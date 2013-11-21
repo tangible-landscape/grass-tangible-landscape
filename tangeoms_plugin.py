@@ -6,14 +6,16 @@ Created on Wed Nov 20 14:44:32 2013
 """
 import threading
 import wx
-import time
+import subprocess
+import os
 
 import wx.lib.newevent
+from import_xyz import import_scan_rinxyz
 
 updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
 
 
-class TangeomsUpdatePlugin(wx.Dialog):
+class TangeomsPlugin(wx.Dialog):
     def __init__(self, giface, parent):
         wx.Dialog.__init__(self, parent)
         self.giface=giface
@@ -41,33 +43,77 @@ class TangeomsUpdatePlugin(wx.Dialog):
         mainSizer.Fit(self)
 
         self.stopEvt = threading.Event()
-        self.threadI = threading.Thread(target=updateGUI, args=[self, self.stopEvt])
 
     def OnClose(self, event):
         self.Stop()
         self.Destroy()
 
     def Start(self):
+        raise NotImplementedError
+
+    def Stop(self):
+        raise NotImplementedError
+
+    def OnUpdate(self, event):
+        self.giface.updateMap()
+
+
+class TangeomsImportPlugin(TangeomsPlugin):
+    def __init__(self, giface, guiparent,  elev_real, scan, diff, scanFile, minZ, maxZ, calib=None):
+        TangeomsPlugin.__init__(self, giface, guiparent)
+        self.elevation=elev_real
+        self.diff = diff
+        self.output = scan
+        self.tmp_file = scanFile
+        self.minZ = minZ
+        self.maxZ = maxZ
+        self.calibRaster = calib
+        self.threadK = threading.Thread(target=runKinect, args=[self.tmp_file, self.stopEvt, self.minZ, self.maxZ])
+        self.threadI = threading.Thread(target=runImport, args=[self, self.tmp_file, self.elevation,
+                                                                self.output, self.diff, self.calibRaster, self.stopEvt])
+        
+    def Start(self):
+        if not self.threadK.isAlive():
+            self.threadK.start()
         if not self.threadI.isAlive():
             self.threadI.start()
 
     def Stop(self):
+        if self.threadK.isAlive():
+            self.stopEvt.set()
         if self.threadI.isAlive():
             self.stopEvt.set()
-
-    def OnUpdate(self, event):
-        self.giface.WriteWarning("bezim")
-
-
-def updateGUI(target, stopEvent):
+    
+def runKinect(fileName, stopEvent, minZ, maxZ):
     while not stopEvent.is_set():
-        time.sleep(1)
-        evt = updateGUIEvt(target.GetId())
-        wx.PostEvent(target, evt)
+        print 'RUNNING KINECT'
+        subprocess.call([r"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Debug\KinectFusionBasics-D2D.exe", fileName, '20', str(minZ), str(maxZ)])
+        #subprocess.call([r"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Debug\KinectFusionBasics-D2D.exe", fileName, '30', '0.5', '1.2'])
+        print 'KINECT END'
+
+def runImport(guiParent, fileName, elevation, scan, diff, calibRaster, stopEvent):
+    lockFilePath = os.path.join(os.path.dirname(fileName),'lock')
+    lastTime = os.path.getmtime(fileName)
+    currTime = 0
+    os.environ['GRASS_MESSAGE_FORMAT'] = 'standard'
+
+    while not stopEvent.is_set():
+        if not os.path.exists(lockFilePath):
+            currTime = os.path.getmtime(fileName)
+            if currTime == lastTime:
+                continue
+            lastTime = currTime
+            print 'RUNNING IMPORT'
+            import_scan_rinxyz(input_file=fileName, real_elev=elevation, output_elev=scan, output_diff=diff, mm_resolution=0.002, calib_raster=calibRaster)
+            print 'IMPORT END'
+            evt = updateGUIEvt(guiParent.GetId())
+            wx.PostEvent(guiParent, evt)
 
 
 def run(giface, guiparent):
-    dlg = TangeomsUpdatePlugin(giface, guiparent)
+    dlg = TangeomsImportPlugin(giface, guiparent, elev_real='elevation', scan='scanned', diff='diff',
+                scanFile=r"C:\Users\akratoc\TanGeoMS\output\scan.txt", minZ=0.4, maxZ=0.55,
+                calib='calibration')
     dlg.Show()
 
 
