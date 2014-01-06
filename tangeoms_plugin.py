@@ -114,6 +114,7 @@ def run(giface, guiparent):
     dlg = TangeomsImportPlugin(giface, guiparent, elev_real='elevation', scan='scanned', diff='diff',
                 scanFile=r"C:\Users\akratoc\TanGeoMS\output\scan.txt", minZ=0.4, maxZ=0.55,
                 calib='calibration')
+    dlg.CenterOnParent()
     dlg.Show()
 
 

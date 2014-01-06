@@ -15,11 +15,59 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 
 
-def remove_fuzzy_edges(input_file, output_file, resolution, tolerance=0.8):
-    fh = open(input_file, 'r')
-    array = np.array([map(float, line.split()) for line in fh.readlines()])
-    fh.close()
+###################### numpy ####################################
 
+def get_calibration_matrix(array):
+    A = np.vstack([array[:, 0], array[:, 1], np.ones(len(array[:, 1]))]).T
+    a, b, c = np.linalg.lstsq(A, array[:, 2])[0]
+    V1 = np.array([a, b, -1])
+    V2 = np.array([0, 0, -1])
+
+    u = unit_vector(np.cross(V1, V2))
+    angle = angle_between(V1, V2)
+    print "Point cloud deviation angle [degrees]: " + str(angle * 180 / np.pi)
+
+    U2 = np.array([[0, -u[2], u[1]],
+                   [u[2], 0, -u[0]],
+                   [-u[1], u[0], 0]])
+
+    # Rodrigues' Rotation Formula (http://mathworld.wolfram.com/RodriguesRotationFormula.html)
+    R = np.identity(3) + U2 * np.sin(angle) + np.linalg.matrix_power(U2, 2) * (1 - np.cos(angle))
+
+    return R
+
+
+def calibrate_points(array, calib_matrix):
+    return np.dot(calib_matrix, array)
+
+
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+    >>> angle_between((1, 0, 0), (0, 1, 0))
+    1.5707963267948966
+    >>> angle_between((1, 0, 0), (1, 0, 0))
+    0.0
+    >>> angle_between((1, 0, 0), (-1, 0, 0))
+    3.141592653589793
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    angle = np.arccos(np.dot(v1_u, v2_u))
+    if np.isnan(angle):
+        if (v1_u == v2_u).all():
+            return 0.0
+        else:
+            return np.pi
+    return angle
+
+
+def remove_fuzzy_edges(array, resolution, tolerance=0.8):
     bins_n = (np.max(array[:, 0]) - np.min(array[:, 0])) / resolution
     H, yedges, xedges = np.histogram2d(-array[:, 1], array[:, 0], bins=(bins_n, bins_n))
 
@@ -81,6 +129,8 @@ def remove_fuzzy_edges(input_file, output_file, resolution, tolerance=0.8):
 #    return np.min(array[:, 0]), np.max(array[:, 0]), np.min(array[:, 1]), np.max(array[:, 1])
 
 
+###################### GRASS ####################################
+
 def adjust_boundaries(real_elev, scanned_elev):
     gcore.run_command('r.region', map=scanned_elev, raster=real_elev, align=real_elev)
 
@@ -99,7 +149,7 @@ def difference(real_elev, scanned_elev, new):
     expression = "{new} = {real_elev} - {scanned_elev}".format(new=new, real_elev=real_elev,
                  scanned_elev=scanned_elev, max=info['max'], min=info['min'])
     grast.mapcalc(expression, overwrite=True)
-    gcore.run_command('r.colors', map=new, color='differences')
+    gcore.run_command('r.colors', map=new, color='differences', flags='n')
 
 
 def read_from_obj(input_file, output_file, rotate_180=True):
@@ -151,3 +201,5 @@ def calibrate(scanned_elev, calib_elev, new):
 
 def smooth(scanned_elev, new):
     gcore.run_command('r.neighbors', input=scanned_elev, output=new, size=5, overwrite=True)
+
+
