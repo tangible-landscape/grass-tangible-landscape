@@ -8,6 +8,7 @@ import threading
 import wx
 import subprocess
 import os
+import numpy as np
 
 import wx.lib.newevent
 from import_xyz import import_scan_rinxyz
@@ -42,8 +43,6 @@ class TangeomsPlugin(wx.Dialog):
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
 
-        self.stopEvt = threading.Event()
-
     def OnClose(self, event):
         self.Stop()
         self.Destroy()
@@ -67,31 +66,29 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.tmp_file = scanFile
         self.minZ = minZ
         self.maxZ = maxZ
-        self.calibRaster = calib
-        self.threadK = threading.Thread(target=runKinect, args=[self.tmp_file, self.stopEvt, self.minZ, self.maxZ])
-        self.threadI = threading.Thread(target=runImport, args=[self, self.tmp_file, self.elevation,
-                                                                self.output, self.diff, self.calibRaster, self.stopEvt])
+        self.calib_matrix = np.load(r"C:\Users\akratoc\TanGeoMS\output\calib_matrix.npy")
+        self.threadI = None
+        self.stopEvt = None
         
+
+    def CreateThread(self):
+        self.stopEvt = threading.Event()
+        self.threadI = threading.Thread(target=runImport, args=[self, self.tmp_file, self.elevation,
+                                                                self.output, self.diff, self.calib_matrix, self.stopEvt])
+
     def Start(self):
-        if not self.threadK.isAlive():
-            self.threadK.start()
-        if not self.threadI.isAlive():
+        if not self.threadI or not self.threadI.isAlive():
+            kinectApp = r"C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\Debug\KinectFusionExplorer-D2D.exe"
+            subprocess.Popen([kinectApp, self.tmp_file, '5'] )
+            self.CreateThread()
             self.threadI.start()
 
     def Stop(self):
-        if self.threadK.isAlive():
+        subprocess.call(['taskkill', '/f', '/im', 'KinectFusionExplorer-D2D.exe'])
+        if self.threadI and self.threadI.isAlive():
             self.stopEvt.set()
-        if self.threadI.isAlive():
-            self.stopEvt.set()
-    
-def runKinect(fileName, stopEvent, minZ, maxZ):
-    while not stopEvent.is_set():
-        print 'RUNNING KINECT'
-        subprocess.call([r"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Debug\KinectFusionBasics-D2D.exe", fileName, '20', str(minZ), str(maxZ)])
-        #subprocess.call([r"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Debug\KinectFusionBasics-D2D.exe", fileName, '30', '0.5', '1.2'])
-        print 'KINECT END'
 
-def runImport(guiParent, fileName, elevation, scan, diff, calibRaster, stopEvent):
+def runImport(guiParent, fileName, elevation, scan, diff, calib_matrix, stopEvent):
     lockFilePath = os.path.join(os.path.dirname(fileName),'lock')
     lastTime = os.path.getmtime(fileName)
     currTime = 0
@@ -104,7 +101,8 @@ def runImport(guiParent, fileName, elevation, scan, diff, calibRaster, stopEvent
                 continue
             lastTime = currTime
             print 'RUNNING IMPORT'
-            import_scan_rinxyz(input_file=fileName, real_elev=elevation, output_elev=scan, output_diff=diff, mm_resolution=0.002, calib_raster=calibRaster)
+            import_scan_rinxyz(input_file=fileName, real_elev=elevation, output_elev=scan, output_diff=diff,
+                               mm_resolution=0.001, calib_matrix=calib_matrix, table_mm=5, zexag=3.5)
             print 'IMPORT END'
             evt = updateGUIEvt(guiParent.GetId())
             wx.PostEvent(guiParent, evt)
