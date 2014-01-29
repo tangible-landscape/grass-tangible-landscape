@@ -77,12 +77,11 @@ def remove_table(array, height):
     hist_values, bin_edges = np.histogram(z, bins=range_mm)
     max_idx = np.argmax(hist_values)
     minimas = (np.diff(np.sign(np.diff(smooth_signal(hist_values, window_len=5)))) > 0).nonzero()[0] + 1
-    
+
 #    from pylab import plot, show
 #    plot(list(smooth_signal(hist_values, window_len=3)))
 #    show()
    
-    min_z = np.min(z)
     min_z += minimas[minimas > max_idx][0] + height
     array = array[z >= min_z]
     return array
@@ -177,6 +176,44 @@ def remove_fuzzy_edges(array, resolution, tolerance=0.5):
 #    print np.min(array[:, 0]), np.max(array[:, 0]), np.min(array[:, 1]), np.max(array[:, 1])
     return array, limit_x_w, limit_x_e, -limit_y_n, -limit_y_s
 #    return np.min(array[:, 0]), np.max(array[:, 0]), np.min(array[:, 1]), np.max(array[:, 1])
+
+
+def trim_edges(array, edge_mm):
+    edge_mm /= 1000.
+    array = array[array[:, 0] <= (np.max(array[:, 0]) - edge_mm)]
+    array = array[array[:, 0] >= np.min(array[:, 0]) + edge_mm]
+    array = array[array[:, 1] <= np.max(array[:, 1]) - edge_mm]
+    array = array[array[:, 1] >= np.min(array[:, 1]) + edge_mm]
+    return array
+
+
+def scale_by_corners(real_elev, array, zexag, toler_mm):
+    raster_info = grast.raster_info(real_elev)
+    res = (raster_info['nsres'] + raster_info['ewres']) / 2.0
+    coordinates = (raster_info['west'] + res / 2.0, raster_info['south'] + res / 2.0)  # WS
+    what = grast.raster_what(real_elev, coordinates)
+    value = float(what[0][real_elev]['value'])
+
+    old_min_x = np.min(array[:, 0])
+    old_max_x = np.max(array[:, 0])
+    old_min_y = np.min(array[:, 1])
+    old_max_y = np.max(array[:, 1])
+    corner = array[array[:, 0] <= old_min_x + toler_mm]
+    corner = corner[corner[:, 1] <= old_min_y + toler_mm]
+    avg_value = np.average(corner[:, 2])
+
+    ns_scale = (raster_info['north'] - raster_info['south']) / (old_max_y - old_min_y)
+    ew_scale = (raster_info['east'] - raster_info['west'] ) / (old_max_x - old_min_x)
+    hor_scale = (ns_scale + ew_scale) / 2
+    scale = float(hor_scale) / zexag
+
+    array[:, 2] = array[:, 2] * scale + value - avg_value * scale + 0.001*scale
+
+    print "SCALE: " + str(hor_scale)
+    print "Z-EXAGGERATION: " + str(zexag)
+    print "1 cm in height ~ {} m".format(0.01 * scale)
+
+    return array
 
 
 def smooth_signal(x, window_len=11, window='hanning'):
