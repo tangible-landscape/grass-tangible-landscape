@@ -7,7 +7,7 @@ Created on Tue Jan 28 12:55:48 2014
 import os
 import subprocess
 import tempfile
-from scan_process import read_from_ascii, calibrate_points, remove_table, trim_edges, scale_by_corners, difference, smooth
+from scan_process import read_from_ascii, calibrate_points, remove_table, trim_edges, scale_flat_surface, difference, smooth, cross_section
 import numpy as np
 
 from grass.script import core as gcore
@@ -28,14 +28,14 @@ def main(real_elev, output_elev, output_diff, output_cross, voxel, scan_file_pat
     
     # calibrate points by given matrix
     array = calibrate_points(array, calib_matrix).T
-
+    table_height = np.percentile(array[:, 2], 10)
     # remove underlying table   
     array = remove_table(array, table_mm)
     
     # cut edges
     array = trim_edges(array, edge_mm)
     gcore.run_command('g.region', rast=real_elev)
-    array = scale_by_corners(real_elev, array, zexag, toler_mm=10)
+    array = scale_flat_surface(real_elev, array, zexag, base=table_height, height_mm=34)
     
     # save resulting array
     np.savetxt(temp_path, array, delimiter=" ")
@@ -49,7 +49,9 @@ def main(real_elev, output_elev, output_diff, output_cross, voxel, scan_file_pat
     gcore.run_command('g.region', rast=output_tmp1)
     
     smooth(scanned_elev=output_tmp1, new=output_elev)
-    gcore.run_command('r.colors', map=output_elev, color='elevation')
+    gcore.write_command('r.colors', map=output_elev, rules='-', stdin="0% 0:66:0\n100% 197:255:138")
+
+#    gcore.run_command('r.colors', map=output_elev, color='elevation')
         
 
     difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff)
@@ -57,7 +59,11 @@ def main(real_elev, output_elev, output_diff, output_cross, voxel, scan_file_pat
     gcore.run_command('g.remove', rast=output_tmp1)
     
     gcore.run_command('g.region', rast3d=voxel, nsres=3, ewres=3)
-    gcore.run_command('r3.cross.rast', input=voxel, elevation=output_elev, output=output_cross, overwrite=True)
+    voxels = gcore.read_command('g.mlist', quiet=True, type='rast3d', pattern='interp_2003*', separator=',').strip()
+    for voxel in voxels.split(','):
+        output_cross_ = output_cross + '2' + voxel
+        cross_section(output_elev, voxel, output_cross_)
+#    gcore.run_command('r3.cross.rast', input=voxel, elevation=output_elev, output=output_cross, overwrite=True)
 
 
 if __name__ == '__main__':
@@ -73,6 +79,6 @@ if __name__ == '__main__':
          scan_file_path=scan_file_path,
          calib_matrix=calib_matrix,
          zexag=1,
-         table_mm=5,
-         edge_mm=10,
+         table_mm=0,
+         edge_mm=5,
          mm_resolution=0.001)

@@ -9,6 +9,7 @@
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
+import os
 import numpy as np
 
 from grass.script import core as gcore
@@ -187,27 +188,31 @@ def trim_edges(array, edge_mm):
     return array
 
 
-def scale_by_corners(real_elev, array, zexag, toler_mm):
+def scale_flat_surface(real_elev, array, zexag, base, height_mm):
     raster_info = grast.raster_info(real_elev)
     res = (raster_info['nsres'] + raster_info['ewres']) / 2.0
     coordinates = (raster_info['west'] + res / 2.0, raster_info['south'] + res / 2.0)  # WS
     what = grast.raster_what(real_elev, coordinates)
     value = float(what[0][real_elev]['value'])
+    print value
 
     old_min_x = np.min(array[:, 0])
     old_max_x = np.max(array[:, 0])
     old_min_y = np.min(array[:, 1])
     old_max_y = np.max(array[:, 1])
-    corner = array[array[:, 0] <= old_min_x + toler_mm]
-    corner = corner[corner[:, 1] <= old_min_y + toler_mm]
-    avg_value = np.average(corner[:, 2])
+#    corner = array[array[:, 0] <= old_min_x + toler_mm]
+#    corner = corner[corner[:, 1] <= old_min_y + toler_mm]
+#    avg_value = np.min(corner[:, 2])
+    avg_value = base + height_mm/1000.
+    print base
+#    print corner.shape
 
     ns_scale = (raster_info['north'] - raster_info['south']) / (old_max_y - old_min_y)
     ew_scale = (raster_info['east'] - raster_info['west'] ) / (old_max_x - old_min_x)
     hor_scale = (ns_scale + ew_scale) / 2
     scale = float(hor_scale) / zexag
 
-    array[:, 2] = array[:, 2] * scale + value - avg_value * scale + 0.001*scale
+    array[:, 2] = array[:, 2] * scale + value - avg_value * scale# + 0.001*scale
 
     print "SCALE: " + str(hor_scale)
     print "Z-EXAGGERATION: " + str(zexag)
@@ -351,3 +356,27 @@ def smooth(scanned_elev, new):
 
 def flowacc(scanned_elev, new):
     gcore.run_command('r.flow', elevation=scanned_elev, flowaccumulation=new, overwrite=True)
+    
+def simwe(scanned_elev, depth, slope):
+    pid = str(os.getpid())
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev, slope=slope, dx='dx_' + pid, dy='dy' + pid, overwrite=True)
+    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, rain_value=500, depth=depth, nwalk=10000, niter=4, overwrite=True)
+    gcore.run_command('g.remove', rast=['dx_' + pid, 'dy' + pid])
+    
+def max_curv(scanned_elev, new):
+    gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=15, param='maxic', zscale=5)
+    
+def cross_section(scanned_elev, voxel, new):
+    pid = str(os.getpid())
+    gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True)
+    grast.mapcalc(exp="zones_{pid}=if(isnull({new}), null(), 1)".format(pid=pid, new=new), overwrite=True)
+    grast.mapcalc(exp="elev_int_{pid}=int({elev})".format(pid=pid, elev=scanned_elev), overwrite=True)
+    gcore.run_command('r.clump', input='zones_' + pid, output='zones_clump_' + pid, overwrite=True)
+    gcore.run_command('r.statistics', base='zones_clump_' + pid, cover='elev_int_' + pid, out='elevstats_' + pid, method='median', overwrite=True)
+    grast.mapcalc('elevstats_real_{pid}=@elevstats_{pid}'.format(pid=pid), overwrite=True)
+    grast.mapcalc(exp='cross_new_{pid}=if(elevstats_real_{pid} < -2, {new}, null())'.format(pid=pid, new=new), overwrite=True)
+    
+#    gcore.write_command('r.colors', map='cross_new', rules='-', stdin='100% blue\n0% yellow')
+    gcore.run_command('g.rename', rast=['cross_new_' + pid, new], overwrite=True)
+    gcore.write_command('r.colors', map=new, rules='-', stdin='100% blue\n0% yellow')
+    gcore.run_command('g.remove', rast=['zones_' + pid, 'elevstats_' + pid, 'zones_clump_' + pid, 'elev_int_' + pid, 'elevstats_real_' + pid])
