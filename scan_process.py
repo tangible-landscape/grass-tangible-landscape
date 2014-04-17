@@ -188,31 +188,19 @@ def trim_edges(array, edge_mm):
     return array
 
 
-def scale_flat_surface(real_elev, array, zexag, base, height_mm):
+def scale_subsurface_flat(real_elev, array, zexag, base, height_mm):
     raster_info = grast.raster_info(real_elev)
-    res = (raster_info['nsres'] + raster_info['ewres']) / 2.0
-    coordinates = (raster_info['west'] + res / 2.0, raster_info['south'] + res / 2.0)  # WS
-    what = grast.raster_what(real_elev, coordinates)
-    value = float(what[0][real_elev]['value'])
-    print value
-
     old_min_x = np.min(array[:, 0])
     old_max_x = np.max(array[:, 0])
     old_min_y = np.min(array[:, 1])
     old_max_y = np.max(array[:, 1])
-#    corner = array[array[:, 0] <= old_min_x + toler_mm]
-#    corner = corner[corner[:, 1] <= old_min_y + toler_mm]
-#    avg_value = np.min(corner[:, 2])
-    avg_value = base + height_mm/1000.
-    print base
-#    print corner.shape
-
     ns_scale = (raster_info['north'] - raster_info['south']) / (old_max_y - old_min_y)
     ew_scale = (raster_info['east'] - raster_info['west'] ) / (old_max_x - old_min_x)
     hor_scale = (ns_scale + ew_scale) / 2
     scale = float(hor_scale) / zexag
+    real_height = base + height_mm/1000.
 
-    array[:, 2] = array[:, 2] * scale + value - avg_value * scale# + 0.001*scale
+    array[:, 2] = array[:, 2] * scale - (real_height * scale - raster_info['max'])
 
     print "SCALE: " + str(hor_scale)
     print "Z-EXAGGERATION: " + str(zexag)
