@@ -26,17 +26,20 @@ class TangeomsPlugin(wx.Dialog):
                       proportion=0, flag=wx.EXPAND | wx.ALL, border=5)
         btnStart = wx.Button(self, label="Start")
         btnStop = wx.Button(self, label="Stop")
+        self.btnPause = wx.Button(self, label="Pause")
         btnClose = wx.Button(self, label="Close")
 
         btnStart.Bind(wx.EVT_BUTTON, lambda evt: self.Start())
         btnStop.Bind(wx.EVT_BUTTON, lambda evt: self.Stop())
         btnClose.Bind(wx.EVT_BUTTON, self.OnClose)
+        self.btnPause.Bind(wx.EVT_BUTTON, lambda evt: self.Pause())
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(EVT_UPDATE_GUI, self.OnUpdate)
 
         btnSizer = wx.BoxSizer(wx.HORIZONTAL)
         btnSizer.Add(btnStart, proportion=0, flag=wx.ALL, border=2)
         btnSizer.Add(btnStop, proportion=0, flag=wx.ALL, border=2)
+        btnSizer.Add(self.btnPause, proportion=0, flag=wx.ALL, border=2)
         btnSizer.Add(btnClose, proportion=0, flag=wx.ALL, border=2)
         mainSizer.Add(btnSizer, proportion=0, flag=wx.EXPAND | wx.ALL, border=5)
 
@@ -87,6 +90,16 @@ class TangeomsImportPlugin(TangeomsPlugin):
         subprocess.call(['taskkill', '/f', '/im', 'KinectFusionExplorer-D2D.exe'])
         if self.threadI and self.threadI.isAlive():
             self.stopEvt.set()
+
+    def Pause(self):
+        if self.threadI and self.threadI.isAlive():
+            self.stopEvt.set()
+            self.btnPause.SetLabel("Resume")
+        else:
+            self.CreateThread()
+            self.threadI.start()
+            self.btnPause.SetLabel("Pause")
+
 
 def runImport(guiParent, fileName, elevation, scan, diff, calib_matrix, stopEvent):
     lockFilePath = os.path.join(os.path.dirname(fileName),'lock')
