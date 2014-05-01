@@ -116,67 +116,58 @@ def scale_z_raster(array, raster_info):
     new_range = raster_info['max'] - raster_info['min']
     array[:, 2] = (((array[:, 2] - old_min_z) * new_range) / old_range) + raster_info['min']
     return array
-        
-
-def remove_fuzzy_edges(array, resolution, tolerance=0.5):
-    bins_n = (np.max(array[:, 0]) - np.min(array[:, 0])) / resolution
-    H, yedges, xedges = np.histogram2d(-array[:, 1], array[:, 0], bins=(bins_n, bins_n))
-    
-#    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-#    import matplotlib.pyplot as plt
-#    np.clip(H, 0, 1, H)
-#    plt.ion()
-#    plt.imshow(H, extent=extent, interpolation='nearest', origin='upper')
-#    plt.colorbar()
-#    plt.show()
 
 
+def remove_fuzzy_edges(array, resolution, tolerance=0.1):
+    """Function trims edges from rectangular model to get rid of noise on the edges.
+    Warning: use with caution when model is not rectangular
+
+    @param array input array of data, array[:, 0] is x, array[:, 1] is y
+    @param resolution for binning
+    @param tolerance tolerance 0 to 1, lower tol. is more strict
+    """
+    intolerance = 1 - tolerance
+    maxx, minx = np.max(array[:, 0]), np.min(array[:, 0])
+    maxy, miny = np.max(array[:, 1]), np.min(array[:, 1])
+    bins_nx = (maxx - minx) / resolution
+    bins_ny = (maxy - miny) / resolution
+
+    # binning
+    H, yedges, xedges = np.histogram2d(-array[:, 1], array[:, 0], bins=(bins_ny, bins_nx))
     np.clip(H, 0, 1, H)
 
-    default_x = max(np.sum(H[int(H.shape[0]/2), :]), np.sum(H[int(H.shape[0]/2) + 1, :]))
-    
-    default_y = max(np.sum(H[:, int(H.shape[1]/2)]), np.sum(H[:, int(H.shape[1]/2) + 1]))
-    
+    # get max values for model width and height to compare it with the edges
+    default_x = np.percentile(np.sum(H, axis=1), 95)
+    default_y = np.percentile(np.sum(H, axis=0), 95)
+
+    # determine the limits
     row = 1
-
-    while np.sum(H[-row, :]) / float(default_y) < tolerance:
+    while np.sum(H[-row, :]) / float(default_y) < intolerance:
         row += 1
-    limit_y_s = yedges[row]
-
+    limit_y_s = miny + (yedges[row - 1] - yedges[0])
 
     row = 0
-    while np.sum(H[row, :]) / float(default_y) < tolerance:
+    while np.sum(H[row, :]) / float(default_y) < intolerance:
         row += 1
-    limit_y_n = yedges[-row]
+    limit_y_n = maxy - (yedges[-1] - yedges[-row - 1])
 
     col = 1
-    while np.sum(H[:, -col]) / float(default_x) < tolerance:
+    while np.sum(H[:, -col]) / float(default_x) < intolerance:
         col += 1
-    limit_x_e = xedges[-col]
+    limit_x_e = maxx - (xedges[-1] - xedges[-col])
 
     col = 0
-    while np.sum(H[:, col]) / float(default_x) < tolerance:
+    while np.sum(H[:, col]) / float(default_x) < intolerance:
         col += 1
+    limit_x_w = minx + (xedges[col] - xedges[0])
 
-    limit_x_w = xedges[col]
-
+    # trim array
     array = array[array[:, 0] <= limit_x_e]
     array = array[array[:, 0] >= limit_x_w]
-    array = array[array[:, 1] <= -limit_y_s]
-    array = array[array[:, 1] >= -limit_y_n]
-#    bins_n = (np.max(array[:, 0]) - np.min(array[:, 0])) / resolution
-#    H, yedges, xedges = np.histogram2d(-array[:, 1], array[:, 0], bins=(bins_n, bins_n))
-#    np.clip(H, 0, 1, H)
-#    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-#    plt.imshow(H, extent=extent, interpolation='nearest', origin='upper')
-#    plt.colorbar()
-#    plt.draw()
+    array = array[array[:, 1] >= limit_y_s]
+    array = array[array[:, 1] <= limit_y_n]
 
-    #np.savetxt(output_file, array, delimiter=" ")
-#    print limit_x_w, limit_x_e, limit_y_s, limit_y_n
-#    print np.min(array[:, 0]), np.max(array[:, 0]), np.min(array[:, 1]), np.max(array[:, 1])
-    return array, limit_x_w, limit_x_e, -limit_y_n, -limit_y_s
-#    return np.min(array[:, 0]), np.max(array[:, 0]), np.min(array[:, 1]), np.max(array[:, 1])
+    return array
 
 
 def trim_edges(array, edge_mm):
