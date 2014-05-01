@@ -344,7 +344,34 @@ def simwe(scanned_elev, depth, slope):
     
 def max_curv(scanned_elev, new):
     gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=15, param='maxic', zscale=5)
+
+
+def landform(scanned_elev, new):
+    gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=25, param='feature', zscale=1)
+
+
+def geomorphone(scanned_elev, new):
+    gcore.run_command('r.geomorphon', overwrite=True, dem=scanned_elev, forms=new, search=22, skip=12, flat=1, dist=0)
+
+def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new):
+    sedflow = 'sedflow_' + str(os.getpid()) 
+    qsx = 'qsx_' + str(os.getpid()) 
+    qsxdx = 'qsxdx_' + str(os.getpid()) 
+    qsy = 'qsy_' + str(os.getpid()) 
+    qsydy = 'qsydy_' + str(os.getpid()) 
+    slope_sm = 'slope_sm' + str(os.getpid()) 
+    gcore.run_command('r.neighbors', overwrite=True, input=slope, output=slope_sm, size=5)
+    grast.mapcalc(exp="{sedflow} = 270. * {k_factor} * {c_factor} * {flowacc} * sin({slope})".format(c_factor=c_factor, k_factor=k_factor, slope=slope_sm, flowacc=flowacc, sedflow=sedflow), overwrite=True)
+    grast.mapcalc(exp="{qsx} = {sedflow} * cos({aspect})".format(sedflow=sedflow, aspect=aspect, qsx=qsx), overwrite=True)
+    grast.mapcalc(exp="{qsy} = {sedflow} * sin({aspect})".format(sedflow=sedflow, aspect=aspect, qsy=qsy), overwrite=True)
+    gcore.run_command('r.slope.aspect', elevation=qsx, dx=qsxdx, overwrite=True)
+    gcore.run_command('r.slope.aspect', elevation=qsy, dy=qsydy, overwrite=True)
+    grast.mapcalc(exp="{erdep} = {qsxdx} + {qsydy}".format(erdep=new, qsxdx=qsxdx, qsydy=qsydy), overwrite=True)
+    gcore.write_command('r.colors', map=new,  rules='-', stdin='-15000 100 0 100\n-100 magenta\n-10 red\n-1 orange\n-0.1 yellow\n0 200 255 200\n0.1 cyan\n1 aqua\n10 blue\n100 0 0 100\n18000 black')
     
+    gcore.run_command('g.remove', rast=[sedflow, qsx, qsxdx, qsy, qsydy, slope_sm])
+
+
 def cross_section(scanned_elev, voxel, new):
     pid = str(os.getpid())
     gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True)
