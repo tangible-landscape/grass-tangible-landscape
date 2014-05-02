@@ -137,8 +137,8 @@ def remove_fuzzy_edges(array, resolution, tolerance=0.1):
     np.clip(H, 0, 1, H)
 
     # get max values for model width and height to compare it with the edges
-    default_x = np.percentile(np.sum(H, axis=1), 95)
-    default_y = np.percentile(np.sum(H, axis=0), 95)
+    default_x = np.percentile(np.sum(H, axis=1), 50)
+    default_y = np.percentile(np.sum(H, axis=0), 50)
 
     # determine the limits
     row = 1
