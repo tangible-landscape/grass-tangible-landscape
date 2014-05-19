@@ -1,0 +1,27 @@
+--- /etc/gui/wxpython/lmgr/frame.py	Mon Apr  7 23:58:28 2014
++++ etc/gui/wxpython/lmgr/frame.py	Thu May  1 15:59:51 2014
+@@ -237,6 +237,7 @@
+         if self.currentPage:
+             self.GetMapDisplay().Raise()
+         wx.CallAfter(self.Raise)
++        wx.CallAfter(self.LoadPlugins)
+ 
+     def _setTitle(self):
+         """!Set frame title"""
+@@ -2181,3 +2182,16 @@
+                                caption = _("Constrain map to region geometry?"),
+                                style = wx.YES_NO | wx.YES_DEFAULT | wx.ICON_QUESTION | wx.CENTRE)
+         return dlg
++
++    def LoadPlugins(self):
++        from core.utils import GetSettingsPath
++        pluginPath = os.path.join(GetSettingsPath(), 'guiplugins')
++        if os.path.exists(pluginPath):
++            sys.path.append(pluginPath)
++            for pyFile in os.listdir(pluginPath):
++                if pyFile.endswith(".py"):
++                    name = __import__(os.path.splitext(pyFile)[0])
++                    try:
++                        name.run(giface=self._giface, guiparent=self)
++                    except AttributeError:
++                        pass
