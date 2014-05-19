@@ -7,7 +7,7 @@ Created on Tue Jan 28 12:55:48 2014
 import os
 import subprocess
 import tempfile
-from scan_process import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, scale_subsurface_flat, difference, smooth
+from scan_processing import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, scale_subsurface_flat, difference, smooth
 import numpy as np
 
 from grass.script import core as gcore

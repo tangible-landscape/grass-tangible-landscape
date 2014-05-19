@@ -11,26 +11,27 @@
 import os
 import sys
 import atexit
-import math
 import numpy as np
 from tempfile import mkstemp
 
 from grass.script import core as gcore
 from grass.script import raster as grast
 
-from scan_process import read_from_ascii, difference, remove_fuzzy_edges, smooth, calibrate_points, remove_table, scale_z_exag
+from scan_processing import  get_environment, remove_temp_regions, read_from_ascii, adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag
+from analyses import smooth, difference, flowacc, max_curv, simwe, contours, landform, geomorphon, usped, slope
 
 
-def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resolution, calib_matrix, table_mm):
+
+def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resolution, calib_matrix, table_mm, zexag):
     output_tmp1 = "output_scan_tmp1"
-#    output_tmp2 = "output_scan_tmp2"
-#    output_tmp3 = "output_scan_tmp3"
-#    mm_resolution *= 1000
 
     fd, temp_path = mkstemp()
     os.close(fd)
     os.remove(temp_path)
-    read_from_ascii(input_file=input_file, output_file=temp_path)
+    try:
+        read_from_ascii(input_file=input_file, output_file=temp_path)
+    except:
+        return
 
     fh = open(temp_path, 'r')
     array = np.array([map(float, line.split()) for line in fh.readlines()])
@@ -39,48 +40,65 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
     # calibrate points by given matrix
     array = calibrate_points(array, calib_matrix).T
 
-    # remove underlying table   
+    # remove underlying table
     array = remove_table(array, table_mm)
 
     # remove fuzzy edges
-    array, x_min, x_max, y_min, y_max = remove_fuzzy_edges(array, resolution=mm_resolution)
+    try:
+        array = remove_fuzzy_edges(array, resolution=mm_resolution, tolerance=0.3)
+    except StandardError, e:
+        print e
+        return
 
     # scale Z to original and apply exaggeration
     raster_info = grast.raster_info(real_elev)
-    array = scale_z_exag(array, raster_info, 3.5)
-    
+    try:
+        array = scale_z_exag(array, raster_info, zexag)
+    except StandardError, e:
+        print e
+        return
+
     # save resulting array
     np.savetxt(temp_path, array, delimiter=" ")
 
     # import
-    gcore.run_command('g.region', n=y_max, s=y_min, e=x_max, w=x_min, res=mm_resolution)
-    gcore.run_command('r.in.xyz', separator=" ", input=temp_path, output=output_tmp1, overwrite=True)
-    os.remove(temp_path)
+    if array.shape[0] < 2000:
+        return
+
+    tmp_regions = []
+    env = get_environment(tmp_regions, n=np.max(array[:, 1]), s=np.min(array[:, 1]), e=np.max(array[:, 0]), w=np.min(array[:, 0]), res=mm_resolution)
+    gcore.run_command('r.in.xyz', separator=" ", input=temp_path, output=output_tmp1, overwrite=True, env=env)
+    try:
+        os.remove(temp_path)
+    except:  # WindowsError
+        gcore.warning("Failed to remove temporary file {path}".format(path=temp_path))
 
     info = grast.raster_info(output_tmp1)
-    if  math.isnan(info['min']) or math.isnan(info['max']):
+    if info['min'] is None or info['max'] is None or np.isnan(info['min']) or np.isnan(info['max']):
         gcore.run_command('g.remove', rast=output_tmp1)
-        return    
+        return
 
-    gcore.run_command('r.region', map=output_tmp1, raster=real_elev, align=real_elev)
-    gcore.run_command('g.region', rast=output_tmp1)
+    adjust_boundaries(real_elev=real_elev, scanned_elev=output_tmp1, env=env)
+    env = get_environment(tmp_regions, rast=output_tmp1)
+    smooth(scanned_elev=output_tmp1, new=output_elev, env=env)
+    gcore.run_command('r.colors', map=output_elev, color='elevation', env=env)
 
-#    if calib_raster:
-#        calibrate(scanned_elev=output_tmp1, calib_elev=calib_raster, new=output_tmp2)
-#        adjust_scanned_elev(real_elev=real_elev, scanned_elev=output_tmp2, new=output_tmp3)
-#        smooth(scanned_elev=output_tmp3, new=output_elev)
-#        gcore.run_command('g.remove', rast=output_tmp3)
-#    else:
-#    adjust_scanned_elev(real_elev=real_elev, scanned_elev=output_tmp1, new=output_tmp2)
-    smooth(scanned_elev=output_tmp1, new=output_elev)
-    gcore.run_command('r.colors', map=output_elev, color='elevation')
-        
 
-    difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff)
+########### analyses ##################################
+#    difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff, env=env)
+#    contours(output_elev, new='contours_scanned4', step=2, env=env)
+#    flowacc(output_elev, new='flowacc', env=env)
+#    max_curv(output_elev, new='maxic', env=env)
+#    landform(output_elev, new='landforms', env=env)
+#    geomorphon(output_elev, new='geomorphon', env=env)
+#    simwe(output_elev, slope='slope', aspect='aspect', depth='depth', env=env)
+#    usped(output_elev, k_factor='soils_Kfactor', c_factor='cfactorbare_1m', flowacc='flowacc', slope='slope', aspect='aspect', new='erdep', env=env)
+#    usped(output_elev, k_factor='soils_Kfactor', c_factor='c_factor_0_5', flowacc='flowacc', slope='slope', aspect='aspect', new='erdep05', env=env)
+#    slope(output_elev, new='slope', env=env)
+########################################################
 
-    gcore.run_command('g.remove', rast=output_tmp1)
-#    gcore.run_command('g.remove', rast=output_tmp2)
-
+    gcore.run_command('g.remove', rast=output_tmp1, env=env)
+    remove_temp_regions(tmp_regions)
 
 
 def main():
@@ -95,10 +113,10 @@ def main():
                        output_diff='diff',
                        mm_resolution=0.001,
                        calib_matrix=calib_matrix,
-                       table_mm=4)
+                       table_mm=4, zexag=3.5)
 
 def cleanup():
-    gcore.del_temp_region()
+    print 'cleanup'
 
 
 if __name__ == '__main__':
