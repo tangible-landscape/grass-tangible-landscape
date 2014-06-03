@@ -7,11 +7,13 @@ Created on Tue Jan 28 12:55:48 2014
 import os
 import subprocess
 import tempfile
-from scan_processing import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, scale_subsurface_flat, difference, smooth
+import shutil
+from scan_processing import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, scale_subsurface_flat, remove_fuzzy_edges, get_environment, adjust_boundaries, remove_temp_regions
+from analyses import difference, smooth
 import numpy as np
 
 from grass.script import core as gcore
-#from grass.script import raster as grast
+from grass.script import raster as grast
 
 
 def compute_crosssection(real_elev, output_elev, output_diff, output_cross, voxel, scan_file_path, calib_matrix, zexag, table_mm, edge_mm, mm_resolution):
@@ -33,43 +35,70 @@ def compute_crosssection(real_elev, output_elev, output_diff, output_cross, voxe
     array = remove_table(array, table_mm)
     
     # cut edges
-    array = trim_edges_nsew(array, edge_mm)
+    try:
+        array = remove_fuzzy_edges(array, mm_resolution, tolerance=0.3)
+    except:
+        return
+#    array = trim_edges_nsew(array, edge_mm)
     gcore.run_command('g.region', rast=real_elev)
-    array = scale_subsurface_flat(real_elev, array, zexag, base=table_height, height_mm=32)
+    array = scale_subsurface_flat(real_elev, array, zexag, base=table_height, height_mm=35)
     
     # save resulting array
     np.savetxt(temp_path, array, delimiter=" ")
 
     # import
-    gcore.run_command('g.region', n=np.max(array[:, 1]), s=np.min(array[:, 1]), e=np.max(array[:, 0]), w=np.min(array[:, 0]), res=mm_resolution)
-    gcore.run_command('r.in.xyz', separator=" ", input=temp_path, output=output_tmp1, overwrite=True)
-    os.remove(temp_path)
+    tmp_regions = []
+    env = get_environment(tmp_regions, n=np.max(array[:, 1]), s=np.min(array[:, 1]), e=np.max(array[:, 0]), w=np.min(array[:, 0]), res=mm_resolution)
 
-    gcore.run_command('r.region', map=output_tmp1, raster=real_elev, align=real_elev)
-    gcore.run_command('g.region', rast=output_tmp1)
+    gcore.run_command('r.in.xyz', separator=" ", input=temp_path, output=output_tmp1, overwrite=True, env=env)
+    try:
+        os.remove(temp_path)
+    except:  # WindowsError
+        gcore.warning("Failed to remove temporary file {path}".format(path=temp_path))
+
+    adjust_boundaries(real_elev=real_elev, scanned_elev=output_tmp1, env=env)
+    env = get_environment(tmp_regions, rast=output_tmp1)
+    smooth(scanned_elev=output_tmp1, new=output_elev, env=env)
     
-    smooth(scanned_elev=output_tmp1, new=output_elev)
     gcore.write_command('r.colors', map=output_elev, rules='-', stdin="0% 0:66:0\n100% 197:255:138")
 
 #    gcore.run_command('r.colors', map=output_elev, color='elevation')
         
 
-    difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff)
+    difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff, env=env)
 
-    gcore.run_command('g.remove', rast=output_tmp1)
-    
-    gcore.run_command('g.region', rast3d=voxel, nsres=3, ewres=3)
+    env = get_environment(tmp_regions, rast3d=voxel, nsres=3, ewres=3)
 #    voxels = gcore.read_command('g.mlist', quiet=True, type='rast3d', pattern='interp_2003*', separator=',').strip()
 #    for voxel in voxels.split(','):
 #        output_cross_ = output_cross + '2' + voxel
-    cross_section(output_elev, voxel, output_cross)
+    cross_section(output_elev, voxel, output_cross, env=env)
+    contours(scanned_elev=output_elev, new='scanned_contours', step=5., env=env)
 #    cross_section_fill(output_elev, voxel, output_cross)
 #    gcore.run_command('r3.cross.rast', input=voxel, elevation=output_elev, output=output_cross, overwrite=True)
 
+    remove_temp_regions(tmp_regions)
+    gcore.run_command('g.remove', rast=output_tmp1, env=env)
 
-def cross_section(scanned_elev, voxel, new):
-    gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True)
-    gcore.run_command('r.colors', map=new, volume=voxel)
+
+def contours(scanned_elev, new, env, step=None):
+    if not step:
+        info = grast.raster_info(scanned_elev)
+        step = (info['max'] - info['min']) / 12.
+    try:
+        if gcore.find_file(new, element='vector')['name']:
+            gcore.run_command('v.db.droptable', map=new, flags='f', env=env)
+            gisenv = gcore.gisenv()
+            path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', new)
+            shutil.rmtree(path_to_vector)
+        gcore.run_command('r.contour', input=scanned_elev, output=new, maxlevel=0, step=step, env=env)
+    except:
+        # catching exception when a vector is added to GUI in the same time
+        pass
+
+
+def cross_section(scanned_elev, voxel, new, env):
+    gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True, env=env)
+    gcore.run_command('r.colors', map=new, volume=voxel, env=env)
 
 
 if __name__ == '__main__':
@@ -84,7 +113,7 @@ if __name__ == '__main__':
                          voxel='interp_2002_08_25',
                          scan_file_path=scan_file_path,
                          calib_matrix=calib_matrix,
-                         zexag=1,
+                         zexag=0.7,
                          table_mm=0,
                          edge_mm=[5, 5, 5, 5],
                          mm_resolution=0.001)
