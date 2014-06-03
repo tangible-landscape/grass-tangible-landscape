@@ -105,3 +105,19 @@ def contours(scanned_elev, new, env, step=None):
     except:
         # catching exception when a vector is added to GUI in the same time
         pass
+
+
+def change_detection(before, after, change, height_treshold, add, env):
+    diff_thr = 'diff_thr_' + str(os.getpid())
+    diff_thr_clump = 'diff_thr_clump_' + str(os.getpid())
+    if add:
+        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({after} - {before}) > {thr}, 1, null())".format(diff_thr=diff_thr,  after=after, before=before, thr=height_treshold), env=env)
+    else:
+        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({before} - {after}) > {thr}, 1, null())".format(diff_thr=diff_thr,  after=after, before=before, thr=height_treshold), env=env)
+    gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
+    stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split('\n')
+    if len(stats) > 0:
+        print stats
+        cat, value = stats[0].split()
+    gcore.run_command('r.mapcalc', expression="{change} = if({diff_thr_clump} == {val}, 1, null())".format(change=change,  diff_thr_clump=diff_thr_clump, val=cat), overwrite=True, env=env)
+    gcore.run_command('g.remove', rast=[diff_thr, diff_thr_clump])
