@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="ImageRenderer.cpp" />
+    <ClCompile Include="KinectFusionExplorer.cpp" />
+    <ClCompile Include="KinectFusionHelper.cpp" />
+    <ClCompile Include="KinectFusionProcessor.cpp" />
+    <ClCompile Include="KinectFusionProcessorFrame.cpp" />
+    <ClCompile Include="Timer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ImageRenderer.h" />
+    <ClInclude Include="Resource.h" />
+    <ClInclude Include="KinectFusionExplorer.h" />
+    <ClInclude Include="KinectFusionHelper.h" />
+    <ClInclude Include="KinectFusionParams.h" />
+    <ClInclude Include="KinectFusionProcessor.h" />
+    <ClInclude Include="KinectFusionProcessorFrame.h" />
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="Timer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="KinectFusionExplorer-D2D.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.ico" />
+    <None Include="..\NuiSensorChooser\Images\Allset.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\AllsetBig.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\Error.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\ErrorBig.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\Listening.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\Initializing.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\InitializingBig.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\ListeningBig.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\NoAvailableSensor.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\NoAvailableSensorBig.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\Refresh.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\RefreshClick.bmp">
+      <Filter>External Images</Filter>
+    </None>
+    <None Include="..\NuiSensorChooser\Images\RefreshOver.bmp">
+      <Filter>External Images</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="External Images">
+      <UniqueIdentifier>{697541a1-dc73-475f-87f9-7062382ec036}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
