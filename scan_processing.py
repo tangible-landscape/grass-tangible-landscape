@@ -72,6 +72,8 @@ def get_calibration_matrix(array):
     u = unit_vector(np.cross(V1, V2))
     angle = angle_between(V1, V2)
     print "Point cloud deviation angle [degrees]: " + str(angle * 180 / np.pi)
+    if (angle * 180 / np.pi) > 2.:
+        print "The deviation angle is too large please adjust Kinect manually and repeat."
 
     U2 = np.array([[0, -u[2], u[1]],
                    [u[2], 0, -u[0]],

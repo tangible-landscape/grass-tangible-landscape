@@ -8,16 +8,20 @@ import os
 import subprocess
 import numpy as np
 import tempfile
-from scan_process import get_calibration_matrix, read_from_ascii
+from scan_processing import get_calibration_matrix, read_from_ascii
 
 
-def write_matrix(mesh_path, matrix_path, min_z, max_z):
+def write_matrix(matrix_path, min_z, max_z):
+    fd_mesh, mesh_path = tempfile.mkstemp()
+    os.close(fd_mesh)
+    os.remove(mesh_path)
     print "MEASURING AND CREATING MESH..."
-    subprocess.call([r"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Debug\KinectFusionBasics-D2D.exe", mesh_path, '5', str(min_z), str(max_z)])
+    subprocess.call([os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kinect', 'scan_once', 'KinectFusionBasics-D2D.exe'), mesh_path, '5', str(min_z), str(max_z)])
     fd, temp_path = tempfile.mkstemp()
     os.close(fd)
     os.remove(temp_path)
     read_from_ascii(input_file=mesh_path, output_file=temp_path)
+    os.remove(mesh_path)
 
     fh = open(temp_path, 'r')
     array = np.array([map(float, line.split()) for line in fh.readlines()])
@@ -28,13 +32,9 @@ def write_matrix(mesh_path, matrix_path, min_z, max_z):
     np.save(matrix_path, R)
     print "MATRIX SAVED TO " + str(matrix_path)
 
-    # just to test
-    print np.load(matrix_path + '.npy')
-    
-    
-    
+
+
 
 if __name__ == '__main__':
-    matrix_file_path = r"C:\Users\akratoc\TanGeoMS\output\calib_matrix"
-    mesh_file_path = r"C:\Users\akratoc\TanGeoMS\output\table"
-    write_matrix(mesh_path=mesh_file_path, matrix_path=matrix_file_path, min_z=0.5, max_z=1.0)
+    matrix_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy')
+    write_matrix(matrix_path=matrix_file_path, min_z=0.5, max_z=1.0)

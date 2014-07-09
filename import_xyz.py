@@ -12,7 +12,7 @@ import os
 import sys
 import atexit
 import numpy as np
-from tempfile import mkstemp
+from tempfile import mkstemp, gettempdir
 
 from grass.script import core as gcore
 from grass.script import raster as grast
@@ -103,17 +103,19 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
 
 def main():
     import subprocess
-    gcore.use_temp_region()
-    mesh_path = r"C:\Users\akratoc\TanGeoMS\output\scan.txt"
-    subprocess.call([r"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Debug\KinectFusionBasics-D2D.exe", mesh_path, '5', str(0.4), str(0.75)])
-    calib_matrix = np.load(r"C:\Users\akratoc\TanGeoMS\output\calib_matrix.npy")
+#    gcore.use_temp_region()
+    mesh_path = os.path.join(os.path.realpath(gettempdir()), 'kinect_scan.txt')
+
+    kinect_app = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kinect', 'scan_once', 'KinectFusionBasics-D2D.exe')
+    subprocess.call([kinect_app, mesh_path, '5', str(0.4), str(0.75)])
+    calib_matrix = np.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy'))
     import_scan_rinxyz(input_file=mesh_path,
                        real_elev='elevation@user1',
                        output_elev='scan',
                        output_diff='diff',
                        mm_resolution=0.001,
                        calib_matrix=calib_matrix,
-                       table_mm=4, zexag=3.5)
+                       table_mm=4, zexag=3)
 
 def cleanup():
     print 'cleanup'
