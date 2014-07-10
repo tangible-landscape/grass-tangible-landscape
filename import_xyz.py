@@ -86,7 +86,7 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
 
 ########### analyses ##################################
 #    difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff, env=env)
-#    contours(output_elev, new='contours_scanned4', step=2, env=env)
+#    contours(output_elev, new='contours_scanned', step=2, env=env)
 #    flowacc(output_elev, new='flowacc', env=env)
 #    max_curv(output_elev, new='maxic', env=env)
 #    landform(output_elev, new='landforms', env=env)
