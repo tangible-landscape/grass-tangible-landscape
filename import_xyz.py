@@ -87,10 +87,14 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
     smooth(scanned_elev=output_tmp1, new=output_elev, env=env)
     gcore.run_command('r.colors', map=output_elev, color='elevation', env=env)
 
+########### export point cloud for Rhino ##############
+#    output_xyz = os.path.join(os.path.realpath(gettempdir()), 'point_cloud.xyz') 
+#    gcore.run_command('r.out.xyz', input=output_elev, output=output_xyz, separator='space', overwrite=True, env=env)
+########################################################
 
 ########### analyses ##################################
 #    difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff, env=env)
-#    contours(output_elev, new='contours_scanned', step=2, env=env)
+    contours(output_elev, new='contours_scanned', step=2, env=env)
 #    flowacc(output_elev, new='flowacc', env=env)
 #    max_curv(output_elev, new='maxic', env=env)
 #    landform(output_elev, new='landforms', env=env)
@@ -108,8 +112,8 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
 def main():
     import subprocess
 #    gcore.use_temp_region()
-    mesh_path = os.path.join(os.path.realpath(gettempdir()), 'kinect_scan.txt')
-
+    mesh_path = os.path.join(os.path.realpath(gettempdir()), 'kinect_scan.txt')    
+    
     kinect_app = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kinect', 'scan_once', 'KinectFusionBasics-D2D.exe')
     subprocess.call([kinect_app, mesh_path, '5', str(0.4), str(0.75)])
     calib_matrix = np.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy'))
