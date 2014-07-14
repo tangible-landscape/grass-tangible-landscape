@@ -123,7 +123,7 @@ def runImport(guiParent, fileName, elevation, scan, diff, calib_matrix, stopEven
     os.environ['GRASS_MESSAGE_FORMAT'] = 'standard'
 
     while not stopEvent.is_set():
-        if not os.path.exists(lockFilePath):
+        if not os.path.exists(lockFilePath) and os.path.exists(fileName):
             currTime = os.path.getmtime(fileName)
             if currTime == lastTime:
                 continue
