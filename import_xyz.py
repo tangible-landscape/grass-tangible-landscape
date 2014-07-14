@@ -41,7 +41,11 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
     array = calibrate_points(array, calib_matrix).T
 
     # remove underlying table
-    array = remove_table(array, table_mm)
+    try:
+        array = remove_table(array, table_mm)
+    except StandardError, e:
+        print e
+        return
 
     # remove fuzzy edges
     try:
