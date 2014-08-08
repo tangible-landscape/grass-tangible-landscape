@@ -110,7 +110,7 @@ class GMFrame(wx.Frame):
         self._setTitle()
         self.SetName("LayerManager")
         
-        self.SetIcon(wx.Icon(os.path.join(globalvar.ETCICONDIR, 'grass.ico'), wx.BITMAP_TYPE_ICO))
+        self.SetIcon(wx.Icon(os.path.join(globalvar.ICONDIR, 'grass.ico'), wx.BITMAP_TYPE_ICO))
         
         self._giface = LayerManagerGrassInterface(self)
         
@@ -1167,13 +1167,10 @@ class GMFrame(wx.Frame):
         @return True on success
         @return False on error
         """
-        # dtd
-        # dtdFilename = os.path.join(globalvar.ETCWXDIR, "xml", "grass-gxw.dtd")
-        
         # parse workspace file
         try:
             gxwXml = ProcessWorkspaceFile(etree.parse(filename))
-        except Exception, e:
+        except Exception as e:
             GError(parent = self,
                    message = _("Reading workspace file <%s> failed.\n"
                                "Invalid file, unable to parse XML document.") % filename)
@@ -1384,7 +1381,7 @@ class GMFrame(wx.Frame):
         tmpfile = tempfile.TemporaryFile(mode = 'w+b')
         try:
             WriteWorkspaceFile(lmgr = self, file = tmpfile)
-        except StandardError, e:
+        except StandardError as e:
             GError(parent = self,
                    message = _("Writing current settings to workspace file "
                                "failed."))
@@ -1551,6 +1548,16 @@ class GMFrame(wx.Frame):
                 layer.cmd = ['d.rast', 'map=']
                 layerList.AddLayer(layer)
                 frame.SetAnimations([layerList, None, None, None])
+
+    def OnTimelineTool(self, event=None, cmd=None):
+        """Launch Timeline Tool"""
+        try:
+            from timeline.frame import TimelineFrame
+        except ImportError:
+            GError(parent=self, message=_("Unable to start Timeline Tool."))
+            return
+        frame = TimelineFrame(None)
+        frame.Show()
 
     def OnHistogram(self, event):
         """!Init histogram display canvas and tools
@@ -2048,8 +2055,8 @@ class GMFrame(wx.Frame):
         if UserSettings.Get(group = 'manager', key = 'askOnRemoveLayer', subkey = 'enabled'):
             layerName = ''
             for item in self.GetLayerTree().GetSelections():
-                name = str(self.GetLayerTree().GetItemText(item))
-                idx = name.find('(opacity')
+                name = self.GetLayerTree().GetItemText(item)
+                idx = name.find('(' + _('opacity:'))
                 if idx > -1:
                     layerName += '<' + name[:idx].strip(' ') + '>,\n'
                 else:
