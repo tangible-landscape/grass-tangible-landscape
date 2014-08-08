@@ -5,13 +5,13 @@ Warning: this description is not complete
 
 Installation:
 -------------
- * Install GRASS GIS beta2, not to Program Files, create your own directory for programs where you have write access
+Install GRASS GIS and Tangeoms:
+ * Install GRASS GIS beta3, not to Program Files, create your own directory for programs where you have write access
  * Make sure you can see hidden files and then go to someusername\.AppData\Roaming\GRASS7
  * if there is no GRASS7 directory, create it
  * in GRASS7 create directory guiplugins
  * download this repository as a zipfile
- * move grass_changed_files/frame.py to where GRASS is installed 
- (C:\Users\someuser\MyPrograms\GRASS GIS 7.0.0beta2\etc\gui\wxpython\lmgr) and replace the file frame.py
+ * move grass_changed_files/frame.py to where GRASS is installed  (C:\\Users\\someuser\\MyPrograms\\GRASS GIS 7.0.0beta3\\gui\\wxpython\\lmgr) and replace the file frame.py
  * copy the rest of the files and directory kinect (not kinect_source - this is not needed) to just created guiplugins directory
 
 Run application
