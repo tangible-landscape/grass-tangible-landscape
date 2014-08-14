@@ -7,7 +7,7 @@ Installation:
 -------------
 Install GRASS GIS and Tangeoms:
  * Install GRASS GIS beta3, not to Program Files, create your own directory for programs where you have write access
- * Make sure you can see hidden files and then go to someusername\.AppData\Roaming\GRASS7
+ * Make sure you can see hidden files and then go to someusername\\AppData\\Roaming\\GRASS7
  * if there is no GRASS7 directory, create it
  * in GRASS7 create directory guiplugins
  * download this repository as a zipfile
