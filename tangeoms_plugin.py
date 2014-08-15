@@ -118,7 +118,10 @@ class TangeomsImportPlugin(TangeomsPlugin):
 
 def runImport(guiParent, fileName, elevation, scan, diff, calib_matrix, stopEvent):
     lockFilePath = fileName + 'lock'
-    lastTime = os.path.getmtime(fileName)
+    if os.path.exists(fileName):
+        lastTime = os.path.getmtime(fileName)
+    else:
+        lastTime = None
     currTime = 0
     os.environ['GRASS_MESSAGE_FORMAT'] = 'standard'
 
