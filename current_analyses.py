@@ -20,9 +20,9 @@ import analyses
 #    analyses.simwe(scanned_elev=scanned_elev, depth='depth', rain_value=200, niter=4, env=env)
 #
 #    
-#def run_geomorphon(scanned_elev, env):
+#def run_geomorphon(scanned_elev, env, **kwargs):
 #    analyses.geomorphon(scanned_elev, new='geomorphon', search=22, skip=12, flat=1, dist=0, env=env)
 #
 #    
-#def run_usped(scanned_elev, env):
+#def run_usped(scanned_elev, env, **kwargs):
 #    analyses.usped(scanned_elev, k_factor='soils_Kfactor', c_factor='cfactorbare_1m', flowacc='flowacc', slope='slope', aspect='aspect', new='erdep', env=env)
