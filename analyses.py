@@ -42,11 +42,11 @@ def slope_aspect(scanned_elev, slope, aspect, env):
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=aspect, slope=slope, overwrite=True, env=env)
 
 
-def shaded_relief(scanned_elev, new, env):
-    gcore.run_command('r.shaded.relief', overwrite=True, input=scanned_elev, output=new, zmult=10, env=env)
+def shaded_relief(scanned_elev, new, zmult=10, env=None):
+    gcore.run_command('r.shaded.relief', overwrite=True, input=scanned_elev, output=new, zmult=zmult, env=env)
 
 
-def simwe(scanned_elev, depth, env, slope=None, aspect=None):
+def simwe(scanned_elev, depth, rain_value, niter, slope=None, aspect=None, env=None):
     pid = str(os.getpid())
     options = {}
     if slope:
@@ -54,21 +54,21 @@ def simwe(scanned_elev, depth, env, slope=None, aspect=None):
     if aspect:
         options['aspect'] = aspect
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, overwrite=True, env=env, **options)
-    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, rain_value=500, depth=depth, nwalk=10000, niter=4, overwrite=True, env=env)
+    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, rain_value=rain_value, depth=depth, nwalk=10000, niter=niter, overwrite=True, env=env)
     gcore.run_command('g.remove', rast=['dx_' + pid, 'dy' + pid])
 
 
-def max_curv(scanned_elev, new, env):
-    gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=15, param='maxic', zscale=5, env=env)
+def max_curv(scanned_elev, new, size=15, zscale=5, env=None):
+    gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=size, param='maxic', zscale=zscale, env=env)
     gcore.run_command('r.colors', map=new, color='byr', env=env)
 
 
-def landform(scanned_elev, new, env):
-    gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=25, param='feature', zscale=1, env=env)
+def landform(scanned_elev, new, size=25, zscale=1, env=None):
+    gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=size, param='feature', zscale=zscale, env=env)
 
 
-def geomorphon(scanned_elev, new, env):
-    gcore.run_command('r.geomorphon', overwrite=True, dem=scanned_elev, forms=new, search=22, skip=12, flat=1, dist=0, env=env)
+def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None):
+    gcore.run_command('r.geomorphon', overwrite=True, dem=scanned_elev, forms=new, search=search, skip=skip, flat=flat, dist=dist, env=env)
 
 
 def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
@@ -97,11 +97,10 @@ def contours(scanned_elev, new, env, step=None):
         step = (info['max'] - info['min']) / 12.
     try:
         if gcore.find_file(new, element='vector')['name']:
-            gcore.run_command('v.db.droptable', map=new, flags='f', env=env)
             gisenv = gcore.gisenv()
             path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', new)
             shutil.rmtree(path_to_vector)
-        gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, env=env)
+        gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, flags='t', env=env)
     except:
         # catching exception when a vector is added to GUI in the same time
         pass
