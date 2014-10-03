@@ -23,10 +23,6 @@ def difference(real_elev, scanned_elev, new, env):
     gcore.run_command('r.colors', map=new, color='differences', env=env)
 
 
-def smooth(scanned_elev, new, env):
-    gcore.run_command('r.neighbors', input=scanned_elev, output=new, size=9, overwrite=True, env=env)
-
-
 def flowacc(scanned_elev, new, env):
     gcore.run_command('r.flow', elevation=scanned_elev, flowaccumulation=new, overwrite=True, env=env)
 

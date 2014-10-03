@@ -10,6 +10,7 @@ This program is free software under the GNU General Public License
 import numpy as np
 import os
 import uuid
+import shutil
 
 from grass.script import core as gcore
 from grass.script import raster as grast
@@ -331,6 +332,14 @@ def get_environment(tmp_regions, **kwargs):
     return env
 
 
+def remove_vector(name):
+    """Helper function to workaround problem with deleting vectors"""
+    gisenv = gcore.gisenv()
+    path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', name)
+    if os.path.exists(path_to_vector):
+        shutil.rmtree(path_to_vector)
+
+
 def remove_temp_regions(regions):
     """!Removes temporary regions."""
     gisenv = gcore.gisenv()
@@ -341,6 +350,19 @@ def remove_temp_regions(regions):
 
 def adjust_boundaries(real_elev, scanned_elev, env):
     gcore.run_command('r.region', map=scanned_elev, raster=real_elev, align=real_elev, env=env)
+
+
+def interpolate_surface(input_file, output_raster, temporary_vector, env):
+    remove_vector(temporary_vector)
+    gcore.run_command('v.in.ascii', flags='ztb', z=3, separator=" ", input=input_file, output=temporary_vector, overwrite=True, env=env)
+    gcore.run_command('v.surf.rst', input=temporary_vector, tension=25, segmax=100, dmin=0.003, smooth=5, npmin=150,
+                      elevation=output_raster, overwrite=True, env=env)
+
+
+def bin_surface(input_file, output_raster, temporary_raster, env):
+    gcore.run_command('r.in.xyz', separator=" ", input=input_file, method='median',
+                      output=temporary_raster, overwrite=True, env=env)
+    gcore.run_command('r.neighbors', input=temporary_raster, output=output_raster, size=9, overwrite=True, env=env)
 
 
 ###################### UNUSED ##############################
