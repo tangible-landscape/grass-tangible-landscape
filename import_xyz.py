@@ -17,13 +17,14 @@ from tempfile import mkstemp, gettempdir
 from grass.script import core as gcore
 from grass.script import raster as grast
 
-from scan_processing import  get_environment, remove_temp_regions, read_from_ascii, adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag
-from analyses import smooth, difference, flowacc, max_curv, simwe, contours, landform, geomorphon, usped, slope
+from scan_processing import  get_environment, remove_temp_regions, read_from_ascii, \
+    adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag, \
+    interpolate_surface, bin_surface, remove_vector
 import current_analyses
 
 
 
-def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resolution, calib_matrix, table_mm, zexag):
+def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, table_mm, zexag, interpolate):
     output_tmp1 = "output_scan_tmp1"
 
     fd, temp_path = mkstemp()
@@ -70,22 +71,26 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
     if array.shape[0] < 2000:
         return
 
+    # create surface
     tmp_regions = []
-    env = get_environment(tmp_regions, n=np.max(array[:, 1]), s=np.min(array[:, 1]), e=np.max(array[:, 0]), w=np.min(array[:, 0]), res=mm_resolution)
-    gcore.run_command('r.in.xyz', separator=" ", input=temp_path, output=output_tmp1, overwrite=True, env=env)
+    env = get_environment(tmp_regions, n=np.max(array[:, 1]), s=np.min(array[:, 1]), 
+                          e=np.max(array[:, 0]), w=np.min(array[:, 0]), res=mm_resolution)
+    if interpolate:
+        interpolate_surface(input_file=temp_path, output_raster=output_elev,
+                            temporary_vector=output_tmp1, env=env)
+    else:
+        bin_surface(input_file=temp_path, output_raster=output_elev, temporary_raster=output_tmp1, env=env)
     try:
         os.remove(temp_path)
     except:  # WindowsError
         gcore.warning("Failed to remove temporary file {path}".format(path=temp_path))
 
-    info = grast.raster_info(output_tmp1)
+    info = grast.raster_info(output_elev)
     if info['min'] is None or info['max'] is None or np.isnan(info['min']) or np.isnan(info['max']):
-        gcore.run_command('g.remove', rast=output_tmp1)
         return
 
-    adjust_boundaries(real_elev=real_elev, scanned_elev=output_tmp1, env=env)
-    env = get_environment(tmp_regions, rast=output_tmp1)
-    smooth(scanned_elev=output_tmp1, new=output_elev, env=env)
+    adjust_boundaries(real_elev=real_elev, scanned_elev=output_elev, env=env)
+    env = get_environment(tmp_regions, rast=output_elev)
     gcore.run_command('r.colors', map=output_elev, color='elevation', env=env)
 
 ########### export point cloud for Rhino ##############
@@ -104,9 +109,13 @@ def import_scan_rinxyz(input_file, real_elev, output_elev, output_diff, mm_resol
     functions = [func for func in dir(current_analyses) if func.startswith('run_')]
     for func in functions:
         exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, env=env)')
-        
 
-    gcore.run_command('g.remove', rast=output_tmp1, env=env)
+    # cleanup
+    if interpolate:
+        remove_vector(output_tmp1)
+    else:
+        gcore.run_command('g.remove', rast=output_tmp1, env=env)
+
     remove_temp_regions(tmp_regions)
 
 
@@ -116,18 +125,18 @@ def main():
     mesh_path = os.path.join(os.path.realpath(gettempdir()), 'kinect_scan.txt')
 
     kinect_app = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kinect', 'scan_once', 'KinectFusionBasics-D2D.exe')
-    subprocess.call([kinect_app, mesh_path, '5', str(0.4), str(0.75)])
+    subprocess.call([kinect_app, mesh_path, '40', str(0.4), str(0.85)])
     calib_matrix = np.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy'))
-    import_scan_rinxyz(input_file=mesh_path,
-                       real_elev='elevation@user1',
-                       output_elev='scan',
-                       output_diff='diff',
-                       mm_resolution=0.001,
-                       calib_matrix=calib_matrix,
-                       table_mm=4, zexag=3)
+    import_scan(input_file=mesh_path,
+                real_elev='elevation@user1',
+                output_elev='scan',
+                mm_resolution=0.001,
+                calib_matrix=calib_matrix,
+                table_mm=5, zexag=3,
+                interpolate=True)
 
 def cleanup():
-    print 'cleanup'
+    pass
 
 
 if __name__ == '__main__':

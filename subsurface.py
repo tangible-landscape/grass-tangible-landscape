@@ -8,8 +8,10 @@ import os
 import subprocess
 import tempfile
 import shutil
-from scan_processing import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, scale_subsurface_flat, remove_fuzzy_edges, get_environment, adjust_boundaries, remove_temp_regions
-from analyses import difference, smooth
+from scan_processing import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, \
+    scale_subsurface_flat, remove_fuzzy_edges, get_environment, adjust_boundaries, remove_temp_regions, \
+    bin_surface
+from analyses import difference
 import numpy as np
 
 from grass.script import core as gcore
@@ -21,8 +23,11 @@ def compute_crosssection(real_elev, output_elev, output_diff, output_cross, voxe
     fd, temp_path = tempfile.mkstemp()
     os.close(fd)
     os.remove(temp_path)
-    read_from_ascii(input_file=scan_file_path, output_file=temp_path)
-
+    try:
+        read_from_ascii(input_file=scan_file_path, output_file=temp_path)
+    except:
+        gcore.warning("Failed to read from ascii")
+        return
     fh = open(temp_path, 'r')
     array = np.array([map(float, line.split()) for line in fh.readlines()])
     fh.close()
@@ -31,35 +36,31 @@ def compute_crosssection(real_elev, output_elev, output_diff, output_cross, voxe
     # calibrate points by given matrix
     array = calibrate_points(array, calib_matrix).T
     table_height = np.percentile(array[:, 2], 10)
+
     # remove underlying table   
     array = remove_table(array, table_mm)
     
     # cut edges
     try:
         array = remove_fuzzy_edges(array, mm_resolution, tolerance=0.3)
-    except:
+    except StandardError, e:
+        print e
+        gcore.warning("Failed to remove fuzzy edges")
         return
-#    array = trim_edges_nsew(array, edge_mm)
+    array = trim_edges_nsew(array, edge_mm)
     gcore.run_command('g.region', rast=real_elev)
     array = scale_subsurface_flat(real_elev, array, zexag, base=table_height, height_mm=35)
-    
+
     # save resulting array
     np.savetxt(temp_path, array, delimiter=" ")
 
     # import
     tmp_regions = []
     env = get_environment(tmp_regions, n=np.max(array[:, 1]), s=np.min(array[:, 1]), e=np.max(array[:, 0]), w=np.min(array[:, 0]), res=mm_resolution)
+    bin_surface(input_file=temp_path, output_raster=output_elev, temporary_raster=output_tmp1, env=env)
 
-    gcore.run_command('r.in.xyz', separator=" ", input=temp_path, output=output_tmp1, overwrite=True, env=env)
-    try:
-        os.remove(temp_path)
-    except:  # WindowsError
-        gcore.warning("Failed to remove temporary file {path}".format(path=temp_path))
-
-    adjust_boundaries(real_elev=real_elev, scanned_elev=output_tmp1, env=env)
-    env = get_environment(tmp_regions, rast=output_tmp1)
-    smooth(scanned_elev=output_tmp1, new=output_elev, env=env)
-    
+    adjust_boundaries(real_elev=real_elev, scanned_elev=output_elev, env=env)
+    env = get_environment(tmp_regions, rast=output_elev)
     gcore.write_command('r.colors', map=output_elev, rules='-', stdin="0% 0:66:0\n100% 197:255:138")
 
 #    gcore.run_command('r.colors', map=output_elev, color='elevation')
@@ -78,6 +79,10 @@ def compute_crosssection(real_elev, output_elev, output_diff, output_cross, voxe
 
     remove_temp_regions(tmp_regions)
     gcore.run_command('g.remove', rast=output_tmp1, env=env)
+    try:
+        os.remove(temp_path)
+    except:  # WindowsError
+        gcore.warning("Failed to remove temporary file {path}".format(path=temp_path))
 
 
 def contours(scanned_elev, new, env, step=None):
@@ -86,11 +91,10 @@ def contours(scanned_elev, new, env, step=None):
         step = (info['max'] - info['min']) / 12.
     try:
         if gcore.find_file(new, element='vector')['name']:
-            gcore.run_command('v.db.droptable', map=new, flags='f', env=env)
             gisenv = gcore.gisenv()
             path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', new)
             shutil.rmtree(path_to_vector)
-        gcore.run_command('r.contour', input=scanned_elev, output=new, maxlevel=0, step=step, env=env)
+        gcore.run_command('r.contour', flags='t', input=scanned_elev, output=new, maxlevel=0, step=step, env=env)
     except:
         # catching exception when a vector is added to GUI in the same time
         pass

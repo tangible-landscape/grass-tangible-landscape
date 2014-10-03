@@ -12,7 +12,8 @@ import numpy as np
 from tempfile import gettempdir
 
 import wx.lib.newevent
-from import_xyz import import_scan_rinxyz
+from import_xyz import import_scan
+from subsurface import compute_crosssection
 
 updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
 
@@ -97,7 +98,7 @@ class TangeomsImportPlugin(TangeomsPlugin):
     def Start(self):
         if not self.threadI or not self.threadI.isAlive():
             kinectApp = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kinect', 'scan_cont', 'KinectFusionExplorer-D2D.exe')
-            subprocess.Popen([kinectApp, self.tmp_file, '5'] )
+            subprocess.Popen([kinectApp, self.tmp_file, '20'] )
             self.CreateThread()
             self.threadI.start()
 
@@ -132,8 +133,10 @@ def runImport(guiParent, fileName, elevation, scan, diff, calib_matrix, stopEven
                 continue
             lastTime = currTime
             print 'RUNNING IMPORT'
-            import_scan_rinxyz(input_file=fileName, real_elev=elevation, output_elev=scan, output_diff=diff,
-                               mm_resolution=0.001, calib_matrix=calib_matrix, table_mm=8, zexag=3)
+            import_scan(input_file=fileName, real_elev=elevation, output_elev=scan,
+                               mm_resolution=0.001, calib_matrix=calib_matrix, table_mm=8, zexag=3, interpolate=True)
+#            compute_crosssection(real_elev='extent', output_elev=scan, output_diff='diff', output_cross='cross', voxel='interp_2002_08_25',
+#                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=0.7, table_mm=2, edge_mm=[10, 10, 0, 0], mm_resolution=0.001)
             print 'IMPORT END'
             evt = updateGUIEvt(guiParent.GetId())
             wx.PostEvent(guiParent, evt)
