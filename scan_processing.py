@@ -360,9 +360,9 @@ def interpolate_surface(input_file, output_raster, temporary_vector, env):
 
 
 def bin_surface(input_file, output_raster, temporary_raster, env):
-    gcore.run_command('r.in.xyz', separator=" ", input=input_file, method='median',
+    gcore.run_command('r.in.xyz', separator=" ", input=input_file, method='min',
                       output=temporary_raster, overwrite=True, env=env)
-    gcore.run_command('r.neighbors', input=temporary_raster, output=output_raster, size=9, overwrite=True, env=env)
+    gcore.run_command('r.neighbors', input=temporary_raster, output=output_raster, method='median', size=9, overwrite=True, env=env)
 
 
 ###################### UNUSED ##############################
