@@ -137,9 +137,9 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
             expression += '), 1, null())'
             gcore.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
             remove_vector(change_vector)
-            gcore.run_command('r.to.vect', flags='st', input=change, output=change_vector, type='area')
+            gcore.run_command('r.to.vect', flags='st', input=change, output=change_vector, type='area', env=env)
             remove_vector(change)
-            gcore.run_command('v.to.points', flags='t', input=change_vector, type='centroid', output=change)
+            gcore.run_command('v.to.points', flags='t', input=change_vector, type='centroid', output=change, env=env)
             remove_vector(change_vector)
         else:
             gcore.warning("No change found!")
@@ -149,3 +149,34 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
     gcore.run_command('g.remove', rast=[diff_thr, diff_thr_clump])
     remove_temp_regions(tmp_regions)
 
+
+def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
+                        walk, walking_dir, points, raster_route, vector_routes, env):
+    import itertools
+    coordinates = gcore.read_command('v.out.ascii', input=points, format='point', separator=',', env=env).strip()
+    coords_list = []
+    for coords in coordinates.split(os.linesep):
+        coords_list.append(coords.split(',')[:2])
+
+    remove_vector(vector_routes)
+    gcore.run_command('v.edit', map=vector_routes, tool='create', env=env)
+    vector_route_tmp = 'route_path_' + str(os.getpid())
+    remove_vector(vector_route_tmp)
+
+    for p1, p2 in itertools.combinations(coords_list, 2):
+        p1 = ','.join(p1)
+        p2 = ','.join(p2)
+        trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor, walk, walking_dir, p1, p2, raster_route, vector_route_tmp, env)
+        gcore.run_command('v.patch', input=vector_route_tmp, output=vector_routes, flags='a', overwrite=True, env=env)
+        remove_vector(vector_route_tmp)
+
+    gcore.run_command('g.remove', rast=[walk, walking_dir, raster_route], env=env)
+
+# procedure for finding a trail in real-time
+def trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
+          walk, walking_dir, start, stop, raster_route, vector_route, env):
+    gcore.run_command('r.walk',overwrite=True, flags='k', elevation=scanned_elev,
+                      friction=friction, output=walk, outdir=walking_dir, start_coordinates=start,
+                      stop_coordinates=stop, walk_coeff=walk_coeff, _lambda=_lambda, slope_factor=slope_factor, env=env)
+    gcore.run_command('r.drain', overwrite=True, flags='d', input=walk, indir=walking_dir,
+                      output=raster_route, vector_output=vector_route, start_coordinates=stop, env=env)
