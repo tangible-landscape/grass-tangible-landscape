@@ -131,6 +131,7 @@ class TangeomsImportPlugin(TangeomsPlugin):
                     mm_resolution=0.001, calib_matrix=self.calib_matrix,
                     table_mm=5, zexag=3, interpolate=False)
         self.status.SetLabel("Done.")
+        self.OnUpdate(None)
 
     def OnScanName(self, event):
         name = self.scan_name.GetValue()
