@@ -18,7 +18,7 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 
 
-def compute_crosssection(real_elev, output_elev, output_diff, output_cross, voxel, scan_file_path, calib_matrix, zexag, table_mm, edge_mm, mm_resolution):
+def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_path, calib_matrix, zexag, table_mm, edge_mm, mm_resolution):
     output_tmp1 = "output_scan_tmp1"
     fd, temp_path = tempfile.mkstemp()
     os.close(fd)
@@ -66,7 +66,7 @@ def compute_crosssection(real_elev, output_elev, output_diff, output_cross, voxe
 #    gcore.run_command('r.colors', map=output_elev, color='elevation')
         
 
-    difference(real_elev=real_elev, scanned_elev=output_elev, new=output_diff, env=env)
+    difference(real_elev=real_elev, scanned_elev=output_elev, new='diff', env=env)
 
     env = get_environment(tmp_regions, rast3d=voxel, nsres=3, ewres=3)
 #    voxels = gcore.read_command('g.mlist', quiet=True, type='rast3d', pattern='interp_2003*', separator=',').strip()

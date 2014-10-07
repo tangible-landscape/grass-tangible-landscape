@@ -13,6 +13,8 @@ import shutil
 from grass.script import core as gcore
 from grass.script import raster as grast
 
+from scan_processing import remove_vector, get_environment, remove_temp_regions
+
 
 def difference(real_elev, scanned_elev, new, env):
     """!Computes difference of original and scanned (scan - orig)."""
@@ -102,17 +104,48 @@ def contours(scanned_elev, new, env, step=None):
         pass
 
 
-def change_detection(before, after, change, height_treshold, add, env):
+def change_detection(before, after, change, height_threshold, cells_threshold, add, env):
+    tmp_regions = []
+    env = get_environment(tmp_regions, rast=before, n='n-30', s='s+30', e='e-30', w='w+30')
     diff_thr = 'diff_thr_' + str(os.getpid())
     diff_thr_clump = 'diff_thr_clump_' + str(os.getpid())
+    change_vector = 'change_vector_' + str(os.getpid())
     if add:
-        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({after} - {before}) > {thr}, 1, null())".format(diff_thr=diff_thr,  after=after, before=before, thr=height_treshold), env=env)
+        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({after} - {before}) > {thr1} &&"
+                                                  " ({after} - {before}) < {thr2}, 1, null())".format(diff_thr=diff_thr,  after=after,
+                                                                                                      before=before, thr1=height_threshold[0],
+                                                                                                      thr2=height_threshold[1]), env=env)
     else:
-        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({before} - {after}) > {thr}, 1, null())".format(diff_thr=diff_thr,  after=after, before=before, thr=height_treshold), env=env)
+        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({before} - {after}) > {thr}, 1, null())".format(diff_thr=diff_thr,
+                          after=after, before=before, thr=height_threshold), env=env)
     gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
-    stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split('\n')
-    if len(stats) > 0:
+
+    stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split(os.linesep)
+    if len(stats) > 0 and stats[0]:
         print stats
-        cat, value = stats[0].split()
-    gcore.run_command('r.mapcalc', expression="{change} = if({diff_thr_clump} == {val}, 1, null())".format(change=change,  diff_thr_clump=diff_thr_clump, val=cat), overwrite=True, env=env)
+        cats = []
+        for stat in stats:
+            if float(stat.split()[1]) < cells_threshold[1] and float(stat.split()[1]) > cells_threshold[0]: # larger than specified number of cells
+                cat, value = stat.split()
+                cats.append(cat)
+        if cats:
+            expression = '{change} = if(('.format(change=change)
+            for i, cat in enumerate(cats):
+                if i != 0:
+                    expression += ' || '
+                expression += '{diff_thr_clump} == {val}'.format(diff_thr_clump=diff_thr_clump, val=cat)
+            expression += '), 1, null())'
+            gcore.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
+            remove_vector(change_vector)
+            gcore.run_command('r.to.vect', flags='st', input=change, output=change_vector, type='area')
+            remove_vector(change)
+            gcore.run_command('v.to.points', flags='t', input=change_vector, type='centroid', output=change)
+            remove_vector(change_vector)
+        else:
+            gcore.warning("No change found!")
+    else:
+        gcore.warning("No change found!")
+    
     gcore.run_command('g.remove', rast=[diff_thr, diff_thr_clump])
+    remove_temp_regions(tmp_regions)
+
