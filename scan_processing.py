@@ -326,6 +326,7 @@ def get_environment(tmp_regions, **kwargs):
     tmp_regions.append(name)
     env = os.environ.copy()
     env['WIND_OVERRIDE'] = name
+    env['GRASS_VERBOSE'] = '0'
     env['GRASS_MESSAGE_FORMAT'] = 'standard'
     if 'GRASS_REGION' in env:
         del env['GRASS_REGION']
