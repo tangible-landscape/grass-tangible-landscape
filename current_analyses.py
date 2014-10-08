@@ -26,3 +26,14 @@ import analyses
 #    
 #def run_usped(scanned_elev, env, **kwargs):
 #    analyses.usped(scanned_elev, k_factor='soils_Kfactor', c_factor='cfactorbare_1m', flowacc='flowacc', slope='slope', aspect='aspect', new='erdep', env=env)
+
+#def run_change_detection(scanned_elev, env, **kwargs):
+#    analyses.change_detection(before='scan', after=scanned_elev,
+#                              change='change', height_threshold=[10, 30], cells_threshold=[10, 200], add=True, env=env)
+#
+#                              
+#def run_trail(real_elev, scanned_elev, env, **kwargs):
+#    analyses.trails_combinations(real_elev,friction='friction', walk_coeff=[0.72, 60.0, 1.9998, -1.9998],
+#                                 _lambda=.5, slope_factor=-.8125, walk='walk_result',
+#                                 walking_dir='walkdir_result', points='change', raster_route='route_result',
+#                                 vector_routes='route_result', env=env)

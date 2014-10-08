@@ -106,7 +106,7 @@ def contours(scanned_elev, new, env, step=None):
 
 def change_detection(before, after, change, height_threshold, cells_threshold, add, env):
     tmp_regions = []
-    env = get_environment(tmp_regions, rast=before, n='n-30', s='s+30', e='e-30', w='w+30')
+    env = get_environment(tmp_regions, rast=before, n='n-20', s='s+20', e='e-20', w='w+20')
     diff_thr = 'diff_thr_' + str(os.getpid())
     diff_thr_clump = 'diff_thr_clump_' + str(os.getpid())
     change_vector = 'change_vector_' + str(os.getpid())
@@ -153,30 +153,43 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
 def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
                         walk, walking_dir, points, raster_route, vector_routes, env):
     import itertools
+
     coordinates = gcore.read_command('v.out.ascii', input=points, format='point', separator=',', env=env).strip()
     coords_list = []
     for coords in coordinates.split(os.linesep):
         coords_list.append(coords.split(',')[:2])
 
     remove_vector(vector_routes)
-    gcore.run_command('v.edit', map=vector_routes, tool='create', env=env)
-    vector_route_tmp = 'route_path_' + str(os.getpid())
-    remove_vector(vector_route_tmp)
 
-    for p1, p2 in itertools.combinations(coords_list, 2):
-        p1 = ','.join(p1)
-        p2 = ','.join(p2)
-        trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor, walk, walking_dir, p1, p2, raster_route, vector_route_tmp, env)
-        gcore.run_command('v.patch', input=vector_route_tmp, output=vector_routes, flags='a', overwrite=True, env=env)
-        remove_vector(vector_route_tmp)
 
-    gcore.run_command('g.remove', rast=[walk, walking_dir, raster_route], env=env)
+        i += 1
+        point_from = ','.join(points[0][0])
+        points_to = [','.join(pair[1]) for pair in points]
+        vector_routes_list_drain = []
+        for each in points_to:
+            vector_route_tmp = 'route_path_' + str(k)
+            remove_vector(vector_route_tmp)
+            vector_routes_list_drain.append(vector_route_tmp)
+            k += 1
+        vector_routes_list.extend(vector_routes_list_drain)
+        
+        trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
+              walk_tmp, walk_dir_tmp, point_from, points_to, raster_route_tmp, vector_routes_list_drain, env)
+                
+    gcore.run_command('v.patch', input=vector_routes_list, output=vector_routes, overwrite=True, env=env)
+
+    gcore.run_command('g.remove', rast=walk_tmp_list, env=env)
+    gcore.run_command('g.remove', rast=walk_dir_tmp_list, env=env)
+    for vmap in vector_routes_list:
+        remove_vector(vmap)
+
 
 # procedure for finding a trail in real-time
 def trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
-          walk, walking_dir, start, stop, raster_route, vector_route, env):
+          walk, walk_dir, point_from, points_to, raster_route, vector_routes, env):
     gcore.run_command('r.walk',overwrite=True, flags='k', elevation=scanned_elev,
-                      friction=friction, output=walk, outdir=walking_dir, start_coordinates=start,
-                      stop_coordinates=stop, walk_coeff=walk_coeff, _lambda=_lambda, slope_factor=slope_factor, env=env)
-    gcore.run_command('r.drain', overwrite=True, flags='d', input=walk, indir=walking_dir,
-                      output=raster_route, vector_output=vector_route, start_coordinates=stop, env=env)
+                      friction=friction, output=walk, start_coordinates=point_from, outdir=walk_dir, 
+                      stop_coordinates=points_to, walk_coeff=walk_coeff, _lambda=_lambda, slope_factor=slope_factor, env=env)
+    for i in range(len(points_to)):
+        gcore.run_command('r.drain', overwrite=True, input=walk, indir=walk_dir, flags='d', vector_output=vector_routes[i],
+                          output=raster_route, start_coordinates=points_to[i], env=env)
