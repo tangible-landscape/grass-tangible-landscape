@@ -125,10 +125,10 @@ def main():
     mesh_path = os.path.join(os.path.realpath(gettempdir()), 'kinect_scan.txt')
 
     kinect_app = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kinect', 'scan_once', 'KinectFusionBasics-D2D.exe')
-    subprocess.call([kinect_app, mesh_path, '40', str(0.4), str(0.85)])
+    subprocess.call([kinect_app, mesh_path, '40', '0.4', '1.2', '512', '384']) # last 2 parameters must be 128/384/512 (larger for bigger models)
     calib_matrix = np.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy'))
     import_scan(input_file=mesh_path,
-                real_elev='elevation@user1',
+                real_elev='elevation',
                 output_elev='scan',
                 mm_resolution=0.001,
                 calib_matrix=calib_matrix,
