@@ -1,0 +1,28 @@
+﻿Build started 6/9/2014 12:07:00 PM.
+     1>Project "C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\KinectFusionExplorer-D2D.vcxproj" on node 2 (Build target(s)).
+     1>ClCompile:
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /Zi /nologo /W3 /WX- /O2 /Oi /Oy- /GL /D WIN32 /D NDEBUG /D _WINDOWS /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Release\\" /Fd"Release\vc110.pdb" /Gd /TP /analyze- /errorReport:prompt KinectFusionProcessor.cpp
+         KinectFusionProcessor.cpp
+       Link:
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\Release\KinectFusionExplorer-D2D.exe" /INCREMENTAL:NO /NOLOGO NuiSensorChooser.lib Kinect10.lib KinectFusion180_32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\Release\KinectFusionExplorer-D2D.pdb" /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\Release\KinectFusionExplorer-D2D.lib" /MACHINE:X86 /SAFESEH "Release\KinectFusionExplorer-D2D.res"
+         Release\ImageRenderer.obj
+         Release\KinectFusionExplorer.obj
+         Release\KinectFusionHelper.obj
+         Release\KinectFusionProcessor.obj
+         Release\KinectFusionProcessorFrame.obj
+         Release\Timer.obj
+         "C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\Release\NuiSensorChooser.lib"
+         Generating code
+     1>c:\users\akratoc\tangeoms\kinectexample3\kinectfusionexplorer-d2d\kinectfusionexplorer.cpp(81): warning C4715: 'wWinMain' : not all control paths return a value
+         Finished generating code
+         KinectFusionExplorer-D2D.vcxproj -> C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\Release\KinectFusionExplorer-D2D.exe
+       PostBuildEvent:
+         xcopy /C /Y "C:\Program Files\Microsoft SDKs\Kinect\Developer Toolkit v1.8.0\Redist\x86\KinectFusion180_32.dll" "C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\Release\"
+         :VCEnd
+         C:\Program Files\Microsoft SDKs\Kinect\Developer Toolkit v1.8.0\Redist\x86\KinectFusion180_32.dll
+         1 File(s) copied
+     1>Done Building Project "C:\Users\akratoc\TanGeoMS\KinectExample3\KinectFusionExplorer-D2D\KinectFusionExplorer-D2D.vcxproj" (Build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:02.57
