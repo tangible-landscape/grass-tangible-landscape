@@ -1,26 +1,26 @@
-﻿Build started 6/9/2014 12:09:38 PM.
-     1>Project "C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\KinectFusionBasics-D2D.vcxproj" on node 2 (Build target(s)).
+﻿Build started 10/3/2014 1:54:34 PM.
+     1>Project "C:\Users\akratoc\TanGeoMS\SDK2\basic\KinectFusionBasics-D2D\KinectFusionBasics-D2D.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
          C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /Zi /nologo /W3 /WX- /O2 /Oi /Oy- /GL /D WIN32 /D NDEBUG /D _WINDOWS /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Release\\" /Fd"Release\vc110.pdb" /Gd /TP /analyze- /errorReport:prompt KinectFusionBasics.cpp
          KinectFusionBasics.cpp
-     1>KinectFusionBasics.cpp(148): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
-     1>KinectFusionBasics.cpp(149): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>KinectFusionBasics.cpp(171): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>KinectFusionBasics.cpp(172): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
        Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.exe" /INCREMENTAL:NO /NOLOGO Kinect10.lib KinectFusion180_32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.pdb" /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.lib" /MACHINE:X86 /SAFESEH "Release\KinectFusionBasics-D2D.res"
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\akratoc\TanGeoMS\SDK2\basic\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.exe" /INCREMENTAL:NO /NOLOGO Kinect20.lib Kinect20.Fusion.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\akratoc\TanGeoMS\SDK2\basic\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.pdb" /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\akratoc\TanGeoMS\SDK2\basic\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.lib" /MACHINE:X86 /SAFESEH "Release\KinectFusionBasics-D2D.res"
          Release\ImageRenderer.obj
          Release\KinectFusionBasics.obj
          Release\Timer.obj
          Generating code
-     1>c:\users\akratoc\tangeoms\basic\new4\kinectfusionbasics-d2d\kinectfusionbasics.cpp(84): warning C4715: 'wWinMain' : not all control paths return a value
+     1>c:\users\akratoc\tangeoms\sdk2\basic\kinectfusionbasics-d2d\kinectfusionbasics.cpp(107): warning C4715: 'wWinMain' : not all control paths return a value
          Finished generating code
-         KinectFusionBasics-D2D.vcxproj -> C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.exe
+         KinectFusionBasics-D2D.vcxproj -> C:\Users\akratoc\TanGeoMS\SDK2\basic\KinectFusionBasics-D2D\Release\KinectFusionBasics-D2D.exe
        PostBuildEvent:
-         xcopy /C /Y "C:\Program Files\Microsoft SDKs\Kinect\Developer Toolkit v1.8.0\Redist\x86\KinectFusion180_32.dll" "C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\Release\"
+         xcopy /C /Y "C:\Program Files\Microsoft SDKs\Kinect\v2.0-PublicPreview1409\Redist\Fusion\x86\Kinect20.Fusion.dll" "C:\Users\akratoc\TanGeoMS\SDK2\basic\KinectFusionBasics-D2D\Release\"
          :VCEnd
-         C:\Program Files\Microsoft SDKs\Kinect\Developer Toolkit v1.8.0\Redist\x86\KinectFusion180_32.dll
+         C:\Program Files\Microsoft SDKs\Kinect\v2.0-PublicPreview1409\Redist\Fusion\x86\Kinect20.Fusion.dll
          1 File(s) copied
-     1>Done Building Project "C:\Users\akratoc\TanGeoMS\Basic\new4\KinectFusionBasics-D2D\KinectFusionBasics-D2D.vcxproj" (Build target(s)).
+     1>Done Building Project "C:\Users\akratoc\TanGeoMS\SDK2\basic\KinectFusionBasics-D2D\KinectFusionBasics-D2D.vcxproj" (Build target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:01.65
+Time Elapsed 00:00:04.30
