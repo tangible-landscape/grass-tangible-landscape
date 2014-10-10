@@ -159,9 +159,15 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
     for coords in coordinates.split(os.linesep):
         coords_list.append(coords.split(',')[:2])
 
-    remove_vector(vector_routes)
+    combinations = itertools.combinations(coords_list, 2)
+    combinations = [list(group) for k, group in itertools.groupby(combinations, key=lambda x: x[0])]
+    i = k = 0
+    vector_routes_list = []
 
-
+    walk_tmp = 'walk_tmp'
+    walk_dir_tmp = 'walk_dir_tmp'
+    raster_route_tmp = 'raster_route_tmp'
+    for points in combinations:
         i += 1
         point_from = ','.join(points[0][0])
         points_to = [','.join(pair[1]) for pair in points]
@@ -172,14 +178,13 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
             vector_routes_list_drain.append(vector_route_tmp)
             k += 1
         vector_routes_list.extend(vector_routes_list_drain)
-        
+
         trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
               walk_tmp, walk_dir_tmp, point_from, points_to, raster_route_tmp, vector_routes_list_drain, env)
-                
+    remove_vector(vector_routes)          
     gcore.run_command('v.patch', input=vector_routes_list, output=vector_routes, overwrite=True, env=env)
 
-    gcore.run_command('g.remove', rast=walk_tmp_list, env=env)
-    gcore.run_command('g.remove', rast=walk_dir_tmp_list, env=env)
+    gcore.run_command('g.remove', rast=[walk_tmp, walk_dir_tmp, raster_route_tmp], env=env)
     for vmap in vector_routes_list:
         remove_vector(vmap)
 
