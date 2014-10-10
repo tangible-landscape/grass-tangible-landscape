@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include <NuiKinectFusionApi.h>
+#include "NuiKinectFusionApi.h"
 
 /// <summary>
 /// Set Identity in a Matrix4
@@ -224,6 +224,14 @@ HRESULT DownsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_I
 /// <param name="factor">The up sample factor (1=just copy, 2=x*2,y*2, 4=x*4,y*4).</param>
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT UpsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMAGE_FRAME *dest, unsigned int factor);
+
+/// <summary>
+/// Down sample color frame with nearest neighbor to the depth frame resolution
+/// </summary>
+/// <param name="src">The source color image.</param>
+/// <param name="dest">The destination down sampled  image.</param>
+/// <returns>S_OK on success, otherwise failure code</returns>
+HRESULT DownsampleColorFrameToDepthResolution(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMAGE_FRAME *dest);
 
 /// <summary>
 /// Convert int to string

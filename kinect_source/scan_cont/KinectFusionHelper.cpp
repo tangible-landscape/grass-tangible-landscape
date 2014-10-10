@@ -26,6 +26,8 @@
 #include <vector>
 #include <stdio.h>
 #include <string.h>
+#include <locale>
+#include <codecvt>
 
 #pragma warning(push)
 #pragma warning(disable:6255)
@@ -325,20 +327,9 @@ HRESULT WriteBinarySTLMeshFile(INuiFusionColorMesh *mesh, LPOLESTR lpOleFileName
     }
 
     // Open File
-    USES_CONVERSION;
-    char* pszFileName = NULL;
-
-    try
-    {
-        pszFileName = OLE2A(lpOleFileName);
-    }
-    catch (...)
-    {
-        return E_INVALIDARG;
-    }
-
+    std::string filename  = std::wstring_convert<std::codecvt_utf8<wchar_t>>().to_bytes(lpOleFileName);
     FILE *meshFile = NULL;
-    errno_t err = fopen_s(&meshFile, pszFileName, "wb");
+    errno_t err = fopen_s(&meshFile, filename.c_str(), "wb");
 
     // Could not open file for writing - return
     if (0 != err || NULL == meshFile)
@@ -439,20 +430,9 @@ HRESULT WriteAsciiObjMeshFile(INuiFusionColorMesh *mesh, LPOLESTR lpOleFileName,
     }
 
     // Open File
-    USES_CONVERSION;
-    char* pszFileName = NULL;
-
-    try
-    {
-        pszFileName = OLE2A(lpOleFileName);
-    }
-    catch (...)
-    {
-        return E_INVALIDARG;
-    }
-
+    std::string filename  = std::wstring_convert<std::codecvt_utf8<wchar_t>>().to_bytes(lpOleFileName);
     FILE *meshFile = NULL;
-    errno_t err = fopen_s(&meshFile, pszFileName, "wt");
+    errno_t err = fopen_s(&meshFile, filename.c_str(), "wt");
 
     // Could not open file for writing - return
     if (0 != err || NULL == meshFile)
@@ -583,20 +563,9 @@ HRESULT WriteAsciiPlyMeshFile(INuiFusionColorMesh *mesh, LPOLESTR lpOleFileName,
     }
 
     // Open File
-    USES_CONVERSION;
-    char* pszFileName = NULL;
-
-    try
-    {
-        pszFileName = OLE2A(lpOleFileName);
-    }
-    catch (...)
-    {
-        return E_INVALIDARG;
-    }
-
+    std::string filename  = std::wstring_convert<std::codecvt_utf8<wchar_t>>().to_bytes(lpOleFileName);
     FILE *meshFile = NULL;
-    errno_t err = fopen_s(&meshFile, pszFileName, "wt");
+    errno_t err = fopen_s(&meshFile, filename.c_str(), "wt");
 
     // Could not open file for writing - return
     if (0 != err || NULL == meshFile)
@@ -762,20 +731,9 @@ HRESULT WriteTexturedeAsciiObjMeshFile(INuiFusionColorMesh *mesh, LPOLESTR lpOle
     }
 
     // Open File
-    USES_CONVERSION;
-    char* pszFileName = NULL;
-
-    try
-    {
-        pszFileName = OLE2A(lpOleFileName);
-    }
-    catch (...)
-    {
-        return E_INVALIDARG;
-    }
-
+    std::string filename  = std::wstring_convert<std::codecvt_utf8<wchar_t>>().to_bytes(lpOleFileName);
     FILE *meshFile = NULL;
-    errno_t err = fopen_s(&meshFile, pszFileName, "wt");
+    errno_t err = fopen_s(&meshFile, filename.c_str(), "wt");
 
     // Could not open file for writing - return
     if (0 != err || NULL == meshFile)
@@ -784,7 +742,6 @@ HRESULT WriteTexturedeAsciiObjMeshFile(INuiFusionColorMesh *mesh, LPOLESTR lpOle
     }
 
     // Split the name and extension
-    std::string filename(pszFileName);
     std::string mtlfilename = filename + ".mtl";
 
     // Open the material file
@@ -917,27 +874,15 @@ HRESULT WriteTexturedeAsciiObjMeshFile(INuiFusionColorMesh *mesh, LPOLESTR lpOle
     CA2W pszW( textureFilenamePath.c_str() );
 
     // Write out the texture
-    // Lock the texture color frame
-    NUI_LOCKED_RECT fusionColorLockedRect;
-    INuiFrameTexture *fusionColorTex = pTexture->pFrameTexture;
+    NUI_FUSION_BUFFER *fusionColorBuffer = pTexture->pFrameBuffer;
 
-    if (NULL == fusionColorTex)
-    {
-        return E_NOINTERFACE;
-    }
-
-    // Lock the frame data to access the color pixels
-    hr = fusionColorTex->LockRect(0, &fusionColorLockedRect, nullptr, 0);
-
-    if (FAILED(hr) || fusionColorLockedRect.Pitch == 0)
+    if (fusionColorBuffer->Pitch == 0)
     {
         return E_FAIL;
     }
 
     // Save the texture
-    hr = SaveBMPFile(pszW, fusionColorLockedRect.pBits, pTexture->width, pTexture->height);
-
-    fusionColorTex->UnlockRect(0);
+    hr = SaveBMPFile(pszW, fusionColorBuffer->pBits, pTexture->width, pTexture->height);
 
     return hr;
 }
@@ -1005,9 +950,8 @@ HRESULT SaveBMPFile(LPCWSTR pszFile, const byte *pImageBytes, unsigned int width
 
     // Open file and write
     HANDLE file = CreateFile(pszFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (NULL == file)
+	if (INVALID_HANDLE_VALUE == file)
     {
-        CloseHandle(file);
         return E_INVALIDARG;
     }
 
@@ -1046,7 +990,7 @@ HRESULT CopyImageFrame(const NUI_FUSION_IMAGE_FRAME *pSrc, const NUI_FUSION_IMAG
 {
     HRESULT hr = S_OK;
 
-    if (nullptr == pSrc || nullptr == pSrc->pFrameTexture || nullptr == pDest || nullptr == pDest->pFrameTexture)
+    if (nullptr == pSrc || nullptr == pSrc->pFrameBuffer || nullptr == pDest || nullptr == pDest->pFrameBuffer)
     {
         return E_INVALIDARG;
     }
@@ -1061,36 +1005,28 @@ HRESULT CopyImageFrame(const NUI_FUSION_IMAGE_FRAME *pSrc, const NUI_FUSION_IMAG
         return E_NOINTERFACE;
     }
 
-    INuiFrameTexture *srcImageFrameTexture = pSrc->pFrameTexture;
-    NUI_LOCKED_RECT srcLockedRect;
-
-    // Lock the frame data so the Kinect knows not to modify it while we're reading it
-    hr = srcImageFrameTexture->LockRect(0, &srcLockedRect, nullptr, 0);
+    NUI_FUSION_BUFFER *srcImageFrameBuffer = pSrc->pFrameBuffer;
 
     // Make sure we've received valid data
-    if (SUCCEEDED(hr) && srcLockedRect.Pitch != 0)
+    if (srcImageFrameBuffer->Pitch != 0)
     {
-        INuiFrameTexture *destImageFrameTexture = pSrc->pFrameTexture;
-        NUI_LOCKED_RECT destLockedRect;
-
-        // Lock the frame data so the Kinect knows not to modify it while we're reading it
-        hr = destImageFrameTexture->LockRect(0, &destLockedRect, nullptr, 0);
+        NUI_FUSION_BUFFER *destImageFrameBuffer = pDest->pFrameBuffer;
 
         // Make sure we've received valid data
-        if (SUCCEEDED(hr) && destLockedRect.Pitch != 0)
+        if (destImageFrameBuffer->Pitch != 0)
         {
             // Copy
-            errno_t err = memcpy_s(destLockedRect.pBits, destImageFrameTexture->BufferLen(), srcLockedRect.pBits, srcImageFrameTexture->BufferLen());
+            errno_t err = memcpy_s(
+                destImageFrameBuffer->pBits, 
+                destImageFrameBuffer->Pitch * pDest->height, 
+                srcImageFrameBuffer->pBits, 
+                srcImageFrameBuffer->Pitch * pSrc->height);
 
             if (0 != err)
             {
                 hr = E_FAIL;
             }
-
-            destImageFrameTexture->UnlockRect(0);
         }
-
-        srcImageFrameTexture->UnlockRect(0);
     }
 
     return hr;
@@ -1104,16 +1040,14 @@ HRESULT CopyImageFrame(const NUI_FUSION_IMAGE_FRAME *pSrc, const NUI_FUSION_IMAG
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT ColorResiduals(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFromReference, const NUI_FUSION_IMAGE_FRAME *pShadedDeltaFromReference)
 {
-    HRESULT hr = S_OK;
-
     if (nullptr == pShadedDeltaFromReference || 
         nullptr == pFloatDeltaFromReference)
     {
         return E_FAIL;
     }
 
-    if (nullptr == pShadedDeltaFromReference->pFrameTexture ||
-        nullptr == pFloatDeltaFromReference->pFrameTexture)
+    if (nullptr == pShadedDeltaFromReference->pFrameBuffer ||
+        nullptr == pFloatDeltaFromReference->pFrameBuffer)
     {
         return E_NOINTERFACE;
     }
@@ -1132,29 +1066,19 @@ HRESULT ColorResiduals(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFromReference, c
         return E_INVALIDARG;
     }
 
-    // 32bit ABGR color pixels for shaded image
-    NUI_LOCKED_RECT shadedDeltasLockedRect;
-    hr = pShadedDeltaFromReference->pFrameTexture->LockRect(0, &shadedDeltasLockedRect, nullptr, 0);
-    if (FAILED(hr) || shadedDeltasLockedRect.Pitch == 0)
+    if (pShadedDeltaFromReference->pFrameBuffer->Pitch == 0
+        || pFloatDeltaFromReference->pFrameBuffer->Pitch == 0)
     {
-        return hr;
+        return E_INVALIDARG;
     }
 
-    // 32bit float per pixel signifies distance delta from the reconstructed surface model after AlignDepthFloatToReconstruction
-    NUI_LOCKED_RECT floatDeltasLockedRect;
-    hr = pFloatDeltaFromReference->pFrameTexture->LockRect(0, &floatDeltasLockedRect, nullptr, 0);
-    if (FAILED(hr) || floatDeltasLockedRect.Pitch == 0)
-    {
-        return hr;
-    }
-
-    unsigned int *pColorBuffer = reinterpret_cast<unsigned int *>(shadedDeltasLockedRect.pBits);
-    const float *pFloatBuffer = reinterpret_cast<float *>(floatDeltasLockedRect.pBits);
+    unsigned int *pColorBuffer = reinterpret_cast<unsigned int *>(pShadedDeltaFromReference->pFrameBuffer->pBits);
+    const float *pFloatBuffer = reinterpret_cast<float *>(pFloatDeltaFromReference->pFrameBuffer->pBits);
 
     Concurrency::parallel_for(0u, height, [&](unsigned int y)
     {
-        unsigned int* pColorRow = reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(pColorBuffer) + (y * shadedDeltasLockedRect.Pitch));
-        const float* pFloatRow = reinterpret_cast<const float*>(reinterpret_cast<const unsigned char*>(pFloatBuffer) + (y * floatDeltasLockedRect.Pitch));
+        unsigned int* pColorRow = reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(pColorBuffer) + (y * pShadedDeltaFromReference->pFrameBuffer->Pitch));
+        const float* pFloatRow = reinterpret_cast<const float*>(reinterpret_cast<const unsigned char*>(pFloatBuffer) + (y * pFloatDeltaFromReference->pFrameBuffer->Pitch));
 
         for (unsigned int x = 0; x < width; ++x)
         {
@@ -1173,10 +1097,7 @@ HRESULT ColorResiduals(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFromReference, c
         }
     });
 
-    pShadedDeltaFromReference->pFrameTexture->UnlockRect(0);
-    pFloatDeltaFromReference->pFrameTexture->UnlockRect(0);
-
-    return hr;
+    return S_OK;
 }
 
 /// <summary>
@@ -1186,14 +1107,12 @@ HRESULT ColorResiduals(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFromReference, c
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT CalculateResidualStatistics(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFromReference, DeltaFromReferenceImageStatistics *stats)
 {
-    HRESULT hr = S_OK;
-
     if (nullptr == pFloatDeltaFromReference || nullptr == stats)
     {
         return E_INVALIDARG;
     }
 
-    if (nullptr == pFloatDeltaFromReference->pFrameTexture)
+    if (nullptr == pFloatDeltaFromReference->pFrameBuffer)
     {
         return E_NOINTERFACE;
     }
@@ -1201,20 +1120,12 @@ HRESULT CalculateResidualStatistics(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFro
     unsigned int width = pFloatDeltaFromReference->width;
     unsigned int height = pFloatDeltaFromReference->height;
 
-    if (0 == width || 0 == height)
+    if (0 == width || 0 == height || pFloatDeltaFromReference->pFrameBuffer->Pitch == 0)
     {
         return E_INVALIDARG;
     }
 
-    // 32bit float per pixel signifies distance delta from the reconstructed surface model after AlignDepthFloatToReconstruction
-    NUI_LOCKED_RECT floatDeltasLockedRect;
-    hr = pFloatDeltaFromReference->pFrameTexture->LockRect(0, &floatDeltasLockedRect, nullptr, 0);
-    if (FAILED(hr) || floatDeltasLockedRect.Pitch == 0)
-    {
-        return hr;
-    }
-
-    const float *pFloatBuffer = reinterpret_cast<float *>(floatDeltasLockedRect.pBits);
+    const float *pFloatBuffer = reinterpret_cast<float *>(pFloatDeltaFromReference->pFrameBuffer->pBits);
 
     // Measurement stats
     std::vector<unsigned int> zeroPixelsRow;
@@ -1229,7 +1140,7 @@ HRESULT CalculateResidualStatistics(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFro
 
     Concurrency::parallel_for(0u, height, [&](unsigned int y)
     {
-        const float* pFloatRow = reinterpret_cast<const float*>(reinterpret_cast<const unsigned char*>(pFloatBuffer) + (y * floatDeltasLockedRect.Pitch));
+        const float* pFloatRow = reinterpret_cast<const float*>(reinterpret_cast<const unsigned char*>(pFloatBuffer) + (y * pFloatDeltaFromReference->pFrameBuffer->Pitch));
 
         for (unsigned int x = 0; x < width; ++x)
         {
@@ -1266,9 +1177,7 @@ HRESULT CalculateResidualStatistics(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFro
         stats->totalValidPixelsDistance += validPixelDistanceRow[y];
     }
 
-    pFloatDeltaFromReference->pFrameTexture->UnlockRect(0);
-
-    return hr;
+    return S_OK;
 }
 
 /// <summary>
@@ -1278,14 +1187,12 @@ HRESULT CalculateResidualStatistics(const NUI_FUSION_IMAGE_FRAME *pFloatDeltaFro
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT HorizontalMirror32bitImageInPlace(const NUI_FUSION_IMAGE_FRAME *pImage)
 {
-    HRESULT hr = S_OK;
-
     if (nullptr == pImage || !(pImage->imageType == NUI_FUSION_IMAGE_TYPE_COLOR || pImage->imageType == NUI_FUSION_IMAGE_TYPE_FLOAT))
     {
         return E_INVALIDARG;
     }
 
-    if (nullptr == pImage->pFrameTexture)
+    if (nullptr == pImage->pFrameBuffer)
     {
         return E_NOINTERFACE;
     }
@@ -1293,19 +1200,12 @@ HRESULT HorizontalMirror32bitImageInPlace(const NUI_FUSION_IMAGE_FRAME *pImage)
     unsigned int width = pImage->width;
     unsigned int height = pImage->height;
 
-    if (0 == width || 0 == height)
+    if (0 == width || 0 == height || pImage->pFrameBuffer->Pitch == 0)
     {
         return E_INVALIDARG;
     }
 
-    NUI_LOCKED_RECT LockedRect;
-    hr = pImage->pFrameTexture->LockRect(0, &LockedRect, nullptr, 0);
-    if (FAILED(hr) || LockedRect.Pitch == 0)
-    {
-        return hr;
-    }
-
-    unsigned int *rawPixels = reinterpret_cast<unsigned int *>(LockedRect.pBits);
+    unsigned int *rawPixels = reinterpret_cast<unsigned int *>(pImage->pFrameBuffer->pBits);
 
     Concurrency::parallel_for(0u, height, [&](unsigned int y)
     {
@@ -1321,9 +1221,7 @@ HRESULT HorizontalMirror32bitImageInPlace(const NUI_FUSION_IMAGE_FRAME *pImage)
         }
     });
 
-    pImage->pFrameTexture->UnlockRect(0);
-
-    return hr;
+    return S_OK;
 }
 
 /// <summary>
@@ -1334,14 +1232,12 @@ HRESULT HorizontalMirror32bitImageInPlace(const NUI_FUSION_IMAGE_FRAME *pImage)
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT HorizontalMirror32bitImage(const NUI_FUSION_IMAGE_FRAME *pSrcImage, const NUI_FUSION_IMAGE_FRAME *pDestImage)
 {
-    HRESULT hr = S_OK;
-
     if (nullptr == pSrcImage || nullptr == pDestImage)
     {
         return E_INVALIDARG;
     }
 
-    if (nullptr == pSrcImage->pFrameTexture || nullptr == pDestImage->pFrameTexture)
+    if (nullptr == pSrcImage->pFrameBuffer || nullptr == pDestImage->pFrameBuffer)
     {
         return E_NOINTERFACE;
     }
@@ -1360,29 +1256,18 @@ HRESULT HorizontalMirror32bitImage(const NUI_FUSION_IMAGE_FRAME *pSrcImage, cons
         return E_INVALIDARG;
     }
 
-    NUI_LOCKED_RECT srcLockedRect;
-    hr = pSrcImage->pFrameTexture->LockRect(0, &srcLockedRect, nullptr, 0);
-    if (FAILED(hr) || srcLockedRect.Pitch == 0)
+    if (pSrcImage->pFrameBuffer->Pitch == 0 || pDestImage->pFrameBuffer->Pitch == 0)
     {
-        return hr;
+        return E_INVALIDARG;
     }
 
-    // 32bit float per pixel signifies distance delta from the reconstructed surface model after AlignDepthFloatToReconstruction
-    NUI_LOCKED_RECT destLockedRect;
-    hr = pDestImage->pFrameTexture->LockRect(0, &destLockedRect, nullptr, 0);
-    if (FAILED(hr) || destLockedRect.Pitch == 0)
-    {
-        pSrcImage->pFrameTexture->UnlockRect(0);
-        return hr;
-    }
-
-    const unsigned int *pSrcBuffer = reinterpret_cast<const unsigned int *>(srcLockedRect.pBits);
-    unsigned int *pDestBuffer = reinterpret_cast<unsigned int *>(destLockedRect.pBits);
+    const unsigned int *pSrcBuffer = reinterpret_cast<const unsigned int *>(pSrcImage->pFrameBuffer->pBits);
+    unsigned int *pDestBuffer = reinterpret_cast<unsigned int *>(pDestImage->pFrameBuffer->pBits);
 
     Concurrency::parallel_for(0u, height, [&](unsigned int y)
     {
-        const unsigned int *pSrcRow = reinterpret_cast<const unsigned int*>(reinterpret_cast<const unsigned char*>(pSrcBuffer) + (y * srcLockedRect.Pitch));
-        unsigned int *pDestRow = reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(pDestBuffer) + (y * destLockedRect.Pitch));
+        const unsigned int *pSrcRow = reinterpret_cast<const unsigned int*>(reinterpret_cast<const unsigned char*>(pSrcBuffer) + (y * pSrcImage->pFrameBuffer->Pitch));
+        unsigned int *pDestRow = reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(pDestBuffer) + (y * pDestImage->pFrameBuffer->Pitch));
 
         for (unsigned int x = 0, flippedX = width-1; x < width; ++x, --flippedX)
         {
@@ -1390,10 +1275,7 @@ HRESULT HorizontalMirror32bitImage(const NUI_FUSION_IMAGE_FRAME *pSrcImage, cons
         }
     });
 
-    pSrcImage->pFrameTexture->UnlockRect(0);
-    pDestImage->pFrameTexture->UnlockRect(0);
-
-    return hr;
+    return S_OK;
 }
 
 /// <summary>
@@ -1410,6 +1292,60 @@ static inline bool IsValidResampleFactor(unsigned int factor)
 }
 
 /// <summary>
+/// Down sample color frame with nearest neighbor to the depth frame resolution
+/// </summary>
+/// <param name="src">The source color image.</param>
+/// <param name="dest">The destination down sampled  image.</param>
+/// <returns>S_OK on success, otherwise failure code</returns>
+HRESULT DownsampleColorFrameToDepthResolution(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMAGE_FRAME *dest)
+{
+    if (nullptr == src || nullptr == dest)
+    {
+        return E_INVALIDARG;
+    }
+
+    if (src->imageType != NUI_FUSION_IMAGE_TYPE_COLOR || src->imageType != dest->imageType 
+        || src->width != 1920 || src->height != 1080 || dest->width != NUI_DEPTH_RAW_WIDTH || dest->height != NUI_DEPTH_RAW_HEIGHT)
+    {
+        return E_INVALIDARG;
+    }
+
+    NUI_FUSION_BUFFER *srcFrameBuffer = src->pFrameBuffer;
+    NUI_FUSION_BUFFER *downsampledFloatFrameBuffer = dest->pFrameBuffer;
+
+    float factor = 1080.0f / NUI_DEPTH_RAW_HEIGHT;
+
+    // Make sure we've received valid data
+    if (srcFrameBuffer->Pitch == 0 || downsampledFloatFrameBuffer->Pitch == 0)
+    {
+        return E_NOINTERFACE;
+    }
+
+    HRESULT hr = S_OK;
+    float *srcValues = (float *)srcFrameBuffer->pBits;
+    float *downsampledDestValues = (float *)downsampledFloatFrameBuffer->pBits;
+
+    const unsigned int filledZeroMargin = 0;
+    const unsigned int downsampledWidth = dest->width;
+    const unsigned int srcImageWidth = src->width;
+
+    ZeroMemory(downsampledDestValues, downsampledFloatFrameBuffer->Pitch * dest->height);
+    Concurrency::parallel_for(filledZeroMargin, dest->height - filledZeroMargin, [=, &downsampledDestValues, &srcValues](unsigned int y)
+    {
+        unsigned int index = dest->width * y;
+        for (unsigned int x=0; x < downsampledWidth; ++x, ++index)
+        {
+            int srcX = (int)(x * factor);
+            int srcY = (int)(y * factor);
+            int srcIndex = srcY * srcImageWidth + srcX;
+            downsampledDestValues[index] = srcValues[srcIndex];
+        }
+    });
+
+    return hr;
+}
+
+/// <summary>
 /// Down sample color, depth float or point cloud frame with nearest neighbor
 /// </summary>
 /// <param name="src">The source depth float or pointcloud image.</param>
@@ -1418,8 +1354,6 @@ static inline bool IsValidResampleFactor(unsigned int factor)
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT DownsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMAGE_FRAME *dest, unsigned int factor)
 {
-    HRESULT hr = S_OK;
-
     if (nullptr == src || nullptr == dest)
     {
         return E_INVALIDARG;
@@ -1436,13 +1370,13 @@ HRESULT DownsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_I
         return E_INVALIDARG;
     }
 
-    INuiFrameTexture *srcFrameTexture = src->pFrameTexture;
-    INuiFrameTexture *downsampledFloatFrameTexture = dest->pFrameTexture;
+    NUI_FUSION_BUFFER *srcFrameBuffer = src->pFrameBuffer;
+    NUI_FUSION_BUFFER *downsampledFloatFrameBuffer = dest->pFrameBuffer;
 
     unsigned int downsampledWidth = src->width / factor;
     unsigned int downsampleHeight = src->height / factor;
 
-    if (1 == factor && srcFrameTexture->BufferLen() != downsampledFloatFrameTexture->BufferLen())
+    if (1 == factor && srcFrameBuffer->Pitch * src->height != downsampledFloatFrameBuffer->Pitch * dest->height)
     {
         return E_INVALIDARG;
     }
@@ -1451,37 +1385,21 @@ HRESULT DownsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_I
         return E_INVALIDARG;
     }
 
-    NUI_LOCKED_RECT srcLockedRect;
-
-    // Lock the frame data so the Kinect knows not to modify it while we're reading it
-    hr = srcFrameTexture->LockRect(0, &srcLockedRect, nullptr, 0);
-
     // Make sure we've received valid data
-    if (FAILED(hr) || srcLockedRect.Pitch == 0)
+    if (srcFrameBuffer->Pitch == 0 || downsampledFloatFrameBuffer->Pitch == 0)
     {
         return E_NOINTERFACE;
     }
 
-    NUI_LOCKED_RECT downsampledLockedRect;
-
-    // Lock the frame data so the Kinect knows not to modify it while we're reading it
-    hr = downsampledFloatFrameTexture->LockRect(0, &downsampledLockedRect, nullptr, 0);
-
-    // Make sure we've received valid data
-    if (FAILED(hr) || downsampledLockedRect.Pitch == 0)
-    {
-        srcFrameTexture->UnlockRect(0);
-        return E_NOINTERFACE;
-    }
-
-    float *srcValues = (float *)srcLockedRect.pBits;
-    float *downsampledDestValues = (float *)downsampledLockedRect.pBits;
+    HRESULT hr = S_OK;
+    float *srcValues = (float *)srcFrameBuffer->pBits;
+    float *downsampledDestValues = (float *)downsampledFloatFrameBuffer->pBits;
 
     const unsigned int srcImageWidth = src->width;
 
     if (1 == factor)
     {
-        errno_t err = memcpy_s(downsampledDestValues, downsampledFloatFrameTexture->BufferLen(), srcValues, srcFrameTexture->BufferLen());
+        errno_t err = memcpy_s(downsampledDestValues, downsampledFloatFrameBuffer->Pitch * dest->height, srcValues, srcFrameBuffer->Pitch * src->height);
         if (0 != err)
         {
             hr = E_FAIL;
@@ -1508,10 +1426,6 @@ HRESULT DownsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_I
         });
     }
 
-    // We're done with the textures so unlock them
-    srcFrameTexture->UnlockRect(0);
-    downsampledFloatFrameTexture->UnlockRect(0);
-
     return hr;
 }
 
@@ -1524,8 +1438,6 @@ HRESULT DownsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_I
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT UpsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMAGE_FRAME *dest, unsigned int factor)
 {
-    HRESULT hr = S_OK;
-
     if (nullptr == src || nullptr == dest)
     {
         return E_INVALIDARG;
@@ -1541,13 +1453,13 @@ HRESULT UpsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMA
         return E_INVALIDARG;
     }
 
-    INuiFrameTexture *srcFrameTexture = src->pFrameTexture;
-    INuiFrameTexture *upsampledDestFrameTexture = dest->pFrameTexture;
+    NUI_FUSION_BUFFER *srcFrameBuffer = src->pFrameBuffer;
+    NUI_FUSION_BUFFER *upsampledDestFrameBuffer = dest->pFrameBuffer;
 
     unsigned int upsampledWidth = src->width * factor;
     unsigned int upsampleHeight = src->height * factor;
 
-    if (1 == factor && srcFrameTexture->BufferLen() != upsampledDestFrameTexture->BufferLen())
+    if (1 == factor && srcFrameBuffer->Pitch * src->height != upsampledDestFrameBuffer->Pitch * dest->height)
     {
         return E_INVALIDARG;
     }
@@ -1556,38 +1468,22 @@ HRESULT UpsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMA
         return E_INVALIDARG;
     }
 
-    NUI_LOCKED_RECT srcLockedRect;
-
-    // Lock the frame data so the Kinect knows not to modify it while we're reading it
-    hr = srcFrameTexture->LockRect(0, &srcLockedRect, nullptr, 0);
-
     // Make sure we've received valid data
-    if (FAILED(hr) || srcLockedRect.Pitch == 0)
+    if (srcFrameBuffer->Pitch == 0 || upsampledDestFrameBuffer->Pitch == 0)
     {
         return E_NOINTERFACE;
     }
 
-    NUI_LOCKED_RECT upsampledLockedRect;
-
-    // Lock the frame data so the Kinect knows not to modify it while we're reading it
-    hr = upsampledDestFrameTexture->LockRect(0, &upsampledLockedRect, nullptr, 0);
-
-    // Make sure we've received valid data
-    if (FAILED(hr) || upsampledLockedRect.Pitch == 0)
-    {
-        srcFrameTexture->UnlockRect(0);
-        return E_NOINTERFACE;
-    }
-
-    unsigned int *srcValues = (unsigned int *)srcLockedRect.pBits;
-    unsigned int *upsampledDestValues = (unsigned int *)upsampledLockedRect.pBits;
+    HRESULT hr = S_OK;
+    unsigned int *srcValues = (unsigned int *)srcFrameBuffer->pBits;
+    unsigned int *upsampledDestValues = (unsigned int *)upsampledDestFrameBuffer->pBits;
 
     const unsigned int srcImageWidth = src->width;
     const unsigned int srcImageHeight = src->height;
 
     if (1 == factor)
     {
-        errno_t err = memcpy_s(upsampledDestValues, upsampledDestFrameTexture->BufferLen(), srcValues, srcFrameTexture->BufferLen());
+        errno_t err = memcpy_s(upsampledDestValues, upsampledDestFrameBuffer->Pitch * dest->height, srcValues, srcFrameBuffer->Pitch * src->height);
         if (0 != err)
         {
             hr = E_FAIL;
@@ -1636,10 +1532,6 @@ HRESULT UpsampleFrameNearestNeighbor(NUI_FUSION_IMAGE_FRAME *src, NUI_FUSION_IMA
             }
         }
     }
-
-    // We're done with the textures so unlock them
-    srcFrameTexture->UnlockRect(0);
-    upsampledDestFrameTexture->UnlockRect(0);
 
     return hr;
 }

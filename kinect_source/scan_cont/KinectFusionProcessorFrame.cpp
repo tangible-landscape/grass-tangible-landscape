@@ -27,7 +27,6 @@
 /// Constructor.
 /// </summary>
 KinectFusionProcessorFrame::KinectFusionProcessorFrame() :
-    m_bIntegrationResumed(false),
     m_pReconstructionRGBX(nullptr),
     m_pDepthRGBX(nullptr),
     m_pTrackingDataRGBX(nullptr),
@@ -69,8 +68,8 @@ HRESULT KinectFusionProcessorFrame::Initialize(int cImageSize)
         m_pDepthRGBX = new(std::nothrow) BYTE[m_cbImageSize];
         m_pTrackingDataRGBX = new(std::nothrow) BYTE[m_cbImageSize];
 
-        if (nullptr != m_pReconstructionRGBX ||
-            nullptr != m_pDepthRGBX ||
+        if (nullptr != m_pReconstructionRGBX &&
+            nullptr != m_pDepthRGBX &&
             nullptr != m_pTrackingDataRGBX)
         {
             ZeroMemory(m_pReconstructionRGBX, m_cbImageSize);
