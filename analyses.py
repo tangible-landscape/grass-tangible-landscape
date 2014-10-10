@@ -151,7 +151,7 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
 
 
 def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
-                        walk, walking_dir, points, raster_route, vector_routes, env):
+                        walk, walking_dir, points, raster_route, vector_routes, mask, env):
     import itertools
 
     coordinates = gcore.read_command('v.out.ascii', input=points, format='point', separator=',', env=env).strip()
@@ -167,6 +167,10 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
     walk_tmp = 'walk_tmp'
     walk_dir_tmp = 'walk_dir_tmp'
     raster_route_tmp = 'raster_route_tmp'
+    
+    if mask:
+        gcore.message('Activating mask')
+        gcore.run_command('r.mask', raster=mask, overwrite=True, env=env)
     for points in combinations:
         i += 1
         point_from = ','.join(points[0][0])
@@ -185,6 +189,9 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
     gcore.run_command('v.patch', input=vector_routes_list, output=vector_routes, overwrite=True, env=env)
 
     gcore.run_command('g.remove', rast=[walk_tmp, walk_dir_tmp, raster_route_tmp], env=env)
+    gcore.message('Removing mask')
+    if mask:
+        gcore.run_command('r.mask', flags='r', env=env)
     for vmap in vector_routes_list:
         remove_vector(vmap)
 
