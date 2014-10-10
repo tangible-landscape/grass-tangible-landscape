@@ -1,4 +1,4 @@
-//------------------------------------------------------------------------------
+﻿//------------------------------------------------------------------------------
 // <copyright file="KinectFusionExplorer.cpp" company="Microsoft">
 // 	 
 //	 Copyright 2013 Microsoft Corporation 
@@ -26,14 +26,13 @@
 #include "stdafx.h"
 #include <shellapi.h>
 
-
 // Project includes
 #include "resource.h"
 #include "KinectFusionExplorer.h"
 #include "KinectFusionProcessorFrame.h"
 #include "KinectFusionHelper.h"
 
-#define MIN_DEPTH_DISTANCE_MM 350   // Must be greater than 0
+#define MIN_DEPTH_DISTANCE_MM 500   // Must be greater than 0
 #define MAX_DEPTH_DISTANCE_MM 1200
 #define MIN_INTEGRATION_WEIGHT 1    // Must be greater than 0
 #define MAX_INTEGRATION_WEIGHT 1000
@@ -77,7 +76,7 @@ bool cvtLPW2stdstring(std::string& s, const LPWSTR pw,
 /// <param name="lpCmdLine">command line arguments</param>
 /// <param name="nCmdShow">whether to display minimized, maximized, or normally</param>
 /// <returns>status</returns>
-int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int nCmdShow)
 {
     LPWSTR *szArglist;
 	int nArgs = 0;
@@ -92,10 +91,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmd
     cvtLPW2stdstring (program, szArglist[0]);
     cvtLPW2stdstring (fileName, szArglist[1]);
     int nFrames = _wtoi (szArglist[2]);
-
     CKinectFusionExplorer application;
     application.Run(hInstance, nCmdShow, fileName, nFrames);
-
 }
 
 /// <summary>
@@ -110,7 +107,6 @@ m_hWnd(nullptr),
     m_bSavingMesh(false),
     m_saveMeshFormat(Stl),
     m_bInitializeError(false),
-    m_pSensorChooserUI(nullptr),
     m_bColorCaptured(false),
     m_bUIUpdated(false)
 {
@@ -121,9 +117,6 @@ m_hWnd(nullptr),
 /// </summary>
 CKinectFusionExplorer::~CKinectFusionExplorer()
 {
-    // clean up sensor chooser UI
-    SAFE_DELETE(m_pSensorChooserUI);
-
     // clean up Direct2D renderer
     SAFE_DELETE(m_pDrawReconstruction);
 
@@ -332,26 +325,10 @@ LRESULT CALLBACK CKinectFusionExplorer::DlgProc(
         UpdateHSliders();
         break;
 
-    case WM_NOTIFY:
-        {
-            const NMHDR* pNMHeader = reinterpret_cast<const NMHDR*>(lParam);
-            if (pNMHeader->code == NSCN_REFRESH && pNMHeader->idFrom == IDC_SENSORCHOOSER)
-            {
-                m_processor.ResolveSensorConflict();
-            }
-        }
-        break;
-
     case WM_FRAMEREADY:
         HandleCompletedFrame();
         break;
 
-    case WM_UPDATESENSORSTATUS:
-        if (m_pSensorChooserUI != nullptr)
-        {
-            m_pSensorChooserUI->UpdateSensorStatus(static_cast<DWORD>(wParam));
-        }
-        break;
     }
 
     return FALSE;
@@ -382,19 +359,6 @@ void CKinectFusionExplorer::HandleCompletedFrame()
 
         SetStatusMessage(pFrame->m_statusMessage);
         SetFramesPerSecond(pFrame->m_fFramesPerSecond);
-    }
-
-    if (pFrame->m_bIntegrationResumed)
-    {
-        m_params.m_bPauseIntegration = false;
-        CheckDlgButton(m_hWnd, IDC_CHECK_PAUSE_INTEGRATION, BST_UNCHECKED);
-        m_processor.SetParams(m_params);
-    }
-    else if (m_processor.IsCameraPoseFinderAvailable() && !m_params.m_bPauseIntegration)
-    {
-        m_params.m_bPauseIntegration = true;
-        CheckDlgButton(m_hWnd, IDC_CHECK_PAUSE_INTEGRATION, BST_CHECKED);
-        m_processor.SetParams(m_params);
     }
 
     if (!m_bUIUpdated && m_processor.IsVolumeInitialized())
@@ -600,10 +564,6 @@ void CKinectFusionExplorer::InitializeUIControls()
     ptCenterTop.x = (rc.right - rc.left)/2;
     ptCenterTop.y = 0;
 
-    // Create the sensor chooser UI control to show sensor status
-    m_pSensorChooserUI = new NuiSensorChooserUI(m_hWnd, IDC_SENSORCHOOSER, ptCenterTop);
-    m_pSensorChooserUI->UpdateSensorStatus(NuiSensorChooserStatusInitializing);
-
     // Set slider ranges
     SendDlgItemMessage(
         m_hWnd,
@@ -661,7 +621,7 @@ void CKinectFusionExplorer::InitializeUIControls()
     swprintf_s(str, ARRAYSIZE(str), L"%4.2fm", m_params.m_fMaxDepthThreshold);
     SetDlgItemText(m_hWnd, IDC_MAX_DIST_TEXT, str);
 
-    swprintf_s(str, ARRAYSIZE(str), L"%d", m_params.m_cMaxIntegrationWeight);
+    swprintf_s(str, ARRAYSIZE(str), L"%u", m_params.m_cMaxIntegrationWeight);
     SetDlgItemText(m_hWnd, IDC_INTEGRATION_WEIGHT_TEXT, str);
 
     // Set the radio buttons for Volume Parameters
@@ -789,14 +749,8 @@ void CKinectFusionExplorer::InitializeUIControls()
 /// </summary>
 /// <param name="wParam">message data</param>
 /// <param name="lParam">additional message data</param>
-void CKinectFusionExplorer::ProcessUI(WPARAM wParam, LPARAM lParam)
+void CKinectFusionExplorer::ProcessUI(WPARAM wParam, LPARAM)
 {
-    // If it was for the near mode control and a clicked event, change near mode
-    if (IDC_CHECK_NEARMODE == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
-    {
-        // Toggle our internal state for near mode
-        m_params.m_bNearMode = !m_params.m_bNearMode;
-    }
     // If it was for the display surface normals toggle this variable
     if (IDC_CHECK_CAPTURE_COLOR == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
     {
@@ -809,21 +763,19 @@ void CKinectFusionExplorer::ProcessUI(WPARAM wParam, LPARAM lParam)
         // Toggle depth mirroring
         m_params.m_bMirrorDepthFrame = !m_params.m_bMirrorDepthFrame;
 
+        // Un-check pause
+        CheckDlgButton(m_hWnd, IDC_CHECK_PAUSE_INTEGRATION, BST_UNCHECKED);
         m_processor.ResetReconstruction();
     }
     if (IDC_CHECK_CAMERA_POSE_FINDER == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
     {
         m_params.m_bAutoFindCameraPoseWhenLost = !m_params.m_bAutoFindCameraPoseWhenLost;
-
-        if (!m_params.m_bAutoFindCameraPoseWhenLost)
-        {
-            // Force pause integration off when unchecking use of camera pose finder
-            m_params.m_bPauseIntegration = false;
-        }
     }
     // If it was the reset button clicked, clear the volume
     if (IDC_BUTTON_RESET_RECONSTRUCTION == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
     {
+        // Un-check pause
+        CheckDlgButton(m_hWnd, IDC_CHECK_PAUSE_INTEGRATION, BST_UNCHECKED);
         m_processor.ResetReconstruction();
     }
     // If it was the mesh button clicked, mesh the volume and save
@@ -1007,7 +959,7 @@ void CKinectFusionExplorer::UpdateHSliders()
     swprintf_s(str, ARRAYSIZE(str), L"%4.2fm", m_params.m_fMaxDepthThreshold);
     SetDlgItemText(m_hWnd, IDC_MAX_DIST_TEXT, str);
 
-    swprintf_s(str, ARRAYSIZE(str), L"%d", m_params.m_cMaxIntegrationWeight);
+    swprintf_s(str, ARRAYSIZE(str), L"%u", m_params.m_cMaxIntegrationWeight);
     SetDlgItemText(m_hWnd, IDC_INTEGRATION_WEIGHT_TEXT, str);
 
     m_processor.SetParams(m_params);
@@ -1031,16 +983,16 @@ void CKinectFusionExplorer::SetStatusMessage(const WCHAR * szMessage)
     if (length > 0)
     {
         SendDlgItemMessageW(m_hWnd, IDC_STATUS, WM_SETTEXT, 0, (LPARAM)szMessage);
-        m_tickLastStatus = GetTickCount();
+        m_tickLastStatus = GetTickCount64();
     }
     else
     {
         // Clear the status message after a timeout (as long as frames are flowing)
-        if (GetTickCount() - m_tickLastStatus > cStatusTimeoutInMilliseconds &&
+        if (GetTickCount64() - m_tickLastStatus > cStatusTimeoutInMilliseconds &&
             m_fFramesPerSecond > 0)
         {
             SendDlgItemMessageW(m_hWnd, IDC_STATUS, WM_SETTEXT, 0, 0);
-            m_tickLastStatus = GetTickCount();
+            m_tickLastStatus = GetTickCount64();
         }
     }
 }

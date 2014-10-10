@@ -24,9 +24,8 @@
 
 #pragma once
 
-#include <NuiApi.h>
-#include <NuiKinectFusionApi.h>
-#include <NuiSensorChooser.h>
+#include <vector>
+#include "NuiKinectFusionApi.h"
 
 #include "Timer.h"
 #include "KinectFusionParams.h"
@@ -45,9 +44,14 @@ class KinectFusionProcessor
     static const int            cResetOnNumberOfLostFrames = 100;
     static const int            cTimeDisplayInterval = 4;
     static const int            cRenderIntervalMilliseconds = 100; // Render every 100ms
-    static const int            cMinTimestampDifferenceForFrameReSync = 17; // The minimum timestamp difference between depth and color (in ms) at which they are considered un-synchronized. 
+    static const int            cMinTimestampDifferenceForFrameReSync = 30; // The minimum timestamp difference between depth and color (in ms) at which they are considered un-synchronized.
+    static const int            cColorWidth = 1920;
+    static const int            cColorHeight = 1080;
+    static const int            cVisibilityTestQuantShift = 2; // shift by 2 == divide by 4
+    static const UINT16         cDepthVisibilityTestThreshold = 50; //50 mm
 
 public:
+
     /// <summary>
     /// Constructor
     /// </summary>
@@ -77,16 +81,16 @@ public:
     HRESULT                     StartProcessing();
 
     /// <summary>
+    /// Initialize the kinect sensor.
+    /// </summary>
+    /// <returns>S_OK on success, otherwise failure code</returns>
+    HRESULT                     InitializeDefaultSensor();
+
+    /// <summary>
     /// Stops Kinect Fusion processing.
     /// </summary>
     /// <returns>S_OK on success, otherwise failure code</returns>
     HRESULT                     StopProcessing();
-
-    /// <summary>
-    /// Attempt to resolve a sensor conflict.
-    /// </summary>
-    /// <returns>S_OK on success, otherwise failure code</returns>
-    HRESULT                     ResolveSensorConflict();
 
     /// <summary>
     /// Reset the reconstruction camera pose and clear the volume on the next frame.
@@ -136,15 +140,9 @@ private:
     HANDLE                      m_hThread;
     DWORD                       m_threadId;
 
-    NuiSensorChooser*           m_pSensorChooser;
-    HANDLE                      m_hStatusChangeEvent;
-    INuiSensor*                 m_pNuiSensor;
-
-    HANDLE                      m_pDepthStreamHandle;
-    HANDLE                      m_hNextDepthFrameEvent;
-
-    HANDLE                      m_pColorStreamHandle;
-    HANDLE                      m_hNextColorFrameEvent;
+    IKinectSensor*              m_pNuiSensor;
+    IDepthFrameReader*          m_pDepthFrameReader;
+    IColorFrameReader*          m_pColorFrameReader;
 
     LONGLONG                    m_cLastDepthFrameTimeStamp;
     LONGLONG                    m_cLastColorFrameTimeStamp;
@@ -170,25 +168,21 @@ private:
     DWORD                       MainLoop();
 
     /// <summary>
-    /// Update the sensor and status based on the changed flags.
-    /// </summary>
-    void                        UpdateSensorAndStatus(DWORD dwChangeFlags);
-
-    /// <summary>
-    /// Called on Kinect device status changed. It will update the sensor chooser UI control
-    /// based on the new sensor status. It may also updates the sensor instance if needed.
-    /// </summary>
-    static void CALLBACK        StatusChangeCallback(
-                                    HRESULT hrStatus,
-                                    const OLECHAR* instancename,
-                                    const OLECHAR* uniqueDeviceName,
-                                    void* pUserData);
-
-    /// <summary>
     /// Create the first connected Kinect found.
     /// </summary>
     /// <returns>S_OK on success, otherwise failure code</returns>
     HRESULT                     CreateFirstConnected();
+
+    /// <summary>
+    /// Setup or update the Undistortion calculation for the connected camera
+    /// </summary>
+    HRESULT                     SetupUndistortion();
+
+    /// <summary>
+    /// Handle Coordinate Mapping changed event.
+    /// Note, this happens after sensor connect, or when Kinect Studio connects
+    /// </summary>
+    HRESULT                     OnCoordinateMappingChanged();
 
     /// <summary>
     /// Initialize Kinect Fusion volume and images for processing
@@ -213,16 +207,10 @@ private:
     HRESULT                     RecreateVolume();
 
     /// <summary>
-    /// Copy the extended depth data out of a Kinect image frame.
-    /// </summary>
-    /// <returns>S_OK on success, otherwise failure code</returns>
-    HRESULT                     CopyExtendedDepth(NUI_IMAGE_FRAME &imageFrame);
-
-    /// <summary>
     /// Copy the color data out of a Kinect image frame
     /// </summary>
     /// <returns>S_OK on success, otherwise failure code</returns>
-    HRESULT                     CopyColor(NUI_IMAGE_FRAME &imageFrame);
+	HRESULT                     CopyColor(IColorFrame* pColorFrame);
 
     /// <summary>
     /// Get the next frames from Kinect, re-synchronizing depth with color if required.
@@ -239,7 +227,7 @@ private:
     /// <summary>
     /// Handle new depth data and perform Kinect Fusion Processing.
     /// </summary>
-    void                        ProcessDepth();
+    bool                        ProcessDepth();
 
     /// <summary>
     /// Perform camera tracking using AlignDepthFloatToReconstruction
@@ -295,13 +283,6 @@ private:
     void                        ResetTracking();
 
     /// <summary>
-    /// Process the color image for the camera pose finder.
-    /// </summary>
-    /// <returns>S_OK on success, otherwise failure code</returns>
-    HRESULT                     ProcessColorForCameraPoseFinder(
-                                    bool &resampled);
-
-    /// <summary>
     /// Update data for camera pose finding and store key frame poses.
     /// </summary>
     /// <returns>S_OK on success, otherwise failure code</returns>
@@ -323,6 +304,13 @@ private:
     HRESULT                     InternalResetReconstruction();
 
     /// <summary>
+    /// Copy and do depth frame undistortion.
+    /// </summary>
+    /// <returns>S_OK on success, otherwise failure code</returns>
+    HRESULT                     CopyDepth(
+                                    IDepthFrame* pDepthFrame);
+
+    /// <summary>
     /// Set the status bar message.
     /// </summary>
     /// <param name="szMessage">message to display</param>
@@ -332,9 +320,9 @@ private:
     void                        NotifyEmptyFrame();
 
     bool                        m_bKinectFusionInitialized;
+    bool                        m_bHaveValidCameraParameters;
     bool                        m_bResetReconstruction;
     bool                        m_bResolveSensorConflict;
-    bool                        m_bIntegrationResumed;
 
     /// <summary>
     /// Used for informing of stopping processing thread.
@@ -361,8 +349,13 @@ private:
     /// <summary>
     /// Frames from the depth input.
     /// </summary>
-    NUI_DEPTH_IMAGE_PIXEL*      m_pDepthImagePixelBuffer;
-    int                         m_cPixelBufferLength;
+    UINT16*                     m_pDepthUndistortedPixelBuffer;
+    UINT16*                     m_pDepthRawPixelBuffer;
+
+    /// <summary>
+    /// Kinect camera parameters.
+    /// </summary>
+    NUI_FUSION_CAMERA_PARAMETERS m_cameraParameters; 
 
     /// <summary>
     /// Frames generated from the depth input for AlignPointClouds
@@ -372,15 +365,19 @@ private:
     NUI_FUSION_IMAGE_FRAME*     m_pDownsampledDepthPointCloud;
 
     /// <summary>
-    /// For mapping color to depth
+    /// For mapping color to depth and depth distortion correction
     /// </summary>
     NUI_FUSION_IMAGE_FRAME*     m_pColorImage;
     NUI_FUSION_IMAGE_FRAME*     m_pResampledColorImageDepthAligned;
-    int                         m_cColorCoordinateBufferLength;
-    NUI_COLOR_IMAGE_POINT*      m_pColorCoordinates;
+    ColorSpacePoint*            m_pColorCoordinates;
+    UINT16*                     m_pDepthVisibilityTestMap;
     float                       m_colorToDepthDivisor;
     float                       m_oneOverDepthDivisor;
-    INuiCoordinateMapper*       m_pMapper;
+    ICoordinateMapper*          m_pMapper;
+    WAITABLE_HANDLE             m_coordinateMappingChangedEvent;
+
+	DepthSpacePoint*            m_pDepthDistortionMap;
+    UINT*                       m_pDepthDistortionLT;
 
     /// <summary>
     /// Frames generated from ray-casting the Reconstruction Volume.
@@ -424,6 +421,7 @@ private:
     /// </summary>
     int                         m_cFrameCounter;
     int m_exportFrameCounter;
+    int                         m_cFPSFrameCounter;
     Timing::Timer               m_timer;
     double                      m_fFrameCounterStartTime;
     double                      m_fMostRecentRaycastTime;

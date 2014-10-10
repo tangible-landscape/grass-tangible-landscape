@@ -67,6 +67,39 @@ bool myLess (Vector3 i, Vector3 j) {
 
 }
 
+HRESULT KinectFusionProcessor::CopyDepth(
+    IDepthFrame* pDepthFrame
+    )
+{
+        // Check the frame pointer
+        if (NULL == pDepthFrame)
+        {
+            return E_INVALIDARG;
+        }
+
+        UINT nBufferSize = 0;
+        UINT16 *pBuffer = NULL;
+
+        HRESULT hr = pDepthFrame->AccessUnderlyingBuffer(&nBufferSize, &pBuffer);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        //copy and remap depth
+        const UINT bufferLength =  NUI_DEPTH_RAW_HEIGHT * NUI_DEPTH_RAW_WIDTH;
+        UINT16 * pDepth = m_pDepthUndistortedPixelBuffer;
+        UINT16 * pRawDepth = m_pDepthRawPixelBuffer;
+        for(UINT i = 0; i < bufferLength; i++, pDepth++, pRawDepth++)
+        {
+            const UINT id = m_pDepthDistortionLT[i];
+            *pDepth = id < bufferLength? pBuffer[id] : 0;
+            *pRawDepth = pBuffer[i];
+        }
+
+        return S_OK;
+}
+
 /// <summary>
 /// Constructor
 /// </summary>
@@ -78,26 +111,23 @@ KinectFusionProcessor::KinectFusionProcessor() :
     m_threadId(0),
     m_pVolume(nullptr),
     m_hrRecreateVolume(S_OK),
-    m_pSensorChooser(nullptr),
-    m_hStatusChangeEvent(INVALID_HANDLE_VALUE),
     m_pNuiSensor(nullptr),
-    m_hNextDepthFrameEvent(INVALID_HANDLE_VALUE),
-    m_pDepthStreamHandle(INVALID_HANDLE_VALUE),
-    m_hNextColorFrameEvent(INVALID_HANDLE_VALUE),
-    m_pColorStreamHandle(INVALID_HANDLE_VALUE),
     m_cLostFrameCounter(0),
     m_bTrackingFailed(false),
     m_cFrameCounter(0),
     m_exportFrameCounter(0),
+    m_cFPSFrameCounter(0),
     m_fFrameCounterStartTime(0),
     m_cLastDepthFrameTimeStamp(0),
     m_cLastColorFrameTimeStamp(0),
     m_fMostRecentRaycastTime(0),
-    m_pDepthImagePixelBuffer(nullptr),
+    m_pDepthUndistortedPixelBuffer(nullptr),
+    m_pDepthRawPixelBuffer(nullptr),
     m_pColorCoordinates(nullptr),
+    m_pDepthVisibilityTestMap(nullptr),
+    m_pDepthDistortionMap(nullptr),
+    m_pDepthDistortionLT(nullptr),
     m_pMapper(nullptr),
-    m_cPixelBufferLength(0),
-    m_cColorCoordinateBufferLength(0),
     m_pDepthFloatImage(nullptr),
     m_pColorImage(nullptr),
     m_pResampledColorImage(nullptr),
@@ -114,7 +144,6 @@ KinectFusionProcessor::KinectFusionProcessor() :
     m_bKinectFusionInitialized(false),
     m_bResetReconstruction(false),
     m_bResolveSensorConflict(false),
-    m_bIntegrationResumed(false),
     m_hStopProcessingEvent(INVALID_HANDLE_VALUE),
     m_pCameraPoseFinder(nullptr),
     m_bTrackingHasFailedPreviously(false),
@@ -123,28 +152,15 @@ KinectFusionProcessor::KinectFusionProcessor() :
     m_pDownsampledDepthPointCloud(nullptr),
     m_pDownsampledShadedDeltaFromReference(nullptr),
     m_pDownsampledRaycastPointCloud(nullptr),
-    m_bCalculateDeltaFrame(false)
+    m_bCalculateDeltaFrame(false),
+    m_coordinateMappingChangedEvent(NULL),
+    m_bHaveValidCameraParameters(false)
 {
     // Initialize synchronization objects
     InitializeCriticalSection(&m_lockParams);
     InitializeCriticalSection(&m_lockFrame);
     InitializeCriticalSection(&m_lockVolume);
 
-    m_hStatusChangeEvent = CreateEvent(
-        nullptr,
-        FALSE, /* bManualReset */ 
-        FALSE, /* bInitialState */
-        nullptr);
-    m_hNextDepthFrameEvent = CreateEvent(
-        nullptr,
-        TRUE, /* bManualReset */ 
-        FALSE, /* bInitialState */
-        nullptr);
-    m_hNextColorFrameEvent = CreateEvent(
-        nullptr,
-        TRUE, /* bManualReset */ 
-        FALSE, /* bInitialState */
-        nullptr);
     m_hStopProcessingEvent = CreateEvent(
         nullptr,
         TRUE, /* bManualReset */ 
@@ -154,6 +170,13 @@ KinectFusionProcessor::KinectFusionProcessor() :
 
     SetIdentityMatrix(m_worldToCameraTransform);
     SetIdentityMatrix(m_defaultWorldToVolumeTransform);
+
+    // We don't know these at object creation time, so we use nominal values.
+    // These will later be updated in response to the CoordinateMappingChanged event.
+    m_cameraParameters.focalLengthX = NUI_KINECT_DEPTH_NORM_FOCAL_LENGTH_X;
+    m_cameraParameters.focalLengthY = NUI_KINECT_DEPTH_NORM_FOCAL_LENGTH_Y;
+    m_cameraParameters.principalPointX = NUI_KINECT_DEPTH_NORM_PRINCIPAL_POINT_X;
+    m_cameraParameters.principalPointY = NUI_KINECT_DEPTH_NORM_PRINCIPAL_POINT_Y;
 }
 
 /// <summary>
@@ -168,6 +191,10 @@ KinectFusionProcessor::~KinectFusionProcessor()
 
     // Clean up Kinect Fusion
     SafeRelease(m_pVolume);
+
+    if (nullptr != m_pMapper)
+        m_pMapper->UnsubscribeCoordinateMappingChanged(m_coordinateMappingChangedEvent);
+
     SafeRelease(m_pMapper);
 
     // Clean up Kinect Fusion Camera Pose Finder
@@ -192,28 +219,26 @@ KinectFusionProcessor::~KinectFusionProcessor()
     SAFE_FUSION_RELEASE_IMAGE_FRAME(m_pDownsampledShadedDeltaFromReference);
 
     // Clean up the depth pixel array
-    SAFE_DELETE_ARRAY(m_pDepthImagePixelBuffer);
+    SAFE_DELETE_ARRAY(m_pDepthUndistortedPixelBuffer);
+    SAFE_DELETE_ARRAY(m_pDepthRawPixelBuffer);
 
     // Clean up the color coordinate array
     SAFE_DELETE_ARRAY(m_pColorCoordinates);
+    SAFE_DELETE_ARRAY(m_pDepthVisibilityTestMap);
+    
+    SAFE_DELETE_ARRAY(m_pDepthDistortionMap);
+    SAFE_DELETE_ARRAY(m_pDepthDistortionLT);
 
-    // Clean up synchronization objects
-    if (m_hNextDepthFrameEvent != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle(m_hNextDepthFrameEvent);
-    }
-    if (m_hNextColorFrameEvent != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle(m_hNextColorFrameEvent);
-    }
-    if (m_hStatusChangeEvent != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle(m_hStatusChangeEvent);
-    }
+    // Clean up synchronization object
     if (m_hStopProcessingEvent != INVALID_HANDLE_VALUE)
     {
         CloseHandle(m_hStopProcessingEvent);
     }
+
+    // done with depth frame reader
+    SafeRelease(m_pDepthFrameReader);
+    SafeRelease(m_pColorFrameReader);
+
 
     DeleteCriticalSection(&m_lockParams);
     DeleteCriticalSection(&m_lockFrame);
@@ -230,7 +255,7 @@ void KinectFusionProcessor::ShutdownSensor()
     // Clean up Kinect
     if (m_pNuiSensor != nullptr)
     {
-        m_pNuiSensor->NuiShutdown();
+        m_pNuiSensor->Close();
         SafeRelease(m_pNuiSensor);
     }
 }
@@ -265,22 +290,6 @@ HRESULT KinectFusionProcessor::StopProcessing()
         WaitForSingleObject(m_hThread, INFINITE);
         m_hThread = nullptr;
     }
-
-    return S_OK;
-}
-
-/// <summary>
-/// Attempt to resolve a sensor conflict.
-/// </summary>
-/// <returns>S_OK on success, otherwise failure code</returns>
-HRESULT KinectFusionProcessor::ResolveSensorConflict()
-{
-    AssertOtherThread();
-
-    EnterCriticalSection(&m_lockParams);
-    m_bResolveSensorConflict = true;
-    SetEvent(m_hStatusChangeEvent);
-    LeaveCriticalSection(&m_lockParams);
 
     return S_OK;
 }
@@ -325,143 +334,90 @@ DWORD KinectFusionProcessor::MainLoop()
     m_paramsCurrent = m_paramsNext;
     LeaveCriticalSection(&m_lockParams);
 
-    // Set the sensor status callback
-    NuiSetDeviceStatusCallback(StatusChangeCallback, this);
-
-    // Init the sensor chooser to find a valid sensor
-    m_pSensorChooser = new(std::nothrow) NuiSensorChooser();
-    if (nullptr == m_pSensorChooser)
-    {
-        SetStatusMessage(L"Memory allocation failure");
-        NotifyEmptyFrame();
-        return 1;
-    }
 
     // Propagate any updates to the gpu index in use
     m_paramsNext.m_deviceIndex = m_paramsCurrent.m_deviceIndex;
 
-    // Attempt to find a sensor for the first time
-    UpdateSensorAndStatus(NUISENSORCHOOSER_SENSOR_CHANGED_FLAG);
+    // Get and initialize the default Kinect sensor
+    InitializeDefaultSensor();
 
     bool bStopProcessing = false;
 
     // Main loop
     while (!bStopProcessing)
     {
-        HANDLE handles[] = { m_hStopProcessingEvent, m_hNextDepthFrameEvent, m_hStatusChangeEvent };
-        DWORD waitResult = WaitForMultipleObjects(ARRAYSIZE(handles), handles, FALSE, INFINITE);
+        if (m_coordinateMappingChangedEvent != NULL &&
+            WAIT_OBJECT_0 == WaitForSingleObject((HANDLE)m_coordinateMappingChangedEvent, 0))
+        {
+            OnCoordinateMappingChanged();
+            ResetEvent((HANDLE)m_coordinateMappingChangedEvent);
+        }
+
+        HANDLE handles[] = { m_hStopProcessingEvent };
+        DWORD waitResult = WaitForMultipleObjects(ARRAYSIZE(handles), handles, FALSE, 0);
 
         // Get parameters and other external signals
 
         EnterCriticalSection(&m_lockParams);
-        bool bChangeNearMode = m_paramsCurrent.m_bNearMode != m_paramsNext.m_bNearMode;
         bool bRecreateVolume = m_paramsCurrent.VolumeChanged(m_paramsNext);
         bool bResetReconstruction = m_bResetReconstruction;
         m_bResetReconstruction = false;
-        bool bResolveSensorConflict = m_bResolveSensorConflict;
         m_bResolveSensorConflict = false;
-
-        if (m_paramsCurrent.m_bPauseIntegration != m_paramsNext.m_bPauseIntegration)
-        {
-            m_bIntegrationResumed = !m_paramsNext.m_bPauseIntegration;
-        }
 
         m_paramsCurrent = m_paramsNext;
         LeaveCriticalSection(&m_lockParams);
 
-        switch (waitResult)
+        if (waitResult == WAIT_OBJECT_0)
         {
-        case WAIT_OBJECT_0: // m_hStopProcessingEvent
             bStopProcessing = true;
             break;
-
-        case WAIT_OBJECT_0 + 1: // m_hNextDepthFrameEvent
+        }
+        else
+        {
+            if (m_bKinectFusionInitialized && m_bHaveValidCameraParameters)
             {
-                if (m_bKinectFusionInitialized)
+                // Clear status message from previous frame
+                SetStatusMessage(L"");
+
+                EnterCriticalSection(&m_lockVolume);
+
+                if (nullptr == m_pVolume && !FAILED(m_hrRecreateVolume))
                 {
-                    // Clear status message from previous frame
-                    SetStatusMessage(L"");
+                    m_hrRecreateVolume = RecreateVolume();
 
-                    if (bChangeNearMode)
+                    // Set an introductory message on success
+                    if (SUCCEEDED(m_hrRecreateVolume))
                     {
-                        if (nullptr != m_pNuiSensor)
-                        {
-                            DWORD flags =
-                                m_paramsCurrent.m_bNearMode ?
-                                NUI_IMAGE_STREAM_FLAG_ENABLE_NEAR_MODE :
-                                0;
-
-                            m_pNuiSensor->NuiImageStreamSetImageFrameFlags(
-                                m_pDepthStreamHandle,
-                                flags);
-                        }
+                        SetStatusMessage(L"Click ‘Reset Reconstruction' to clear!");
                     }
+                }
+                else if (bRecreateVolume)
+                {
+                    m_hrRecreateVolume = RecreateVolume();
+                }
+                else if (bResetReconstruction)
+                {
+                    HRESULT hr = InternalResetReconstruction();
 
-                    EnterCriticalSection(&m_lockVolume);
-
-                    if (nullptr == m_pVolume && !FAILED(m_hrRecreateVolume))
+                    if (SUCCEEDED(hr))
                     {
-                        m_hrRecreateVolume = RecreateVolume();
-
-                        // Set an introductory message on success
-                        if (SUCCEEDED(m_hrRecreateVolume))
-                        {
-                            SetStatusMessage(
-                                L"Click ‘Near Mode’ to change sensor range, and ‘Reset Reconstruction’ to clear!");
-                        }
+                        SetStatusMessage(L"Reconstruction has been reset.");
                     }
-                    else if (bRecreateVolume)
+                    else
                     {
-                        m_hrRecreateVolume = RecreateVolume();
+                        SetStatusMessage(L"Failed to reset reconstruction.");
                     }
-                    else if (bResetReconstruction)
-                    {
-                        HRESULT hr = InternalResetReconstruction();
+                }
 
-                        if (SUCCEEDED(hr))
-                        {
-                            SetStatusMessage(L"Reconstruction has been reset.");
-                        }
-                        else
-                        {
-                            SetStatusMessage(L"Failed to reset reconstruction.");
-                        }
-                    }
+                bool processSucceed = ProcessDepth();
 
-                    ProcessDepth();
+                LeaveCriticalSection(&m_lockVolume);
 
-                    LeaveCriticalSection(&m_lockVolume);
-
+                if (processSucceed)
+                {
                     NotifyFrameReady();
                 }
-                break;
             }
-
-        case WAIT_OBJECT_0 + 2:  // m_hStatusChangeEvent
-            {
-                DWORD dwChangeFlags = 0;
-                HRESULT hr = E_FAIL;
-
-                if (nullptr != m_pSensorChooser && !bResolveSensorConflict)
-                {
-                    // Handle sensor status change event
-                    hr = m_pSensorChooser->HandleNuiStatusChanged(&dwChangeFlags);
-                }
-                else if (m_pNuiSensor == nullptr && bResolveSensorConflict)
-                {
-                    hr = m_pSensorChooser->TryResolveConflict(&dwChangeFlags);
-                }
-
-                if (SUCCEEDED(hr))
-                {
-                    UpdateSensorAndStatus(dwChangeFlags);
-                }
-            }
-
-            break;
-
-        default:
-            bStopProcessing = true;
         }
 
         if (m_pNuiSensor == nullptr)
@@ -477,125 +433,68 @@ DWORD KinectFusionProcessor::MainLoop()
 }
 
 /// <summary>
-/// Update the sensor and status based on the changed flags
-/// </summary>
-void KinectFusionProcessor::UpdateSensorAndStatus(DWORD dwChangeFlags)
-{
-    DWORD dwSensorStatus = NuiSensorChooserStatusNone;
-
-    switch (dwChangeFlags)
-    {
-        case NUISENSORCHOOSER_SENSOR_CHANGED_FLAG:
-        {
-            // Free the previous sensor and try to get a new one
-            SafeRelease(m_pNuiSensor);
-            if (SUCCEEDED(CreateFirstConnected()))
-            {
-                if (SUCCEEDED(InitializeKinectFusion()))
-                {
-                    m_bKinectFusionInitialized = true;
-                }
-                else
-                {
-                    NotifyEmptyFrame();
-                }
-            }
-        }
-        __fallthrough;
-
-    case NUISENSORCHOOSER_STATUS_CHANGED_FLAG:
-        if (SUCCEEDED(m_pSensorChooser->GetStatus(&dwSensorStatus)))
-        {
-            if (m_hWnd != nullptr && m_msgUpdateSensorStatus != WM_NULL)
-            {
-                PostMessage(m_hWnd, m_msgUpdateSensorStatus, dwSensorStatus, 0);
-            }
-        }
-        break;
-    }
-}
-
-/// <summary>
-/// This function will be called when Kinect device status changed
-/// </summary>
-void CALLBACK KinectFusionProcessor::StatusChangeCallback(
-    HRESULT hrStatus,
-    const OLECHAR* instancename,
-    const OLECHAR* uniqueDeviceName,
-    void* pUserData)
-{
-    KinectFusionProcessor* pThis = reinterpret_cast<KinectFusionProcessor*>(pUserData);
-    SetEvent(pThis->m_hStatusChangeEvent);
-}
-
-/// <summary>
-/// Create the first connected Kinect found 
+/// Initializes the default Kinect sensor
 /// </summary>
 /// <returns>indicates success or failure</returns>
-HRESULT KinectFusionProcessor::CreateFirstConnected()
+HRESULT KinectFusionProcessor::InitializeDefaultSensor()
 {
-    AssertOwnThread();
+    HRESULT hr;
 
-    // Get the Kinect and specify that we'll be using depth
-    HRESULT hr = m_pSensorChooser->GetSensor(NUI_INITIALIZE_FLAG_USES_DEPTH | NUI_INITIALIZE_FLAG_USES_COLOR, &m_pNuiSensor);
-
-    EnableWindow(GetDlgItem(m_hWnd, IDC_CHECK_NEARMODE), TRUE);
-
-    if (SUCCEEDED(hr) && nullptr != m_pNuiSensor)
+    hr = GetDefaultKinectSensor(&m_pNuiSensor);
+    if (FAILED(hr))
     {
-        // Open a depth image stream to receive depth frames
-        hr = m_pNuiSensor->NuiImageStreamOpen(
-            NUI_IMAGE_TYPE_DEPTH,
-            m_paramsCurrent.m_depthImageResolution,
-            0,
-            2,
-            m_hNextDepthFrameEvent,
-            &m_pDepthStreamHandle);
+        return hr;
+    }
+
+    if (m_pNuiSensor)
+    {
+        // Initialize the Kinect and get the depth reader
+        IDepthFrameSource* pDepthFrameSource = NULL;
+        IColorFrameSource* pColorFrameSource = NULL;
+
+        hr = m_pNuiSensor->Open();
 
         if (SUCCEEDED(hr))
         {
-            // Open a color image stream to receive color frames
-            hr = m_pNuiSensor->NuiImageStreamOpen(
-                NUI_IMAGE_TYPE_COLOR,
-                m_paramsCurrent.m_colorImageResolution,
-                0,
-                2,
-                m_hNextColorFrameEvent,
-                &m_pColorStreamHandle);
+            hr = m_pNuiSensor->get_DepthFrameSource(&pDepthFrameSource);
         }
 
         if (SUCCEEDED(hr))
         {
-            // Create the coordinate mapper for converting color to depth space
-            hr = m_pNuiSensor->NuiGetCoordinateMapper(&m_pMapper);
+            hr = pDepthFrameSource->OpenReader(&m_pDepthFrameReader);
         }
 
-        if (SUCCEEDED(hr) && m_paramsCurrent.m_bNearMode)
+        if (SUCCEEDED(hr))
         {
-            HRESULT hr = m_pNuiSensor->NuiImageStreamSetImageFrameFlags(
-                m_pDepthStreamHandle,
-                NUI_IMAGE_STREAM_FLAG_ENABLE_NEAR_MODE);
-            if (FAILED(hr))
-            {
-                CheckDlgButton(m_hWnd, IDC_CHECK_NEARMODE, BST_UNCHECKED);
-                EnableWindow(GetDlgItem(m_hWnd, IDC_CHECK_NEARMODE), FALSE);
-            }
-            else
-            {
-                CheckDlgButton(m_hWnd, IDC_CHECK_NEARMODE, BST_CHECKED);
-            }
+            hr = m_pNuiSensor->get_CoordinateMapper(&m_pMapper);
         }
-    }
-    else
-    {
-        // Reset the event to non-signaled state
-        ResetEvent(m_hNextDepthFrameEvent);
-        ResetEvent(m_hNextColorFrameEvent);
+
+        if (SUCCEEDED(hr))
+        {
+            hr = m_pMapper->SubscribeCoordinateMappingChanged(&m_coordinateMappingChangedEvent);
+        }
+
+        if (SUCCEEDED(hr))
+        {
+            hr = m_pNuiSensor->get_ColorFrameSource(&pColorFrameSource);
+        }
+
+        if (SUCCEEDED(hr))
+        {
+            hr = pColorFrameSource->OpenReader(&m_pColorFrameReader);
+        }
+
+        if (SUCCEEDED(InitializeKinectFusion()))
+        {
+            m_bKinectFusionInitialized = true;
+        }
+
+        SafeRelease(pDepthFrameSource);
+        SafeRelease(pColorFrameSource);
     }
 
-    if (nullptr == m_pNuiSensor || FAILED(hr))
+    if (!m_pNuiSensor || FAILED(hr))
     {
-        SafeRelease(m_pNuiSensor);
         SetStatusMessage(L"No ready Kinect found!");
         return E_FAIL;
     }
@@ -660,8 +559,195 @@ HRESULT KinectFusionProcessor::UnlockFrame()
     return S_OK;
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
+void UpdateIntrinsics(NUI_FUSION_IMAGE_FRAME * pImageFrame, NUI_FUSION_CAMERA_PARAMETERS * params)
+{
+    if (pImageFrame != nullptr && pImageFrame->pCameraParameters != nullptr && params != nullptr)
+    {
+        pImageFrame->pCameraParameters->focalLengthX = params->focalLengthX;
+        pImageFrame->pCameraParameters->focalLengthY = params->focalLengthY;
+        pImageFrame->pCameraParameters->principalPointX = params->principalPointX;
+        pImageFrame->pCameraParameters->principalPointY = params->principalPointY;
+    }
 
+    // Confirm we are called correctly
+    _ASSERT(pImageFrame != nullptr && pImageFrame->pCameraParameters != nullptr && params != nullptr);
+}
+
+HRESULT KinectFusionProcessor::SetupUndistortion()
+{
+    AssertOwnThread();
+
+    HRESULT hr = E_UNEXPECTED;
+
+    if (m_cameraParameters.principalPointX != 0)
+    {
+
+        const UINT width = m_paramsCurrent.m_cDepthWidth;
+        const UINT height = m_paramsCurrent.m_cDepthHeight;
+        const UINT depthBufferSize = width * height;
+
+        CameraSpacePoint cameraFrameCorners[4] = //at 1 meter distance. Take into account that depth frame is mirrored
+        {
+            /*LT*/ { -m_cameraParameters.principalPointX / m_cameraParameters.focalLengthX, m_cameraParameters.principalPointY / m_cameraParameters.focalLengthY, 1.f }, 
+            /*RT*/ { (1.f - m_cameraParameters.principalPointX) / m_cameraParameters.focalLengthX, m_cameraParameters.principalPointY / m_cameraParameters.focalLengthY, 1.f }, 
+            /*LB*/ { -m_cameraParameters.principalPointX / m_cameraParameters.focalLengthX, (m_cameraParameters.principalPointY - 1.f) / m_cameraParameters.focalLengthY, 1.f }, 
+            /*RB*/ { (1.f - m_cameraParameters.principalPointX) / m_cameraParameters.focalLengthX, (m_cameraParameters.principalPointY - 1.f) / m_cameraParameters.focalLengthY, 1.f }
+        };
+
+        for(UINT rowID = 0; rowID < height; rowID++)
+        {
+            const float rowFactor = float(rowID) / float(height - 1);
+            const CameraSpacePoint rowStart = 
+            {
+                cameraFrameCorners[0].X + (cameraFrameCorners[2].X - cameraFrameCorners[0].X) * rowFactor,
+                cameraFrameCorners[0].Y + (cameraFrameCorners[2].Y - cameraFrameCorners[0].Y) * rowFactor,
+                1.f
+            };
+
+            const CameraSpacePoint rowEnd = 
+            {
+                cameraFrameCorners[1].X + (cameraFrameCorners[3].X - cameraFrameCorners[1].X) * rowFactor,
+                cameraFrameCorners[1].Y + (cameraFrameCorners[3].Y - cameraFrameCorners[1].Y) * rowFactor,
+                1.f
+            };
+
+            const float stepFactor = 1.f / float(width - 1);
+            const CameraSpacePoint rowDelta = 
+            {
+                (rowEnd.X - rowStart.X) * stepFactor,
+                (rowEnd.Y - rowStart.Y) * stepFactor,
+                0
+            };
+
+            _ASSERT(width == NUI_DEPTH_RAW_WIDTH);
+            CameraSpacePoint cameraCoordsRow[NUI_DEPTH_RAW_WIDTH];
+
+            CameraSpacePoint currentPoint = rowStart;
+            for(UINT i = 0; i < width; i++)
+            {
+                cameraCoordsRow[i] = currentPoint;
+                currentPoint.X += rowDelta.X;
+                currentPoint.Y += rowDelta.Y;
+            }
+
+            hr = m_pMapper->MapCameraPointsToDepthSpace(width, cameraCoordsRow, width, &m_pDepthDistortionMap[rowID * width]);
+            if(FAILED(hr))
+            {
+                SetStatusMessage(L"Failed to initialize Kinect Coordinate Mapper.");
+                return hr;
+            }
+        }
+
+        if (nullptr == m_pDepthDistortionLT)
+        {
+            SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion Lookup Table.");
+            return E_OUTOFMEMORY;
+        }
+
+        UINT* pLT = m_pDepthDistortionLT;
+        for(UINT i = 0; i < depthBufferSize; i++, pLT++)
+        {
+            //nearest neighbor depth lookup table 
+            UINT x = UINT(m_pDepthDistortionMap[i].X + 0.5f);
+            UINT y = UINT(m_pDepthDistortionMap[i].Y + 0.5f);
+
+            *pLT = (x < width && y < height)? x + y * width : UINT_MAX; 
+        } 
+        m_bHaveValidCameraParameters = true;
+    }
+    else
+    {
+        m_bHaveValidCameraParameters = false;
+    }
+    return S_OK;
+}
+///////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>
+/// Initialize Kinect Fusion volume and images for processing
+/// </summary>
+/// <returns>S_OK on success, otherwise failure code</returns>
+HRESULT KinectFusionProcessor::OnCoordinateMappingChanged()
+{
+    AssertOwnThread();
+
+    HRESULT hr = E_UNEXPECTED;
+
+    // Calculate the down sampled image sizes, which are used for the AlignPointClouds calculation frames
+    CameraIntrinsics intrinsics = {};
+
+    m_pMapper->GetDepthCameraIntrinsics(&intrinsics);
+
+    float focalLengthX = intrinsics.FocalLengthX / NUI_DEPTH_RAW_WIDTH;
+    float focalLengthY = intrinsics.FocalLengthY / NUI_DEPTH_RAW_HEIGHT;
+    float principalPointX = intrinsics.PrincipalPointX / NUI_DEPTH_RAW_WIDTH;
+    float principalPointY = intrinsics.PrincipalPointY / NUI_DEPTH_RAW_HEIGHT;
+
+    if (m_cameraParameters.focalLengthX == focalLengthX && m_cameraParameters.focalLengthY == focalLengthY &&
+        m_cameraParameters.principalPointX == principalPointX && m_cameraParameters.principalPointY == principalPointY)
+        return S_OK; 
+
+    m_cameraParameters.focalLengthX = focalLengthX;
+    m_cameraParameters.focalLengthY = focalLengthY;
+    m_cameraParameters.principalPointX = principalPointX;
+    m_cameraParameters.principalPointY = principalPointY;
+
+    _ASSERT(m_cameraParameters.focalLengthX != 0);
+
+    UpdateIntrinsics(m_pDepthFloatImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pDownsampledDepthFloatImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pColorImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pResampledColorImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pResampledColorImageDepthAligned, &m_cameraParameters);
+    UpdateIntrinsics(m_pRaycastPointCloud, &m_cameraParameters);
+    UpdateIntrinsics(m_pDownsampledRaycastPointCloud, &m_cameraParameters);
+    UpdateIntrinsics(m_pRaycastDepthFloatImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pShadedSurface, &m_cameraParameters);
+    UpdateIntrinsics(m_pShadedSurfaceNormals, &m_cameraParameters);
+    UpdateIntrinsics(m_pCapturedSurfaceColor, &m_cameraParameters);
+    UpdateIntrinsics(m_pFloatDeltaFromReference, &m_cameraParameters);
+    UpdateIntrinsics(m_pShadedDeltaFromReference, &m_cameraParameters);
+    UpdateIntrinsics(m_pDownsampledShadedDeltaFromReference, &m_cameraParameters);
+    UpdateIntrinsics(m_pSmoothDepthFloatImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pDownsampledSmoothDepthFloatImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pDepthPointCloud, &m_cameraParameters);
+    UpdateIntrinsics(m_pDownsampledDepthPointCloud, &m_cameraParameters);
+
+    if (nullptr == m_pDepthUndistortedPixelBuffer)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image pixel buffer.");
+        return E_OUTOFMEMORY;
+    }
+
+    if (nullptr == m_pDepthRawPixelBuffer)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion raw depth image pixel buffer.");
+        return E_OUTOFMEMORY;
+    }
+    
+    if (nullptr == m_pColorCoordinates)
+    {
+    SetStatusMessage(L"Failed to initialize Kinect Fusion color image coordinate buffer.");
+    return E_OUTOFMEMORY;
+    }
+
+    if (nullptr == m_pDepthVisibilityTestMap)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth points visibility test buffer.");
+        return E_OUTOFMEMORY;
+    }
+
+    if (nullptr == m_pDepthDistortionMap)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion buffer.");
+        return E_OUTOFMEMORY;
+    }
+
+    hr = SetupUndistortion();
+    return hr;
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
 /// <summary>
 /// Initialize Kinect Fusion volume and images for processing
 /// </summary>
@@ -670,7 +756,7 @@ HRESULT KinectFusionProcessor::InitializeKinectFusion()
 {
     AssertOwnThread();
 
-    HRESULT hr = S_OK;
+    HRESULT hr = E_UNEXPECTED;
 
     hr = m_frame.Initialize(m_paramsCurrent.m_cDepthImagePixels);
     if (FAILED(hr))
@@ -709,15 +795,16 @@ HRESULT KinectFusionProcessor::InitializeKinectFusion()
         return hr;
     }
 
-    unsigned int width = static_cast<UINT>(m_paramsCurrent.m_cDepthWidth);
-    unsigned int height = static_cast<UINT>(m_paramsCurrent.m_cDepthHeight);
+    const UINT width = m_paramsCurrent.m_cDepthWidth;
+    const UINT height = m_paramsCurrent.m_cDepthHeight;
+    const UINT depthBufferSize = width * height;
 
-    unsigned int colorWidth = static_cast<UINT>(m_paramsCurrent.m_cColorWidth);
-    unsigned int colorHeight = static_cast<UINT>(m_paramsCurrent.m_cColorHeight);
+    const UINT colorWidth = m_paramsCurrent.m_cColorWidth;
+    const UINT colorHeight = m_paramsCurrent.m_cColorHeight;
 
     // Calculate the down sampled image sizes, which are used for the AlignPointClouds calculation frames
-    unsigned int downsampledWidth = width / m_paramsCurrent.m_cAlignPointCloudsImageDownsampleFactor;
-    unsigned int downsampledHeight = height / m_paramsCurrent.m_cAlignPointCloudsImageDownsampleFactor;
+    const UINT downsampledWidth = width / m_paramsCurrent.m_cAlignPointCloudsImageDownsampleFactor;
+    const UINT downsampledHeight = height / m_paramsCurrent.m_cAlignPointCloudsImageDownsampleFactor;
 
     // Frame generated from the depth input
     if (FAILED(hr = CreateFrame(NUI_FUSION_IMAGE_TYPE_FLOAT, width, height, &m_pDepthFloatImage)))
@@ -828,63 +915,71 @@ HRESULT KinectFusionProcessor::InitializeKinectFusion()
         return hr;
     }
 
-    if (nullptr != m_pDepthImagePixelBuffer)
+    SAFE_DELETE_ARRAY(m_pDepthUndistortedPixelBuffer);
+    m_pDepthUndistortedPixelBuffer = new(std::nothrow) UINT16[depthBufferSize];
+
+    if (nullptr == m_pDepthUndistortedPixelBuffer)
     {
-        // If buffer length has changed, delete the old one.
-        if (m_paramsCurrent.m_cDepthImagePixels != m_cPixelBufferLength)
-        {
-            SAFE_DELETE_ARRAY(m_pDepthImagePixelBuffer);
-        }
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image pixel buffer.");
+        return E_OUTOFMEMORY;
     }
 
-    if (nullptr == m_pDepthImagePixelBuffer)
+    SAFE_DELETE_ARRAY(m_pDepthRawPixelBuffer);
+    m_pDepthRawPixelBuffer = new(std::nothrow) UINT16[depthBufferSize];
+
+    if (nullptr == m_pDepthRawPixelBuffer)
     {
-        // Depth pixel array to capture data from Kinect sensor
-        m_pDepthImagePixelBuffer =
-            new(std::nothrow) NUI_DEPTH_IMAGE_PIXEL[m_paramsCurrent.m_cDepthImagePixels];
-
-        if (nullptr == m_pDepthImagePixelBuffer)
-        {
-            SetStatusMessage(L"Failed to initialize Kinect Fusion depth image pixel buffer.");
-            return hr;
-        }
-
-        m_cPixelBufferLength = m_paramsCurrent.m_cDepthImagePixels;
+        SetStatusMessage(L"Failed to initialize Kinect Fusion raw depth image pixel buffer.");
+        return E_OUTOFMEMORY;
     }
-
-    if (nullptr != m_pColorCoordinates)
-    {
-        // If buffer length has changed, delete the old one.
-        if (m_paramsCurrent.m_cDepthImagePixels != m_cColorCoordinateBufferLength)
-        {
-            SAFE_DELETE_ARRAY(m_pColorCoordinates);
-        }
-    }
+    
+    // Color coordinate array to capture data from Kinect sensor and for color to depth mapping
+    // Note: this must be the same size as the depth
+    SAFE_DELETE_ARRAY(m_pColorCoordinates);
+    m_pColorCoordinates = new(std::nothrow) ColorSpacePoint[depthBufferSize];
 
     if (nullptr == m_pColorCoordinates)
     {
-        // Color coordinate array to capture data from Kinect sensor and for color to depth mapping
-        // Note: this must be the same size as the depth
-        m_pColorCoordinates = 
-            new(std::nothrow) NUI_COLOR_IMAGE_POINT[m_paramsCurrent.m_cDepthImagePixels];
-
-        if (nullptr == m_pColorCoordinates)
-        {
-            SetStatusMessage(L"Failed to initialize Kinect Fusion color image coordinate buffers.");
-            return hr;
-        }
-
-        m_cColorCoordinateBufferLength = m_paramsCurrent.m_cDepthImagePixels;
+    SetStatusMessage(L"Failed to initialize Kinect Fusion color image coordinate buffer.");
+    return E_OUTOFMEMORY;
     }
 
-    if (nullptr != m_pCameraPoseFinder)
+    SAFE_DELETE_ARRAY(m_pDepthVisibilityTestMap);
+    m_pDepthVisibilityTestMap = new(std::nothrow) UINT16[(colorWidth >> cVisibilityTestQuantShift) * (colorHeight >> cVisibilityTestQuantShift)]; 
+
+    if (nullptr == m_pDepthVisibilityTestMap)
     {
-        SafeRelease(m_pCameraPoseFinder);
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth points visibility test buffer.");
+        return E_OUTOFMEMORY;
     }
+
+    SAFE_DELETE_ARRAY(m_pDepthDistortionMap);
+    m_pDepthDistortionMap = new(std::nothrow) DepthSpacePoint[depthBufferSize];
+
+    if (nullptr == m_pDepthDistortionMap)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion buffer.");
+        return E_OUTOFMEMORY;
+    }
+
+    SAFE_DELETE_ARRAY(m_pDepthDistortionLT);
+    m_pDepthDistortionLT = new(std::nothrow) UINT[depthBufferSize];
+
+    if (nullptr == m_pDepthDistortionLT)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion Lookup Table.");
+        return E_OUTOFMEMORY;
+    }
+
+    // If we have valid parameters, let's go ahead and use them.
+    if (m_cameraParameters.focalLengthX != 0)
+    {
+        SetupUndistortion();
+    }
+
+    SafeRelease(m_pCameraPoseFinder);
 
     // Create the camera pose finder if necessary
-    if (nullptr == m_pCameraPoseFinder)
-    {
         NUI_FUSION_CAMERA_POSE_FINDER_PARAMETERS cameraPoseFinderParameters;
 
         cameraPoseFinderParameters.featureSampleLocationsPerFrameCount = m_paramsCurrent.m_cCameraPoseFinderFeatureSampleLocationsPerFrame;
@@ -898,8 +993,8 @@ HRESULT KinectFusionProcessor::InitializeKinectFusion()
         {
             return hr;
         }
-    }
-
+    
+    m_bKinectFusionInitialized = true;
     return hr;
 }
 
@@ -910,7 +1005,7 @@ HRESULT KinectFusionProcessor::CreateFrame(
     NUI_FUSION_IMAGE_FRAME** ppImageFrame)
 {
     HRESULT hr = S_OK;
-    
+
     if (nullptr != *ppImageFrame)
     {
         // If image size or type has changed, release the old one.
@@ -930,7 +1025,7 @@ HRESULT KinectFusionProcessor::CreateFrame(
             frameType,
             imageWidth,
             imageHeight,
-            nullptr,
+            &m_cameraParameters,
             ppImageFrame);
 
         if (FAILED(hr))
@@ -1037,73 +1132,11 @@ HRESULT KinectFusionProcessor::RecreateVolume()
 }
 
 /// <summary>
-/// Get Extended depth data
-/// </summary>
-/// <param name="imageFrame">The extended depth image frame to copy.</param>
-/// <returns>S_OK on success, otherwise failure code</returns>
-HRESULT KinectFusionProcessor::CopyExtendedDepth(NUI_IMAGE_FRAME &imageFrame)
-{
-    AssertOwnThread();
-
-    HRESULT hr = S_OK;
-
-    if (nullptr == m_pDepthImagePixelBuffer)
-    {
-        SetStatusMessage(L"Error depth image pixel buffer is nullptr.");
-        return E_FAIL;
-    }
-
-    INuiFrameTexture *extendedDepthTex = nullptr;
-
-    // Extract the extended depth in NUI_DEPTH_IMAGE_PIXEL format from the frame
-    BOOL nearModeOperational = FALSE;
-    hr = m_pNuiSensor->NuiImageFrameGetDepthImagePixelFrameTexture(
-        m_pDepthStreamHandle,
-        &imageFrame,
-        &nearModeOperational,
-        &extendedDepthTex);
-
-    if (FAILED(hr))
-    {
-        SetStatusMessage(L"Error getting extended depth texture.");
-        return hr;
-    }
-
-    NUI_LOCKED_RECT extendedDepthLockedRect;
-
-    // Lock the frame data to access the un-clamped NUI_DEPTH_IMAGE_PIXELs
-    hr = extendedDepthTex->LockRect(0, &extendedDepthLockedRect, nullptr, 0);
-
-    if (FAILED(hr) || extendedDepthLockedRect.Pitch == 0)
-    {
-        SetStatusMessage(L"Error getting extended depth texture pixels.");
-        return hr;
-    }
-
-    // Copy the depth pixels so we can return the image frame
-    errno_t err = memcpy_s(
-        m_pDepthImagePixelBuffer,
-        m_paramsCurrent.m_cDepthImagePixels * sizeof(NUI_DEPTH_IMAGE_PIXEL),
-        extendedDepthLockedRect.pBits,
-        extendedDepthTex->BufferLen());
-
-    extendedDepthTex->UnlockRect(0);
-
-    if (0 != err)
-    {
-        SetStatusMessage(L"Error copying extended depth texture pixels.");
-        return hr;
-    }
-
-    return hr;
-}
-
-/// <summary>
 /// Get Color data
 /// </summary>
 /// <param name="imageFrame">The color image frame to copy.</param>
 /// <returns>S_OK on success, otherwise failure code</returns>
-HRESULT KinectFusionProcessor::CopyColor(NUI_IMAGE_FRAME &imageFrame)
+HRESULT KinectFusionProcessor::CopyColor(IColorFrame* pColorFrame)
 {
     HRESULT hr = S_OK;
 
@@ -1113,48 +1146,17 @@ HRESULT KinectFusionProcessor::CopyColor(NUI_IMAGE_FRAME &imageFrame)
         return E_FAIL;
     }
 
-    INuiFrameTexture *srcColorTex = imageFrame.pFrameTexture;
-    INuiFrameTexture *destColorTex = m_pColorImage->pFrameTexture;
+    NUI_FUSION_BUFFER *destColorBuffer = m_pColorImage->pFrameBuffer;
 
-    if (nullptr == srcColorTex || nullptr == destColorTex)
+    if (nullptr == pColorFrame || nullptr == destColorBuffer)
     {
-        return E_NOINTERFACE;
-    }
-
-    // Lock the frame data to access the color pixels
-    NUI_LOCKED_RECT srcLockedRect;
-
-    hr = srcColorTex->LockRect(0, &srcLockedRect, nullptr, 0);
-
-    if (FAILED(hr) || srcLockedRect.Pitch == 0)
-    {
-        SetStatusMessage(L"Error getting color texture pixels.");
-        return E_NOINTERFACE;
-    }
-
-    // Lock the frame data to access the color pixels
-    NUI_LOCKED_RECT destLockedRect;
-
-    hr = destColorTex->LockRect(0, &destLockedRect, nullptr, 0);
-
-    if (FAILED(hr) || destLockedRect.Pitch == 0)
-    {
-        srcColorTex->UnlockRect(0);
-        SetStatusMessage(L"Error copying color texture pixels.");
         return E_NOINTERFACE;
     }
 
     // Copy the color pixels so we can return the image frame
-    errno_t err = memcpy_s(
-        destLockedRect.pBits, 
-        m_paramsCurrent.m_cColorImagePixels * KinectFusionParams::BytesPerPixel,
-        srcLockedRect.pBits,
-        srcLockedRect.size);
+    hr = pColorFrame->CopyConvertedFrameDataToArray(cColorWidth * cColorHeight * sizeof(RGBQUAD), destColorBuffer->pBits, ColorImageFormat_Bgra);
 
-    srcColorTex->UnlockRect(0);
-    destColorTex->UnlockRect(0);
-
-    if (0 != err)
+    if (FAILED(hr))
     {
         SetStatusMessage(L"Error copying color texture pixels.");
         hr = E_FAIL;
@@ -1169,140 +1171,165 @@ HRESULT KinectFusionProcessor::CopyColor(NUI_IMAGE_FRAME &imageFrame)
 /// <returns>S_OK for success, or failure code</returns>
 HRESULT KinectFusionProcessor::MapColorToDepth()
 {
-    HRESULT hr;
+    HRESULT hr = S_OK;
 
     if (nullptr == m_pColorImage || nullptr == m_pResampledColorImageDepthAligned 
-        || nullptr == m_pDepthImagePixelBuffer || nullptr == m_pColorCoordinates)
+        || nullptr == m_pColorCoordinates || nullptr == m_pDepthVisibilityTestMap)
     {
         return E_FAIL;
     }
 
-    INuiFrameTexture *srcColorTex = m_pColorImage->pFrameTexture;
-    INuiFrameTexture *destColorTex = m_pResampledColorImageDepthAligned->pFrameTexture;
+    NUI_FUSION_BUFFER *srcColorBuffer = m_pColorImage->pFrameBuffer;
+    NUI_FUSION_BUFFER *destColorBuffer = m_pResampledColorImageDepthAligned->pFrameBuffer;
 
-    if (nullptr == srcColorTex || nullptr == destColorTex)
+    if (nullptr == srcColorBuffer || nullptr == destColorBuffer)
     {
         SetStatusMessage(L"Error accessing color textures.");
         return E_NOINTERFACE;
     }
 
-    // Lock the source color frame
-    NUI_LOCKED_RECT srcLockedRect;
-
-    // Lock the frame data to access the color pixels
-    hr = srcColorTex->LockRect(0, &srcLockedRect, nullptr, 0);
-
-    if (FAILED(hr) || srcLockedRect.Pitch == 0)
+    if (FAILED(hr) || srcColorBuffer->Pitch == 0)
     {
         SetStatusMessage(L"Error accessing color texture pixels.");
         return  E_FAIL;
     }
 
-    // Lock the destination color frame
-    NUI_LOCKED_RECT destLockedRect;
-
-    // Lock the frame data to access the color pixels
-    hr = destColorTex->LockRect(0, &destLockedRect, nullptr, 0);
-
-    if (FAILED(hr) || destLockedRect.Pitch == 0)
+    if (FAILED(hr) || destColorBuffer->Pitch == 0)
     {
-        srcColorTex->UnlockRect(0);
         SetStatusMessage(L"Error accessing color texture pixels.");
         return  E_FAIL;
     }
 
-    int *rawColorData = reinterpret_cast<int*>(srcLockedRect.pBits);
-    int *colorDataInDepthFrame = reinterpret_cast<int*>(destLockedRect.pBits);
+    int *rawColorData = reinterpret_cast<int*>(srcColorBuffer->pBits);
+    int *colorDataInDepthFrame = reinterpret_cast<int*>(destColorBuffer->pBits);
 
     // Get the coordinates to convert color to depth space
-    hr = m_pMapper->MapDepthFrameToColorFrame(
-        m_paramsCurrent.m_depthImageResolution, 
-        m_paramsCurrent.m_cDepthImagePixels, 
-        m_pDepthImagePixelBuffer, 
-        NUI_IMAGE_TYPE_COLOR, 
-        m_paramsCurrent.m_colorImageResolution, 
-        m_paramsCurrent.m_cDepthImagePixels,   // the color coordinates that get set are the same array size as the depth image
-        m_pColorCoordinates );
+    hr = m_pMapper->MapDepthFrameToColorSpace(NUI_DEPTH_RAW_WIDTH * NUI_DEPTH_RAW_HEIGHT, m_pDepthRawPixelBuffer, 
+        NUI_DEPTH_RAW_WIDTH * NUI_DEPTH_RAW_HEIGHT, m_pColorCoordinates);
 
     if (FAILED(hr))
     {
-        srcColorTex->UnlockRect(0);
-        destColorTex->UnlockRect(0);
         return hr;
     }
+
+    // construct dense depth points visibility test map so we can test for depth points that are invisible in color space
+    const UINT16* const pDepthEnd = m_pDepthRawPixelBuffer + NUI_DEPTH_RAW_WIDTH * NUI_DEPTH_RAW_HEIGHT;
+    const ColorSpacePoint* pColorPoint = m_pColorCoordinates;
+    const UINT testMapWidth = UINT(cColorWidth >> cVisibilityTestQuantShift);
+    const UINT testMapHeight = UINT(cColorHeight >> cVisibilityTestQuantShift);
+    ZeroMemory(m_pDepthVisibilityTestMap, testMapWidth * testMapHeight * sizeof(UINT16));
+    for(const UINT16* pDepth = m_pDepthRawPixelBuffer; pDepth < pDepthEnd; pDepth++, pColorPoint++)
+    {
+        const UINT x = UINT(pColorPoint->X + 0.5f) >> cVisibilityTestQuantShift;
+        const UINT y = UINT(pColorPoint->Y + 0.5f) >> cVisibilityTestQuantShift;
+        if(x < testMapWidth && y < testMapHeight)
+        {
+            const UINT idx = y * testMapWidth + x;
+            const UINT16 oldDepth = m_pDepthVisibilityTestMap[idx];
+            const UINT16 newDepth = *pDepth;
+            if(!oldDepth || oldDepth > newDepth)
+            {
+                m_pDepthVisibilityTestMap[idx] = newDepth;
+            }
+        }
+    }
+
 
     // Loop over each row and column of the destination color image and copy from the source image
     // Note that we could also do this the other way, and convert the depth pixels into the color space, 
     // avoiding black areas in the converted color image and repeated color images in the background
     // However, then the depth would have radial and tangential distortion like the color camera image,
     // which is not ideal for Kinect Fusion reconstruction.
+
     if (m_paramsCurrent.m_bMirrorDepthFrame)
     {
-        Concurrency::parallel_for(0, static_cast<int>(m_paramsCurrent.m_cDepthHeight), [&](int y)
+        Concurrency::parallel_for(0u, m_paramsCurrent.m_cDepthHeight, [&](UINT y)
         {
-            unsigned int destIndex = y * m_paramsCurrent.m_cDepthWidth;
+            const UINT depthWidth = m_paramsCurrent.m_cDepthWidth;
+            const UINT depthImagePixels = m_paramsCurrent.m_cDepthImagePixels;
+            const UINT colorHeight = m_paramsCurrent.m_cColorHeight;
+            const UINT colorWidth = m_paramsCurrent.m_cColorWidth;
+            const UINT testMapWidth = UINT(colorWidth >> cVisibilityTestQuantShift);
 
-            for (int x = 0; x < m_paramsCurrent.m_cDepthWidth; ++x, ++destIndex)
+            UINT destIndex = y * depthWidth;
+            for (UINT x = 0; x < depthWidth; ++x, ++destIndex)
             {
-                // calculate index into depth array
-                int colorInDepthX = m_pColorCoordinates[destIndex].x;
-                int colorInDepthY = m_pColorCoordinates[destIndex].y;
-
-                // make sure the depth pixel maps to a valid point in color space
-                if ( colorInDepthX >= 0 && colorInDepthX < m_paramsCurrent.m_cColorWidth 
-                    && colorInDepthY >= 0 && colorInDepthY < m_paramsCurrent.m_cColorHeight 
-                    && m_pDepthImagePixelBuffer[destIndex].depth != 0)
+                int pixelColor = 0;
+                const UINT mappedIndex = m_pDepthDistortionLT[destIndex];
+                if(mappedIndex < depthImagePixels)
                 {
-                    // Calculate index into color array
-                    unsigned int sourceColorIndex = colorInDepthX + (colorInDepthY * m_paramsCurrent.m_cColorWidth);
+                    // retrieve the depth to color mapping for the current depth pixel
+                    const ColorSpacePoint colorPoint = m_pColorCoordinates[mappedIndex];
 
-                    // Copy color pixel
-                    colorDataInDepthFrame[destIndex] = rawColorData[sourceColorIndex];
+                    // make sure the depth pixel maps to a valid point in color space
+                    const UINT colorX = (UINT)(colorPoint.X + 0.5f);
+                    const UINT colorY = (UINT)(colorPoint.Y + 0.5f);
+                    if (colorX < colorWidth && colorY < colorHeight)
+                    {
+                        const UINT16 depthValue = m_pDepthRawPixelBuffer[mappedIndex];
+                        const UINT testX = colorX >> cVisibilityTestQuantShift;
+                        const UINT testY = colorY >> cVisibilityTestQuantShift;
+                        const UINT testIdx = testY * testMapWidth + testX;
+                        const UINT16 depthTestValue = m_pDepthVisibilityTestMap[testIdx];
+                        _ASSERT(depthValue >= depthTestValue);
+                        if(depthValue - depthTestValue < cDepthVisibilityTestThreshold)
+                        {
+                            // calculate index into color array
+                            const UINT colorIndex = colorX + (colorY * colorWidth);
+                            pixelColor = rawColorData[colorIndex];
+                        }
+                    }
                 }
-                else
-                {
-                    colorDataInDepthFrame[destIndex] = 0;
-                }
+                colorDataInDepthFrame[destIndex] = pixelColor;
             }
         });
     }
     else
     {
-        Concurrency::parallel_for(0, static_cast<int>(m_paramsCurrent.m_cDepthHeight), [&](int y)
+        Concurrency::parallel_for(0u, m_paramsCurrent.m_cDepthHeight, [&](UINT y)
         {
-            unsigned int destIndex = y * m_paramsCurrent.m_cDepthWidth;
+            const UINT depthWidth = m_paramsCurrent.m_cDepthWidth;
+            const UINT depthImagePixels = m_paramsCurrent.m_cDepthImagePixels;
+            const UINT colorHeight = m_paramsCurrent.m_cColorHeight;
+            const UINT colorWidth = m_paramsCurrent.m_cColorWidth;
+            const UINT testMapWidth = UINT(colorWidth >> cVisibilityTestQuantShift);
 
             // Horizontal flip the color image as the standard depth image is flipped internally in Kinect Fusion
             // to give a viewpoint as though from behind the Kinect looking forward by default.
-            unsigned int flippedDestIndex = destIndex + (m_paramsCurrent.m_cDepthWidth-1);
-
-            for (int x = 0; x < m_paramsCurrent.m_cDepthWidth; ++x, ++destIndex, --flippedDestIndex)
+            UINT destIndex = y * depthWidth;
+            UINT flipIndex = destIndex + depthWidth - 1;
+            for (UINT x = 0; x < depthWidth; ++x, ++destIndex, --flipIndex)
             {
-                // calculate index into depth array
-                int colorInDepthX = m_pColorCoordinates[destIndex].x;
-                int colorInDepthY = m_pColorCoordinates[destIndex].y;
-
-                // make sure the depth pixel maps to a valid point in color space
-                if ( colorInDepthX >= 0 && colorInDepthX < m_paramsCurrent.m_cColorWidth 
-                    && colorInDepthY >= 0 && colorInDepthY < m_paramsCurrent.m_cColorHeight 
-                    && m_pDepthImagePixelBuffer[destIndex].depth != 0)
+                int pixelColor = 0;
+                const UINT mappedIndex = m_pDepthDistortionLT[destIndex];
+                if(mappedIndex < depthImagePixels)
                 {
-                    // Calculate index into color array- this will perform a horizontal flip as well
-                    unsigned int sourceColorIndex = colorInDepthX + (colorInDepthY * m_paramsCurrent.m_cColorWidth);
+                    // retrieve the depth to color mapping for the current depth pixel
+                    const ColorSpacePoint colorPoint = m_pColorCoordinates[mappedIndex];
 
-                    // Copy color pixel
-                    colorDataInDepthFrame[flippedDestIndex] = rawColorData[sourceColorIndex];
+                    // make sure the depth pixel maps to a valid point in color space
+                    const UINT colorX = (UINT)(colorPoint.X + 0.5f);
+                    const UINT colorY = (UINT)(colorPoint.Y + 0.5f);
+                    if (colorX < colorWidth && colorY < colorHeight)
+                    {
+                        const UINT16 depthValue = m_pDepthRawPixelBuffer[mappedIndex];
+                        const UINT testX = colorX >> cVisibilityTestQuantShift;
+                        const UINT testY = colorY >> cVisibilityTestQuantShift;
+                        const UINT testIdx = testY * testMapWidth + testX;
+                        const UINT16 depthTestValue = m_pDepthVisibilityTestMap[testIdx];
+                        _ASSERT(depthValue >= depthTestValue);
+                        if(depthValue - depthTestValue < cDepthVisibilityTestThreshold)
+                        {
+                            // calculate index into color array
+                            const UINT colorIndex = colorX + (colorY * colorWidth);
+                            pixelColor = rawColorData[colorIndex];
+                        }
+                    }
                 }
-                else
-                {
-                    colorDataInDepthFrame[flippedDestIndex] = 0;
-                }
+                colorDataInDepthFrame[flipIndex] = pixelColor;
             }
         });
     }
-
-    srcColorTex->UnlockRect(0);
-    destColorTex->UnlockRect(0);
 
     return hr;
 }
@@ -1313,160 +1340,67 @@ HRESULT KinectFusionProcessor::MapColorToDepth()
 /// <returns>S_OK on success, otherwise failure code</returns>
 HRESULT KinectFusionProcessor::GetKinectFrames(bool &colorSynchronized)
 {
-    NUI_IMAGE_FRAME imageFrame;
-    LONGLONG currentDepthFrameTime = 0;
-    LONGLONG currentColorFrameTime = 0;
-    colorSynchronized = true;   // assume we are synchronized to start with
+    HRESULT hr = S_OK;
+    INT64 currentDepthFrameTime = 0;
+    INT64 currentColorFrameTime = 0;
+    colorSynchronized = false;   // assume we are not synchronized to start with
 
     ////////////////////////////////////////////////////////
     // Get an extended depth frame from Kinect
 
-    HRESULT hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pDepthStreamHandle, 0, &imageFrame);
-    if (FAILED(hr))
-    {
-        SetStatusMessage(L"Kinect depth stream NuiImageStreamGetNextFrame call failed.");
-        return hr;
-    }
+    IDepthFrame* pDepthFrame = NULL;
 
-    hr = CopyExtendedDepth(imageFrame);
-
-    currentDepthFrameTime = imageFrame.liTimeStamp.QuadPart;
-
-    // Release the Kinect camera frame
-    m_pNuiSensor->NuiImageStreamReleaseFrame(m_pDepthStreamHandle, &imageFrame);
+    hr = m_pDepthFrameReader->AcquireLatestFrame(&pDepthFrame);
 
     if (FAILED(hr))
     {
-        SetStatusMessage(L"Kinect depth stream NuiImageStreamReleaseFrame call failed.");
+        SafeRelease(pDepthFrame);
+        SetStatusMessage(L"Kinect depth stream get frame call failed.");
         return hr;
     }
+
+    hr = CopyDepth(pDepthFrame);
+    pDepthFrame->get_RelativeTime(&currentDepthFrameTime);
+    currentDepthFrameTime /= 10000;
+
+    SafeRelease(pDepthFrame);
 
     ////////////////////////////////////////////////////////
     // Get a color frame from Kinect
 
-    currentColorFrameTime = m_cLastColorFrameTimeStamp;
-
-    hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 0, &imageFrame);
-    if (FAILED(hr))
+    if(m_paramsCurrent.m_bCaptureColor)
     {
-        // Here we just do not integrate color rather than reporting an error
-        colorSynchronized = false;
-    }
-    else
-    {
-        hr = CopyColor(imageFrame);
+        currentColorFrameTime = m_cLastColorFrameTimeStamp;
 
-        currentColorFrameTime = imageFrame.liTimeStamp.QuadPart;
-
-        // Release the Kinect camera frame
-        m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
+        IColorFrame* pColorFrame;
+        hr = m_pColorFrameReader->AcquireLatestFrame(&pColorFrame);
 
         if (FAILED(hr))
         {
-            SetStatusMessage(L"Kinect color stream NuiImageStreamReleaseFrame call failed.");
+            // Here we just do not integrate color rather than reporting an error
+            colorSynchronized = false;
         }
-    }
-
-
-    // Check color and depth frame timestamps to ensure they were captured at the same time
-    // If not, we attempt to re-synchronize by getting a new frame from the stream that is behind.
-    int timestampDiff = static_cast<int>(abs(currentColorFrameTime - currentDepthFrameTime));
-
-    if (timestampDiff >= cMinTimestampDifferenceForFrameReSync && m_cSuccessfulFrameCounter > 0 && (m_paramsCurrent.m_bAutoFindCameraPoseWhenLost || m_paramsCurrent.m_bCaptureColor))
-    {
-        // Get another frame to try and re-sync
-        if (currentColorFrameTime - currentDepthFrameTime >= cMinTimestampDifferenceForFrameReSync)
+        else
         {
-            // Perform camera tracking only from this current depth frame
-            if (nullptr != m_pVolume)
+            if (SUCCEEDED(hr))
             {
-                // Convert the pixels describing extended depth as unsigned short type in millimeters to depth
-                // as floating point type in meters.
-                hr = m_pVolume->DepthToDepthFloatFrame(
-                            m_pDepthImagePixelBuffer,
-                            m_paramsCurrent.m_cDepthImagePixels * sizeof(NUI_DEPTH_IMAGE_PIXEL),
-                            m_pDepthFloatImage,
-                            m_paramsCurrent.m_fMinDepthThreshold,
-                            m_paramsCurrent.m_fMaxDepthThreshold,
-                            m_paramsCurrent.m_bMirrorDepthFrame);
-
-                if (FAILED(hr))
-                {
-                    SetStatusMessage(L"Kinect Fusion NuiFusionDepthToDepthFloatFrame call failed.");
-                    return hr;
-                }
-
-                Matrix4 calculatedCameraPose = m_worldToCameraTransform;
-                FLOAT alignmentEnergy = 1.0f;
-
-                hr = TrackCameraAlignPointClouds(calculatedCameraPose, alignmentEnergy);
-
-                if (SUCCEEDED(hr))
-                {
-                    m_worldToCameraTransform = calculatedCameraPose;
-
-                    // Raycast and set reference frame for tracking with AlignDepthFloatToReconstruction
-                    hr = SetReferenceFrame(m_worldToCameraTransform);
-
-                    SetTrackingSucceeded();
-                }
-                else
-                {
-                    SetTrackingFailed();
-                }
+                CopyColor(pColorFrame);
             }
 
-            // Get another depth frame to try and re-sync as color ahead of depth
-            hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pDepthStreamHandle, timestampDiff, &imageFrame);
-            if (FAILED(hr))
+            if (SUCCEEDED(hr))
             {
-                // Return silently, having performed camera tracking on the current depth frame
-                return hr;
+                hr = pColorFrame->get_RelativeTime(&currentColorFrameTime);
+                currentColorFrameTime /= 10000;
             }
 
-            hr = CopyExtendedDepth(imageFrame);
-
-            currentDepthFrameTime = imageFrame.liTimeStamp.QuadPart;
-
-            // Release the Kinect camera frame
-            m_pNuiSensor->NuiImageStreamReleaseFrame(m_pDepthStreamHandle, &imageFrame);
-
-            if (FAILED(hr))
-            {
-                SetStatusMessage(L"Kinect depth stream NuiImageStreamReleaseFrame call failed.");
-                return hr;
-            }
-        }
-        else if (currentDepthFrameTime - currentColorFrameTime >= cMinTimestampDifferenceForFrameReSync && WaitForSingleObject(m_hNextColorFrameEvent, 0) != WAIT_TIMEOUT)
-        {
-            // Get another color frame to try and re-sync as depth ahead of color and there is another color frame waiting
-            hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pColorStreamHandle, 0, &imageFrame);
-            if (FAILED(hr))
-            {
-                // Here we just do not integrate color rather than reporting an error
-                colorSynchronized = false;
-            }
-            else
-            {
-                hr = CopyColor(imageFrame);
-
-                currentColorFrameTime = imageFrame.liTimeStamp.QuadPart;
-
-                // Release the Kinect camera frame
-                m_pNuiSensor->NuiImageStreamReleaseFrame(m_pColorStreamHandle, &imageFrame);
-
-                if (FAILED(hr))
-                {
-                    SetStatusMessage(L"Kinect color stream NuiImageStreamReleaseFrame call failed.");
-                    return hr;
-                }
-            }
+            SafeRelease(pColorFrame);
         }
 
-        timestampDiff = static_cast<int>(abs(currentColorFrameTime - currentDepthFrameTime));
+        // Check color and depth frame timestamps to ensure they were captured at the same time
+        // If not, we attempt to re-synchronize by getting a new frame from the stream that is behind.
+        int timestampDiff = static_cast<int>(abs(currentColorFrameTime - currentDepthFrameTime));
 
-        // If the difference is still too large, we do not want to integrate color
-        if (timestampDiff > cMinTimestampDifferenceForFrameReSync || FAILED(hr))
+        if ((timestampDiff >= cMinTimestampDifferenceForFrameReSync) && m_cSuccessfulFrameCounter > 0 && (m_paramsCurrent.m_bAutoFindCameraPoseWhenLost || m_paramsCurrent.m_bCaptureColor))
         {
             colorSynchronized = false;
         }
@@ -1475,10 +1409,9 @@ HRESULT KinectFusionProcessor::GetKinectFrames(bool &colorSynchronized)
             colorSynchronized = true;
         }
     }
-
     ////////////////////////////////////////////////////////
-    // To enable playback of a .xed file through Kinect Studio and reset of the reconstruction
-    // if the .xed loops, we test for when the frame timestamp has skipped a large number. 
+    // To enable playback of a .xef file through Kinect Studio and reset of the reconstruction
+    // if the .xef loops, we test for when the frame timestamp has skipped a large number. 
     // Note: this will potentially continually reset live reconstructions on slow machines which
     // cannot process a live frame in less time than the reset threshold. Increase the number of
     // milliseconds in cResetOnTimeStampSkippedMilliseconds if this is a problem.
@@ -1516,6 +1449,8 @@ HRESULT KinectFusionProcessor::GetKinectFrames(bool &colorSynchronized)
 /// </summary>
 HRESULT KinectFusionProcessor::TrackCameraAlignPointClouds(Matrix4 &calculatedCameraPose, FLOAT &alignmentEnergy)
 {
+    UNREFERENCED_PARAMETER(alignmentEnergy);
+
     ////////////////////////////////////////////////////////
     // Down sample the depth image
 
@@ -1608,7 +1543,7 @@ HRESULT KinectFusionProcessor::TrackCameraAlignPointClouds(Matrix4 &calculatedCa
             m_pDownsampledRaycastPointCloud,
             m_pDownsampledDepthPointCloud,
             NUI_FUSION_DEFAULT_ALIGN_ITERATION_COUNT,
-            nullptr,
+            NULL,
             &calculatedCameraPose); 
     }
 
@@ -1697,7 +1632,7 @@ HRESULT KinectFusionProcessor::TrackCameraAlignDepthFloatToReconstruction(Matrix
 /// <summary>
 /// Handle new depth data and perform Kinect Fusion processing
 /// </summary>
-void KinectFusionProcessor::ProcessDepth()
+bool KinectFusionProcessor::ProcessDepth()
 {
     AssertOwnThread();
 
@@ -1705,23 +1640,23 @@ void KinectFusionProcessor::ProcessDepth()
     bool depthAvailable = false;
     bool raycastFrame = false;
     bool cameraPoseFinderAvailable = IsCameraPoseFinderAvailable();
-    bool integrateColor = m_paramsCurrent.m_bCaptureColor && m_cFrameCounter % m_paramsCurrent.m_cColorIntegrationInterval == 0;
+    bool integrateColor = m_paramsCurrent.m_bCaptureColor && ((m_cFrameCounter % m_paramsCurrent.m_cColorIntegrationInterval) == 0);
     bool colorSynchronized = false;
     FLOAT alignmentEnergy = 1.0f;
     Matrix4 calculatedCameraPose = m_worldToCameraTransform;
     m_bCalculateDeltaFrame = (m_cFrameCounter % m_paramsCurrent.m_cDeltaFromReferenceFrameCalculationInterval == 0) 
-                            || (m_bTrackingHasFailedPreviously && m_cSuccessfulFrameCounter <= 2);
+        || (m_bTrackingHasFailedPreviously && m_cSuccessfulFrameCounter <= 2);
 
     // Get the next frames from Kinect
     hr = GetKinectFrames(colorSynchronized);
 
     if (FAILED(hr))
     {
-        goto FinishFrame;
+        return false;
     }
 
     // Only integrate when color is synchronized with depth
-    integrateColor = integrateColor && colorSynchronized;
+    //integrateColor = integrateColor && colorSynchronized;
 
     ////////////////////////////////////////////////////////
     // Depth to Depth Float
@@ -1731,7 +1666,7 @@ void KinectFusionProcessor::ProcessDepth()
     if (nullptr == m_pVolume)
     {
         hr =  NuiFusionDepthToDepthFloatFrame(
-            m_pDepthImagePixelBuffer,
+            m_pDepthUndistortedPixelBuffer,
             m_paramsCurrent.m_cDepthWidth,
             m_paramsCurrent.m_cDepthHeight,
             m_pDepthFloatImage,
@@ -1742,12 +1677,12 @@ void KinectFusionProcessor::ProcessDepth()
     else
     {
         hr = m_pVolume->DepthToDepthFloatFrame(
-                m_pDepthImagePixelBuffer,
-                m_paramsCurrent.m_cDepthImagePixels * sizeof(NUI_DEPTH_IMAGE_PIXEL),
-                m_pDepthFloatImage,
-                m_paramsCurrent.m_fMinDepthThreshold,
-                m_paramsCurrent.m_fMaxDepthThreshold,
-                m_paramsCurrent.m_bMirrorDepthFrame);
+            m_pDepthUndistortedPixelBuffer,
+            m_paramsCurrent.m_cDepthImagePixels * sizeof(UINT16),
+            m_pDepthFloatImage,
+            m_paramsCurrent.m_fMinDepthThreshold,
+            m_paramsCurrent.m_fMaxDepthThreshold,
+            m_paramsCurrent.m_bMirrorDepthFrame);
     }
 
     if (FAILED(hr))
@@ -1772,7 +1707,7 @@ void KinectFusionProcessor::ProcessDepth()
 
     HRESULT tracking = E_NUI_FUSION_TRACKING_ERROR;
 
-    if (!m_bTrackingFailed && 0 != m_cFrameCounter)
+    if (0 != m_cFrameCounter)
     {
         // Here we can either call or TrackCameraAlignDepthFloatToReconstruction or TrackCameraAlignPointClouds
         // The TrackCameraAlignPointClouds function typically has higher performance with the camera pose finder 
@@ -1871,17 +1806,11 @@ void KinectFusionProcessor::ProcessDepth()
     // 2) camera pose finder is off and we have paused capture
     // 3) camera pose finder is on and we are still under the m_cMinSuccessfulTrackingFramesForCameraPoseFinderAfterFailure
     //    number of successful frames count.
-    bool integrateData = !m_bTrackingFailed && ((!cameraPoseFinderAvailable && !m_paramsCurrent.m_bPauseIntegration) 
-        || (cameraPoseFinderAvailable && !(m_bTrackingHasFailedPreviously && m_cSuccessfulFrameCounter < m_paramsCurrent.m_cMinSuccessfulTrackingFramesForCameraPoseFinderAfterFailure)));
+    bool integrateData = !m_bTrackingFailed && !m_paramsCurrent.m_bPauseIntegration && 
+        (!cameraPoseFinderAvailable || (cameraPoseFinderAvailable && !(m_bTrackingHasFailedPreviously && m_cSuccessfulFrameCounter < m_paramsCurrent.m_cMinSuccessfulTrackingFramesForCameraPoseFinderAfterFailure)));
 
     if (integrateData)
     {
-        if (cameraPoseFinderAvailable)
-        {
-            // If integration resumed, this will un-check the pause integration check box back on in the UI automatically
-            m_bIntegrationResumed = true;
-        }
-
         // Reset this flag as we are now integrating data again
         m_bTrackingHasFailedPreviously = false;
 
@@ -1892,11 +1821,11 @@ void KinectFusionProcessor::ProcessDepth()
 
             // Integrate the depth and color data into the volume from the calculated camera pose
             hr = m_pVolume->IntegrateFrame(
-                    m_pDepthFloatImage,
-                    m_pResampledColorImageDepthAligned,
-                    m_paramsCurrent.m_cMaxIntegrationWeight,
-                    NUI_FUSION_DEFAULT_COLOR_INTEGRATION_OF_ALL_ANGLES,
-                    &m_worldToCameraTransform);
+                m_pDepthFloatImage,
+                m_pResampledColorImageDepthAligned,
+                m_paramsCurrent.m_cMaxIntegrationWeight,
+                NUI_FUSION_DEFAULT_COLOR_INTEGRATION_OF_ALL_ANGLES,
+                &m_worldToCameraTransform);
 
             m_frame.m_bColorCaptured = true;
         }
@@ -1904,11 +1833,11 @@ void KinectFusionProcessor::ProcessDepth()
         {
             // Integrate just the depth data into the volume from the calculated camera pose
             hr = m_pVolume->IntegrateFrame(
-                    m_pDepthFloatImage,
-                    nullptr,
-                    m_paramsCurrent.m_cMaxIntegrationWeight,
-                    NUI_FUSION_DEFAULT_COLOR_INTEGRATION_OF_ALL_ANGLES,
-                    &m_worldToCameraTransform);
+                m_pDepthFloatImage,
+                nullptr,
+                m_paramsCurrent.m_cMaxIntegrationWeight,
+                NUI_FUSION_DEFAULT_COLOR_INTEGRATION_OF_ALL_ANGLES,
+                &m_worldToCameraTransform);
         }
 
         if (FAILED(hr))
@@ -1924,18 +1853,7 @@ void KinectFusionProcessor::ProcessDepth()
     {
         double currentTime = m_timer.AbsoluteTime();
 
-        // Is another frame already waiting?
-        if (WaitForSingleObject(m_hNextDepthFrameEvent, 0) == WAIT_TIMEOUT)
-        {
-            // No: We should have enough time to raycast.
-            raycastFrame = true;
-        }
-        else
-        {
-            // Yes: Raycast only if we've exceeded the render interval.
-            double renderIntervalSeconds = (0.001 * cRenderIntervalMilliseconds);
-            raycastFrame = (currentTime - m_fMostRecentRaycastTime > renderIntervalSeconds);
-        }
+        raycastFrame = true;
 
         if (raycastFrame)
         {
@@ -2002,18 +1920,6 @@ FinishFrame:
 
     EnterCriticalSection(&m_lockFrame);
 
-    if (cameraPoseFinderAvailable)
-    {
-        // Do not set false, as camera pose finder will toggle automatically depending on whether it has
-        // regained tracking (re-localized) and is integrating again.
-        m_frame.m_bIntegrationResumed = m_bIntegrationResumed;
-    }
-    else
-    {
-        m_frame.m_bIntegrationResumed = m_bIntegrationResumed;
-        m_bIntegrationResumed = false;
-    }
-
     ////////////////////////////////////////////////////////
     // Copy the images to their frame buffers
 
@@ -2064,11 +1970,11 @@ FinishFrame:
     ////////////////////////////////////////////////////////
     // Periodically Display Fps
 
-
     if (SUCCEEDED(hr))
     {
         // Update frame counter
         m_cFrameCounter++;
+        m_cFPSFrameCounter++;
 
         // Display fps count approximately every cTimeDisplayInterval seconds
         double elapsed = m_timer.AbsoluteTime() - m_fFrameCounterStartTime;
@@ -2079,10 +1985,10 @@ FinishFrame:
             // Update status display
             if (!m_bTrackingFailed)
             {
-                m_frame.m_fFramesPerSecond = static_cast<float>(m_cFrameCounter / elapsed);
+                m_frame.m_fFramesPerSecond = static_cast<float>(m_cFPSFrameCounter / elapsed);
             }
 
-            m_cFrameCounter = 0;
+            m_cFPSFrameCounter = 0;
             m_fFrameCounterStartTime = m_timer.AbsoluteTime();
         }
     }
@@ -2090,7 +1996,6 @@ FinishFrame:
     m_frame.SetStatusMessage(m_statusMessage);
 
     LeaveCriticalSection(&m_lockFrame);
-
     if (SUCCEEDED(hr))
     {
         m_exportFrameCounter++;
@@ -2147,6 +2052,7 @@ FinishFrame:
 			}
             SafeRelease(mesh);
 		}
+    return SUCCEEDED(hr);
 }
 
 /// <summary>
@@ -2162,10 +2068,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignPointClouds()
         return E_FAIL;
     }
 
-    bool resampled = false;
-
-    hr = ProcessColorForCameraPoseFinder(resampled);
-
+    hr = DownsampleColorFrameToDepthResolution(m_pColorImage, m_pResampledColorImage);
     if (FAILED(hr))
     {
         return hr;
@@ -2178,7 +2081,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignPointClouds()
     // This will return an error code if there are no matched frames in the camera pose finder database.
     hr = m_pCameraPoseFinder->FindCameraPose(
         m_pDepthFloatImage, 
-        resampled ? m_pResampledColorImage : m_pColorImage,
+        m_pResampledColorImage,
         &pMatchCandidates);
 
     if (FAILED(hr) || nullptr == pMatchCandidates)
@@ -2335,7 +2238,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignPointClouds()
         m_bCalculateDeltaFrame = false;
 
         WCHAR str[MAX_PATH];
-        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder SUCCESS! Residual energy=%f, %d frames stored, minimum distance=%f, best match index=%d", bestNeighborAlignmentEnergy, cPoses, minDistance, bestNeighborIndex);
+        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder SUCCESS! Residual energy=%f, %u frames stored, minimum distance=%f, best match index=%d", bestNeighborAlignmentEnergy, cPoses, minDistance, bestNeighborIndex);
         SetStatusMessage(str);
     }
     else
@@ -2355,7 +2258,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignPointClouds()
 
         // Tracking Failed will be set again on the next iteration in ProcessDepth
         WCHAR str[MAX_PATH];
-        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder FAILED! Residual energy=%f, %d frames stored, minimum distance=%f, best match index=%d", smallestEnergy, cPoses, minDistance, smallestEnergyNeighborIndex);
+        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder FAILED! Residual energy=%f, %u frames stored, minimum distance=%f, best match index=%d", smallestEnergy, cPoses, minDistance, smallestEnergyNeighborIndex);
         SetStatusMessage(str);
     }
 
@@ -2379,10 +2282,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignDepthFloatToReconstruction()
         return E_FAIL;
     }
 
-    bool resampled = false;
-
-    hr = ProcessColorForCameraPoseFinder(resampled);
-
+    hr = DownsampleColorFrameToDepthResolution(m_pColorImage, m_pResampledColorImage);
     if (FAILED(hr))
     {
         return hr;
@@ -2395,7 +2295,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignDepthFloatToReconstruction()
     // This will return an error code if there are no matched frames in the camera pose finder database.
     hr = m_pCameraPoseFinder->FindCameraPose(
         m_pDepthFloatImage, 
-        resampled ? m_pResampledColorImage : m_pColorImage,
+        m_pResampledColorImage,
         &pMatchCandidates);
 
     if (FAILED(hr) || nullptr == pMatchCandidates)
@@ -2471,7 +2371,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignDepthFloatToReconstruction()
             &(pNeighbors[n]));
 
         bool relocSuccess = SUCCEEDED(tracking) && alignmentEnergy < bestNeighborAlignmentEnergy && alignmentEnergy > m_paramsCurrent.m_fMinAlignToReconstructionEnergyForSuccess;
-        
+
         if (relocSuccess)
         {
             if (SUCCEEDED(tracking))
@@ -2515,7 +2415,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignDepthFloatToReconstruction()
         m_bCalculateDeltaFrame = true;
 
         WCHAR str[MAX_PATH];
-        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder SUCCESS! Residual energy=%f, %d frames stored, minimum distance=%f, best match index=%d", bestNeighborAlignmentEnergy, cPoses, minDistance, bestNeighborIndex);
+        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder SUCCESS! Residual energy=%f, %u frames stored, minimum distance=%f, best match index=%d", bestNeighborAlignmentEnergy, cPoses, minDistance, bestNeighborIndex);
         SetStatusMessage(str);
     }
     else
@@ -2533,7 +2433,7 @@ HRESULT KinectFusionProcessor::FindCameraPoseAlignDepthFloatToReconstruction()
 
         // Tracking Failed will be set again on the next iteration in ProcessDepth
         WCHAR str[MAX_PATH];
-        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder FAILED! Residual energy=%f, %d frames stored, minimum distance=%f, best match index=%d", smallestEnergy, cPoses, minDistance, smallestEnergyNeighborIndex);
+        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder FAILED! Residual energy=%f, %u frames stored, minimum distance=%f, best match index=%d", smallestEnergy, cPoses, minDistance, smallestEnergyNeighborIndex);
         SetStatusMessage(str);
     }
 
@@ -2587,8 +2487,6 @@ void KinectFusionProcessor::SetTrackingFailed()
     m_cSuccessfulFrameCounter = 0;
     m_bTrackingFailed = true;
     m_bTrackingHasFailedPreviously = true;
-
-    m_bIntegrationResumed = false;
 }
 
 /// <summary>
@@ -2615,61 +2513,12 @@ void KinectFusionProcessor::ResetTracking()
     // Reset pause and signal that the integration resumed
     m_paramsCurrent.m_bPauseIntegration = false;
     m_paramsNext.m_bPauseIntegration = false;
-    m_bIntegrationResumed = true;
-    m_frame.m_bIntegrationResumed = true;
     m_frame.m_bColorCaptured = false;
 
     if (nullptr != m_pCameraPoseFinder)
     {
         m_pCameraPoseFinder->ResetCameraPoseFinder();
     }
-}
-
-/// <summary>
-/// Process the color image for the camera pose finder.
-/// </summary>
-/// <returns>S_OK on success, otherwise failure code</returns>
-HRESULT KinectFusionProcessor::ProcessColorForCameraPoseFinder(bool &resampled)
-{
-    HRESULT hr = S_OK;
-
-    // If color and depth are different resolutions we first we re-sample the color frame using nearest neighbor
-    // before passing to the CameraPoseFinder
-    if (m_paramsCurrent.m_cDepthImagePixels != m_paramsCurrent.m_cColorImagePixels)
-    {
-        if (m_pColorImage->width > m_pResampledColorImage->width)
-        {
-            // Down-sample
-            unsigned int factor = m_pColorImage->width / m_pResampledColorImage->width;
-            hr = DownsampleFrameNearestNeighbor(m_pColorImage, m_pResampledColorImage, factor);
-
-            if (FAILED(hr))
-            {
-                SetStatusMessage(L"Kinect Fusion DownsampleFrameNearestNeighbor call failed.");
-                return hr;
-            }
-        }
-        else
-        {
-            // Up-sample
-            unsigned int factor = m_pResampledColorImage->width / m_pColorImage->width;
-            hr = UpsampleFrameNearestNeighbor(m_pColorImage, m_pResampledColorImage, factor);
-
-            if (FAILED(hr))
-            {
-                SetStatusMessage(L"Kinect Fusion UpsampleFrameNearestNeighbor call failed.");
-                return hr;
-            }
-        }
-
-        resampled = true;
-    }
-    else
-    {
-        resampled = false;
-    }
-
-    return hr;
 }
 
 /// <summary>
@@ -2688,10 +2537,7 @@ HRESULT KinectFusionProcessor::UpdateCameraPoseFinder()
         return E_FAIL;
     }
 
-    bool resampled = false;
-
-    hr = ProcessColorForCameraPoseFinder(resampled);
-
+    hr = DownsampleColorFrameToDepthResolution(m_pColorImage, m_pResampledColorImage);
     if (FAILED(hr))
     {
         return hr;
@@ -2709,7 +2555,7 @@ HRESULT KinectFusionProcessor::UpdateCameraPoseFinder()
     // reset both the reconstruction and database when changing the mirror depth setting.
     hr = m_pCameraPoseFinder->ProcessFrame(
         m_pDepthFloatImage, 
-        resampled ? m_pResampledColorImage : m_pColorImage,
+        m_pResampledColorImage,
         &m_worldToCameraTransform, 
         m_paramsCurrent.m_fCameraPoseFinderDistanceThresholdAccept, 
         &addedPose, 
@@ -2718,7 +2564,7 @@ HRESULT KinectFusionProcessor::UpdateCameraPoseFinder()
     if (TRUE == addedPose)
     {
         WCHAR str[MAX_PATH];
-        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder Added Frame! %d frames stored, minimum distance>=%f\n", m_pCameraPoseFinder->GetStoredPoseCount(), m_paramsCurrent.m_fCameraPoseFinderDistanceThresholdAccept);
+        swprintf_s(str, ARRAYSIZE(str), L"Camera Pose Finder Added Frame! %u frames stored, minimum distance>=%f\n", m_pCameraPoseFinder->GetStoredPoseCount(), m_paramsCurrent.m_fCameraPoseFinderDistanceThresholdAccept);
         SetStatusMessage(str);
     }
 
@@ -2750,7 +2596,7 @@ HRESULT KinectFusionProcessor::StoreImageToFrameBuffer(
 
     HRESULT hr = S_OK;
 
-    if (nullptr == imageFrame || nullptr == imageFrame->pFrameTexture || nullptr == buffer)
+    if (nullptr == imageFrame || nullptr == imageFrame->pFrameBuffer || nullptr == buffer)
     {
         return E_INVALIDARG;
     }
@@ -2766,14 +2612,10 @@ HRESULT KinectFusionProcessor::StoreImageToFrameBuffer(
         return E_NOINTERFACE;
     }
 
-    INuiFrameTexture *imageFrameTexture = imageFrame->pFrameTexture;
-    NUI_LOCKED_RECT LockedRect;
-
-    // Lock the frame data so the Kinect knows not to modify it while we're reading it
-    imageFrameTexture->LockRect(0, &LockedRect, nullptr, 0);
+    NUI_FUSION_BUFFER *imageFrameBuffer = imageFrame->pFrameBuffer;
 
     // Make sure we've received valid data
-    if (LockedRect.Pitch != 0)
+    if (imageFrameBuffer->Pitch != 0)
     {
         // Convert from floating point depth if required
         if (NUI_FUSION_IMAGE_TYPE_FLOAT == imageFrame->imageType)
@@ -2783,12 +2625,12 @@ HRESULT KinectFusionProcessor::StoreImageToFrameBuffer(
             const FLOAT oneOverRange = (1.0f / range) * 256.0f;
             const FLOAT minRange = 0.0f;
 
-            const float *pFloatBuffer = reinterpret_cast<float *>(LockedRect.pBits);
+            const float *pFloatBuffer = reinterpret_cast<float *>(imageFrameBuffer->pBits);
 
             Concurrency::parallel_for(0u, imageFrame->height, [&](unsigned int y)
             {
-                unsigned int* pColorRow = reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(buffer) + (y * LockedRect.Pitch));
-                const float* pFloatRow = reinterpret_cast<const float*>(reinterpret_cast<const unsigned char*>(pFloatBuffer) + (y * LockedRect.Pitch));
+                unsigned int* pColorRow = reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(buffer) + (y * imageFrameBuffer->Pitch));
+                const float* pFloatRow = reinterpret_cast<const float*>(reinterpret_cast<const unsigned char*>(pFloatBuffer) + (y * imageFrameBuffer->Pitch));
 
                 for (unsigned int x = 0; x < imageFrame->width; ++x)
                 {
@@ -2798,18 +2640,23 @@ HRESULT KinectFusionProcessor::StoreImageToFrameBuffer(
                     // Consider using a lookup table instead when writing production code.
                     BYTE intensity = (depth >= minRange) ?
                         static_cast<BYTE>( (int)((depth - minRange) * oneOverRange) % 256 ) :
-                        0; // % 256 to enable it to wrap around after the max range
+                    0; // % 256 to enable it to wrap around after the max range
 
-                    pColorRow[x] = (255 << 24) | (intensity << 16) | (intensity << 8 ) | intensity;
+                    pColorRow[x] = (255u << 24) | (intensity << 16) | (intensity << 8 ) | intensity;
+
+                    if (depth < 0.01f)
+                    {
+                        pColorRow[x] = (255u << 24) | (255u << 16);
+                    }
                 }
             });
         }
-        else	// already in 4 bytes per int (RGBA/BGRA) format
+        else    // already in 4 bytes per int (RGBA/BGRA) format
         {
             const size_t destPixelCount =
                 m_paramsCurrent.m_cDepthWidth * m_paramsCurrent.m_cDepthHeight;
 
-            BYTE * pBuffer = (BYTE *)LockedRect.pBits;
+            BYTE * pBuffer = imageFrameBuffer->pBits;
 
             // Draw the data with Direct2D
             memcpy_s(
@@ -2823,9 +2670,6 @@ HRESULT KinectFusionProcessor::StoreImageToFrameBuffer(
     {
         return E_NOINTERFACE;
     }
-
-    // We're done with the texture so unlock it
-    imageFrameTexture->UnlockRect(0);
 
     return hr;
 }
@@ -2883,6 +2727,7 @@ HRESULT KinectFusionProcessor::InternalResetReconstruction()
     }
 
     m_cFrameCounter = 0;
+    m_cFPSFrameCounter = 0;
     m_fFrameCounterStartTime = m_timer.AbsoluteTime();
 
     EnterCriticalSection(&m_lockFrame);
@@ -2916,6 +2761,7 @@ HRESULT KinectFusionProcessor::CalculateMesh(INuiFusionColorMesh** ppMesh)
         // Set the frame counter to 0 to prevent a reset reconstruction call due to large frame 
         // timestamp change after meshing. Also reset frame time for fps counter.
         m_cFrameCounter = 0;
+        m_cFPSFrameCounter = 0;
         m_fFrameCounterStartTime =  m_timer.AbsoluteTime();
     }
 

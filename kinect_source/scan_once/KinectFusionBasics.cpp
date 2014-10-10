@@ -36,11 +36,9 @@
 #include <new>
 #include <shellapi.h>
 
-
 // Project includes
 #include "resource.h"
 #include "KinectFusionBasics.h"
-
 
 bool cvtLPW2stdstring(std::string& s, const LPWSTR pw,
                       UINT codepage = CP_ACP)
@@ -70,161 +68,6 @@ bool cvtLPW2stdstring(std::string& s, const LPWSTR pw,
     return res;
 }
 
-/// <summary>
-/// Entry point for the application
-/// </summary>
-/// <param name="hInstance">handle to the application instance</param>
-/// <param name="hPrevInstance">always 0</param>
-/// <param name="lpCmdLine">command line arguments</param>
-/// <param name="nCmdShow">whether to display minimized, maximized, or normally</param>
-/// <returns>status</returns>
-int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
-{
-    LPWSTR *szArglist;
-	int nArgs = 0;
-	szArglist = CommandLineToArgvW(GetCommandLineW(), &nArgs);
-
-    if (nArgs != 5){
-        return 1;
-    }
-
-    std::string program, fileName;
-
-    cvtLPW2stdstring (program, szArglist[0]);
-    cvtLPW2stdstring (fileName, szArglist[1]);
-    int nFrames = _wtoi (szArglist[2]);
-    double minZ = _wtof (szArglist[3]);
-    double maxZ = _wtof (szArglist[4]);
-
-    CKinectFusionBasics application(minZ, maxZ);
-
-    application.Run(hInstance, nCmdShow, fileName, nFrames);
-}
-
-
-
-/// <summary>
-/// Set Identity in a Matrix4
-/// </summary>
-/// <param name="mat">The matrix to set to identity</param>
-void SetIdentityMatrix(Matrix4 &mat)
-{
-    mat.M11 = 1; mat.M12 = 0; mat.M13 = 0; mat.M14 = 0;
-    mat.M21 = 0; mat.M22 = 1; mat.M23 = 0; mat.M24 = 0;
-    mat.M31 = 0; mat.M32 = 0; mat.M33 = 1; mat.M34 = 0;
-    mat.M41 = 0; mat.M42 = 0; mat.M43 = 0; mat.M44 = 1;
-}
-
-/// <summary>
-/// Constructor
-/// </summary>
-CKinectFusionBasics::CKinectFusionBasics(double minZ, double maxZ) :
-    m_pD2DFactory(nullptr),
-    m_pDrawDepth(nullptr),
-    m_pVolume(nullptr),
-    m_pNuiSensor(nullptr),
-    m_depthImageResolution(NUI_IMAGE_RESOLUTION_640x480),
-    m_cDepthImagePixels(0),
-    m_hNextDepthFrameEvent(INVALID_HANDLE_VALUE),
-    m_pDepthStreamHandle(INVALID_HANDLE_VALUE),
-    m_bNearMode(true),
-    m_bMirrorDepthFrame(false),
-    m_bTranslateResetPoseByMinDepthThreshold(true),
-    m_bAutoResetReconstructionWhenLost(false),
-    m_bAutoResetReconstructionOnTimeout(true),
-    m_cLostFrameCounter(0),
-    m_bTrackingFailed(false),
-    m_cFrameCounter(0),
-    m_fStartTime(0),
-    m_pDepthImagePixelBuffer(nullptr),
-    m_pDepthFloatImage(nullptr),
-    m_pPointCloud(nullptr),
-    m_pShadedSurface(nullptr),
-    m_bInitializeError(false),
-    m_depthFrameCount(0)
-{
-    // Get the depth frame size from the NUI_IMAGE_RESOLUTION enum
-    // You can use NUI_IMAGE_RESOLUTION_640x480 or NUI_IMAGE_RESOLUTION_320x240 in this sample
-    // Smaller resolutions will be faster in per-frame computations, but show less detail in reconstructions.
-    DWORD width = 0, height = 0;
-    NuiImageResolutionToSize(m_depthImageResolution, width, height);
-    m_cDepthWidth = width;
-    m_cDepthHeight = height;
-    m_cDepthImagePixels = m_cDepthWidth*m_cDepthHeight;
-
-    // create heap storage for depth pixel data in RGBX format
-    m_pDepthRGBX = new BYTE[m_cDepthImagePixels*cBytesPerPixel];
-
-    // Define a cubic Kinect Fusion reconstruction volume,
-    // with the Kinect at the center of the front face and the volume directly in front of Kinect.
-    m_reconstructionParams.voxelsPerMeter = 640;// 1000mm / 256vpm = ~3.9mm/voxel    
-    m_reconstructionParams.voxelCountX = 512;   // 512 / 256vpm = 2m wide reconstruction
-    m_reconstructionParams.voxelCountY = 512;   // Memory = 512*384*512 * 4bytes per voxel
-    m_reconstructionParams.voxelCountZ = 512;   // This will require a GPU with at least 512MB
-
-    // These parameters are for optionally clipping the input depth image 
-    m_fMinDepthThreshold = minZ;//NUI_FUSION_DEFAULT_MINIMUM_DEPTH;   // min depth in meters
-    m_fMaxDepthThreshold = maxZ; //NUI_FUSION_DEFAULT_MAXIMUM_DEPTH;    // max depth in meters
-
-    // This parameter is the temporal averaging parameter for depth integration into the reconstruction
-    m_cMaxIntegrationWeight = 500;//NUI_FUSION_DEFAULT_INTEGRATION_WEIGHT;	// Reasonable for static scenes
-
-    // This parameter sets whether GPU or CPU processing is used. Note that the CPU will likely be 
-    // too slow for real-time processing.
-    m_processorType = NUI_FUSION_RECONSTRUCTION_PROCESSOR_TYPE_AMP;
-
-    // If GPU processing is selected, we can choose the index of the device we would like to
-    // use for processing by setting this zero-based index parameter. Note that setting -1 will cause
-    // automatic selection of the most suitable device (specifically the DirectX11 compatible device 
-    // with largest memory), which is useful in systems with multiple GPUs when only one reconstruction
-    // volume is required. Note that the automatic choice will not load balance across multiple 
-    // GPUs, hence users should manually select GPU indices when multiple reconstruction volumes 
-    // are required, each on a separate device.
-    m_deviceIndex = -1;    // automatically choose device index for processing
-
-    SetIdentityMatrix(m_worldToCameraTransform);
-    SetIdentityMatrix(m_defaultWorldToVolumeTransform);
-
-    m_cLastDepthFrameTimeStamp.QuadPart = 0;
-}
-
-/// <summary>
-/// Destructor
-/// </summary>
-CKinectFusionBasics::~CKinectFusionBasics()
-{
-    // Clean up Kinect Fusion
-    SafeRelease(m_pVolume);
-
-    SAFE_FUSION_RELEASE_IMAGE_FRAME(m_pShadedSurface);
-    SAFE_FUSION_RELEASE_IMAGE_FRAME(m_pPointCloud);
-    SAFE_FUSION_RELEASE_IMAGE_FRAME(m_pDepthFloatImage);
-
-    // Clean up Kinect
-    if (m_pNuiSensor)
-    {
-        m_pNuiSensor->NuiShutdown();
-        m_pNuiSensor->Release();
-    }
-
-    if (m_hNextDepthFrameEvent != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle(m_hNextDepthFrameEvent);
-    }
-
-    // clean up the depth pixel array
-    SAFE_DELETE_ARRAY(m_pDepthImagePixelBuffer);
-
-    // clean up Direct2D renderer
-    SAFE_DELETE(m_pDrawDepth);
-
-    // done with depth pixel data
-    SAFE_DELETE_ARRAY(m_pDepthRGBX);
-
-    // clean up Direct2D
-    SafeRelease(m_pD2DFactory);
-}
-
 // TODO
 bool myEquals (Vector3 i, Vector3 j) {
     return ((i.x==j.x) && (i.y == j.y) && (i.z == j.z));
@@ -249,6 +92,174 @@ bool myLess (Vector3 i, Vector3 j) {
 }
 
 /// <summary>
+/// Entry point for the application
+/// </summary>
+/// <param name="hInstance">handle to the application instance</param>
+/// <param name="hPrevInstance">always 0</param>
+/// <param name="lpCmdLine">command line arguments</param>
+/// <param name="nCmdShow">whether to display minimized, maximized, or normally</param>
+/// <returns>status</returns>
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR, _In_ int nCmdShow)
+{
+    LPWSTR *szArglist;
+	int nArgs = 0;
+	szArglist = CommandLineToArgvW(GetCommandLineW(), &nArgs);
+
+    if (nArgs != 7){
+        return 1;
+    }
+
+    std::string program, fileName;
+
+    cvtLPW2stdstring (program, szArglist[0]);
+    cvtLPW2stdstring (fileName, szArglist[1]);
+    int nFrames = _wtoi (szArglist[2]);
+    double minZ = _wtof (szArglist[3]);
+    double maxZ = _wtof (szArglist[4]);
+    int voxelCountX = _wtoi(szArglist[5]);
+    int voxelCountY = _wtoi(szArglist[6]);
+
+    CKinectFusionBasics application(minZ, maxZ, voxelCountX, voxelCountY);
+
+    application.Run(hInstance, nCmdShow, fileName, nFrames);
+}
+
+/// <summary>
+/// Set Identity in a Matrix4
+/// </summary>
+/// <param name="mat">The matrix to set to identity</param>
+void SetIdentityMatrix(Matrix4 &mat)
+{
+    mat.M11 = 1; mat.M12 = 0; mat.M13 = 0; mat.M14 = 0;
+    mat.M21 = 0; mat.M22 = 1; mat.M23 = 0; mat.M24 = 0;
+    mat.M31 = 0; mat.M32 = 0; mat.M33 = 1; mat.M34 = 0;
+    mat.M41 = 0; mat.M42 = 0; mat.M43 = 0; mat.M44 = 1;
+}
+
+/// <summary>
+/// Constructor
+/// </summary>
+CKinectFusionBasics::CKinectFusionBasics(double minZ, double maxZ, int voxelCountX, int voxelCountY) :
+    m_pD2DFactory(nullptr),
+    m_pDrawDepth(nullptr),
+    m_pVolume(nullptr),
+    m_pNuiSensor(nullptr),
+    m_cDepthImagePixels(0),
+    m_bMirrorDepthFrame(false),
+    m_bTranslateResetPoseByMinDepthThreshold(true),
+    m_bAutoResetReconstructionWhenLost(false),
+    m_bAutoResetReconstructionOnTimeout(true),
+    m_lastFrameTimeStamp(0),
+    m_bResetReconstruction(false),
+    m_cLostFrameCounter(0),
+    m_bTrackingFailed(false),
+    m_cFrameCounter(0),
+    m_fStartTime(0),
+    m_pMapper(nullptr),
+    m_pDepthImagePixelBuffer(nullptr),
+    m_pDepthDistortionMap(nullptr),
+    m_pDepthDistortionLT(nullptr),
+    m_pDepthFloatImage(nullptr),
+    m_pPointCloud(nullptr),
+    m_pShadedSurface(nullptr),
+    m_bInitializeError(false),
+    m_pDepthFrameReader(NULL),
+    m_coordinateMappingChangedEvent(NULL),
+    m_bHaveValidCameraParameters(false),
+    m_depthFrameCount(0)
+{
+    // Get the depth frame size from the NUI_IMAGE_RESOLUTION enum
+    // You can use NUI_IMAGE_RESOLUTION_640x480 or NUI_IMAGE_RESOLUTION_320x240 in this sample
+    // Smaller resolutions will be faster in per-frame computations, but show less detail in reconstructions.
+    m_cDepthWidth = NUI_DEPTH_RAW_WIDTH;
+    m_cDepthHeight = NUI_DEPTH_RAW_HEIGHT;
+    m_cDepthImagePixels = m_cDepthWidth * m_cDepthHeight;
+
+    // create heap storage for depth pixel data in RGBX format
+    m_pDepthRGBX = new BYTE[m_cDepthImagePixels * cBytesPerPixel];
+
+    // Define a cubic Kinect Fusion reconstruction volume,
+    // with the Kinect at the center of the front face and the volume directly in front of Kinect.
+    m_reconstructionParams.voxelsPerMeter = 640;// 1000mm / 256vpm = ~3.9mm/voxel    
+    m_reconstructionParams.voxelCountX = voxelCountX;   // 384 / 256vpm = 1.5m wide reconstruction
+    m_reconstructionParams.voxelCountY = voxelCountY;   // Memory = 384*384*384 * 4bytes per voxel
+    m_reconstructionParams.voxelCountZ = 384;   // This will require a GPU with at least 256MB
+
+    // These parameters are for optionally clipping the input depth image 
+    m_fMinDepthThreshold = minZ;//NUI_FUSION_DEFAULT_MINIMUM_DEPTH;   // min depth in meters
+    m_fMaxDepthThreshold = maxZ;//NUI_FUSION_DEFAULT_MAXIMUM_DEPTH;    // max depth in meters
+
+    // This parameter is the temporal averaging parameter for depth integration into the reconstruction
+    m_cMaxIntegrationWeight = 200;//NUI_FUSION_DEFAULT_INTEGRATION_WEIGHT;	// Reasonable for static scenes
+
+    // This parameter sets whether GPU or CPU processing is used. Note that the CPU will likely be 
+    // too slow for real-time processing.
+    m_processorType = NUI_FUSION_RECONSTRUCTION_PROCESSOR_TYPE_AMP;
+
+    // If GPU processing is selected, we can choose the index of the device we would like to
+    // use for processing by setting this zero-based index parameter. Note that setting -1 will cause
+    // automatic selection of the most suitable device (specifically the DirectX11 compatible device 
+    // with largest memory), which is useful in systems with multiple GPUs when only one reconstruction
+    // volume is required. Note that the automatic choice will not load balance across multiple 
+    // GPUs, hence users should manually select GPU indices when multiple reconstruction volumes 
+    // are required, each on a separate device.
+    m_deviceIndex = -1;    // automatically choose device index for processing
+
+    SetIdentityMatrix(m_worldToCameraTransform);
+    SetIdentityMatrix(m_defaultWorldToVolumeTransform);
+    
+    // We don't know these at object creation time, so we use nominal values.
+    // These will later be updated in response to the CoordinateMappingChanged event.
+    m_cameraParameters.focalLengthX = NUI_KINECT_DEPTH_NORM_FOCAL_LENGTH_X;
+    m_cameraParameters.focalLengthY = NUI_KINECT_DEPTH_NORM_FOCAL_LENGTH_Y;
+    m_cameraParameters.principalPointX = NUI_KINECT_DEPTH_NORM_PRINCIPAL_POINT_X;
+    m_cameraParameters.principalPointY = NUI_KINECT_DEPTH_NORM_PRINCIPAL_POINT_Y;
+
+}
+
+/// <summary>
+/// Destructor
+/// </summary>
+CKinectFusionBasics::~CKinectFusionBasics()
+{
+    // Clean up Kinect Fusion
+    SafeRelease(m_pVolume);
+    SafeRelease(m_pMapper);
+
+    if (nullptr != m_pMapper)
+        m_pMapper->UnsubscribeCoordinateMappingChanged(m_coordinateMappingChangedEvent);
+
+    SAFE_FUSION_RELEASE_IMAGE_FRAME(m_pShadedSurface);
+    SAFE_FUSION_RELEASE_IMAGE_FRAME(m_pPointCloud);
+    SAFE_FUSION_RELEASE_IMAGE_FRAME(m_pDepthFloatImage);
+
+    // done with depth frame reader
+    SafeRelease(m_pDepthFrameReader);
+
+    // Clean up Kinect
+    if (m_pNuiSensor)
+    {
+        m_pNuiSensor->Close();
+        m_pNuiSensor->Release();
+    }
+
+    // clean up the depth pixel array
+    SAFE_DELETE_ARRAY(m_pDepthImagePixelBuffer);
+
+    SAFE_DELETE_ARRAY(m_pDepthDistortionMap);
+    SAFE_DELETE_ARRAY(m_pDepthDistortionLT);
+
+    // clean up Direct2D renderer
+    SAFE_DELETE(m_pDrawDepth);
+
+    // done with depth pixel data
+    SAFE_DELETE_ARRAY(m_pDepthRGBX);
+
+    // clean up Direct2D
+    SafeRelease(m_pD2DFactory);
+}
+
+/// <summary>
 /// Creates the main window and begins processing
 /// </summary>
 /// <param name="hInstance">handle to the application instance</param>
@@ -263,7 +274,7 @@ int CKinectFusionBasics::Run(HINSTANCE hInstance, int nCmdShow, std::string file
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     wc.cbWndExtra    = DLGWINDOWEXTRA;
     wc.hInstance     = hInstance;
-    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hCursor       = LoadCursorW(nullptr, MAKEINTRESOURCE(IDC_ARROW));
     wc.hIcon         = LoadIconW(hInstance, MAKEINTRESOURCE(IDI_APP));
     wc.lpfnWndProc   = DefDlgProcW;
     wc.lpszClassName = L"KinectFusionBasicsAppDlgWndClass";
@@ -284,23 +295,10 @@ int CKinectFusionBasics::Run(HINSTANCE hInstance, int nCmdShow, std::string file
     // Show window
     //ShowWindow(hWndApp, nCmdShow);
 
-    const int eventCount = 1;
-    HANDLE hEvents[eventCount];
-
     // Main message loop
     while (WM_QUIT != msg.message)
     {
-        hEvents[0] = m_hNextDepthFrameEvent;
-
-        // Check to see if we have either a message (by passing in QS_ALLINPUT)
-        // Or a Kinect event (hEvents)
-        // Update() will check for Kinect events individually, in case more than one are signalled
-        DWORD dwEvent = MsgWaitForMultipleObjects(eventCount, hEvents, FALSE, INFINITE, QS_ALLINPUT);
-
-        // Check if this is an event we're waiting on and not a timeout or message
-        if (WAIT_OBJECT_0 == dwEvent)
-        {
-			if (m_depthFrameCount >= nFrames){
+        if (m_depthFrameCount >= nFrames){
 				INuiFusionMesh *mesh = nullptr;
 				HRESULT hr = m_pVolume->CalculateMesh(1, &mesh);
 				if (SUCCEEDED(hr)){
@@ -349,10 +347,11 @@ int CKinectFusionBasics::Run(HINSTANCE hInstance, int nCmdShow, std::string file
 					SafeRelease(mesh);
 				}
 				PostQuitMessage(0);
-			}
-			else {
-				Update();
-			}
+            }
+        else {
+        // Explicitly check the Kinect frame event since MsgWaitForMultipleObjects
+        // can return for other reasons even though it is signaled.
+        Update();
         }
 
         if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -381,10 +380,64 @@ void CKinectFusionBasics::Update()
         return;
     }
 
-    if ( WAIT_OBJECT_0 == WaitForSingleObject(m_hNextDepthFrameEvent, 0) )
+    if (m_coordinateMappingChangedEvent != NULL &&
+        WAIT_OBJECT_0 == WaitForSingleObject((HANDLE)m_coordinateMappingChangedEvent, 0))
     {
-        ProcessDepth();
+        OnCoordinateMappingChanged();
+        ResetEvent((HANDLE)m_coordinateMappingChangedEvent);
     }
+
+    if (!m_bHaveValidCameraParameters)
+    {
+        return;
+    }
+
+    m_bResetReconstruction = false;
+
+    if (!m_pDepthFrameReader)
+    {
+        return;
+    }
+
+    IDepthFrame* pDepthFrame = NULL;
+
+    HRESULT hr = m_pDepthFrameReader->AcquireLatestFrame(&pDepthFrame);
+
+    if (SUCCEEDED(hr))
+    {
+        UINT nBufferSize = 0;
+        UINT16 *pBuffer = NULL;
+        INT64 currentTimestamp = 0;
+
+        hr = pDepthFrame->get_RelativeTime(&currentTimestamp);
+        if (SUCCEEDED(hr) && currentTimestamp - m_lastFrameTimeStamp > cResetOnTimeStampSkippedMilliseconds * 10000
+            && 0 != m_lastFrameTimeStamp)
+        {
+            m_bResetReconstruction = true;
+        }
+        m_lastFrameTimeStamp = currentTimestamp;
+
+        if (SUCCEEDED(hr))
+        {
+            hr = pDepthFrame->AccessUnderlyingBuffer(&nBufferSize, &pBuffer);
+        }
+
+        if (SUCCEEDED(hr))
+        {
+            //copy and remap depth
+            const UINT bufferLength =  m_cDepthImagePixels;
+            UINT16 * pDepth = m_pDepthImagePixelBuffer;
+            for(UINT i = 0; i < bufferLength; i++, pDepth++)
+            {
+                const UINT id = m_pDepthDistortionLT[i];
+                *pDepth = id < bufferLength? pBuffer[id] : 0;
+            }
+
+            ProcessDepth();
+        }
+    }
+
+    SafeRelease(pDepthFrame);
 }
 
 /// <summary>
@@ -425,7 +478,7 @@ LRESULT CALLBACK CKinectFusionBasics::MessageRouter(HWND hWnd, UINT uMsg, WPARAM
 /// <param name="wParam">message data</param>
 /// <param name="lParam">additional message data</param>
 /// <returns>result of message processing</returns>
-LRESULT CALLBACK CKinectFusionBasics::DlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK CKinectFusionBasics::DlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM)
 {
     switch (message)
     {
@@ -439,7 +492,7 @@ LRESULT CALLBACK CKinectFusionBasics::DlgProc(HWND hWnd, UINT message, WPARAM wP
 
             // Create and initialize a new Direct2D image renderer (take a look at ImageRenderer.h)
             // We'll use this to draw the data we receive from the Kinect to the screen
-           /* m_pDrawDepth = new ImageRenderer();
+            /*m_pDrawDepth = new ImageRenderer();
             HRESULT hr = m_pDrawDepth->Initialize(GetDlgItem(m_hWnd, IDC_VIDEOVIEW), m_pD2DFactory, m_cDepthWidth, m_cDepthHeight, m_cDepthWidth * sizeof(int));
             if (FAILED(hr))
             {
@@ -477,18 +530,6 @@ LRESULT CALLBACK CKinectFusionBasics::DlgProc(HWND hWnd, UINT message, WPARAM wP
 
         // Handle button press
         case WM_COMMAND:
-            // If it was for the near mode control and a clicked event, change near mode
-            if (IDC_CHECK_NEARMODE == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
-            {
-                // Toggle our internal state for near mode
-                m_bNearMode = !m_bNearMode;
-
-                if (nullptr != m_pNuiSensor)
-                {
-                    // Set near mode based on our internal state
-                    m_pNuiSensor->NuiImageStreamSetImageFrameFlags(m_pDepthStreamHandle, m_bNearMode ? NUI_IMAGE_STREAM_FLAG_ENABLE_NEAR_MODE : 0);
-                }
-            }
             // If the reset reconstruction button was clicked, clear the volume 
             // and reset tracking parameters
             if (IDC_BUTTON_RESET_RECONSTRUCTION == LOWORD(wParam) && BN_CLICKED == HIWORD(wParam))
@@ -507,71 +548,42 @@ LRESULT CALLBACK CKinectFusionBasics::DlgProc(HWND hWnd, UINT message, WPARAM wP
 /// <returns>indicates success or failure</returns>
 HRESULT CKinectFusionBasics::CreateFirstConnected()
 {
-    INuiSensor * pNuiSensor;
     HRESULT hr;
 
-    int iSensorCount = 0;
-    hr = NuiGetSensorCount(&iSensorCount);
+    hr = GetDefaultKinectSensor(&m_pNuiSensor);
     if (FAILED(hr))
     {
-        SetStatusMessage(L"No ready Kinect found!");
         return hr;
     }
 
-    // Look at each Kinect sensor
-    for (int i = 0; i < iSensorCount; ++i)
+    if (m_pNuiSensor)
     {
-        // Create the sensor so we can check status, if we can't create it, move on to the next
-        hr = NuiCreateSensorByIndex(i, &pNuiSensor);
-        if (FAILED(hr))
-        {
-            continue;
-        }
+        // Initialize the Kinect and get the depth reader
+        IDepthFrameSource* pDepthFrameSource = NULL;
 
-        // Get the status of the sensor, and if connected, then we can initialize it
-        hr = pNuiSensor->NuiStatus();
-        if (S_OK == hr)
-        {
-            m_pNuiSensor = pNuiSensor;
-            break;
-        }
+        hr = m_pNuiSensor->Open();
 
-        // This sensor wasn't OK, so release it since we're not using it
-        pNuiSensor->Release();
-    }
-
-    if (nullptr != m_pNuiSensor)
-    {
-        // Initialize the Kinect and specify that we'll be using depth
-        hr = m_pNuiSensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_DEPTH); 
         if (SUCCEEDED(hr))
         {
-            // Create an event that will be signaled when depth data is available
-            m_hNextDepthFrameEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
-
-            // Open a depth image stream to receive depth frames
-            hr = m_pNuiSensor->NuiImageStreamOpen(
-                NUI_IMAGE_TYPE_DEPTH,
-                m_depthImageResolution,
-                0,
-                2,
-                m_hNextDepthFrameEvent,
-                &m_pDepthStreamHandle);
+            hr = m_pNuiSensor->get_CoordinateMapper(&m_pMapper);
         }
 
-        if (m_bNearMode)
+        if (SUCCEEDED(hr))
         {
-            // Set near mode based on our internal state
-            HRESULT nearHr = m_pNuiSensor->NuiImageStreamSetImageFrameFlags(m_pDepthStreamHandle, NUI_IMAGE_STREAM_FLAG_ENABLE_NEAR_MODE);
-            if (SUCCEEDED(nearHr))
-            {
-                CheckDlgButton(m_hWnd, IDC_CHECK_NEARMODE, BST_CHECKED);
-            }
-            else
-            {
-                EnableWindow(GetDlgItem(m_hWnd, IDC_CHECK_NEARMODE), FALSE);
-            }
+            hr = m_pNuiSensor->get_DepthFrameSource(&pDepthFrameSource);
         }
+
+        if (SUCCEEDED(hr))
+        {
+            hr = m_pMapper->SubscribeCoordinateMappingChanged(&m_coordinateMappingChangedEvent);
+        }
+
+        if (SUCCEEDED(hr))
+        {
+            hr = pDepthFrameSource->OpenReader(&m_pDepthFrameReader);
+        }
+
+        SafeRelease(pDepthFrameSource);
     }
 
     if (nullptr == m_pNuiSensor || FAILED(hr))
@@ -580,6 +592,146 @@ HRESULT CKinectFusionBasics::CreateFirstConnected()
         return E_FAIL;
     }
 
+    return hr;
+}
+
+void UpdateIntrinsics(NUI_FUSION_IMAGE_FRAME * pImageFrame, NUI_FUSION_CAMERA_PARAMETERS * params)
+{
+    if (pImageFrame != nullptr && pImageFrame->pCameraParameters != nullptr && params != nullptr)
+    {
+        pImageFrame->pCameraParameters->focalLengthX = params->focalLengthX;
+        pImageFrame->pCameraParameters->focalLengthY = params->focalLengthY;
+        pImageFrame->pCameraParameters->principalPointX = params->principalPointX;
+        pImageFrame->pCameraParameters->principalPointY = params->principalPointY;
+    }
+
+    // Confirm we are called correctly
+    _ASSERT(pImageFrame != nullptr && pImageFrame->pCameraParameters != nullptr && params != nullptr);
+}
+
+HRESULT CKinectFusionBasics::SetupUndistortion()
+{
+    HRESULT hr = E_UNEXPECTED;
+
+    if (m_cameraParameters.principalPointX != 0)
+    {
+
+        CameraSpacePoint cameraFrameCorners[4] = //at 1 meter distance. Take into account that depth frame is mirrored
+        {
+            /*LT*/{ -m_cameraParameters.principalPointX / m_cameraParameters.focalLengthX, m_cameraParameters.principalPointY / m_cameraParameters.focalLengthY, 1.f },
+            /*RT*/{ (1.f - m_cameraParameters.principalPointX) / m_cameraParameters.focalLengthX, m_cameraParameters.principalPointY / m_cameraParameters.focalLengthY, 1.f },
+            /*LB*/{ -m_cameraParameters.principalPointX / m_cameraParameters.focalLengthX, (m_cameraParameters.principalPointY - 1.f) / m_cameraParameters.focalLengthY, 1.f },
+            /*RB*/{ (1.f - m_cameraParameters.principalPointX) / m_cameraParameters.focalLengthX, (m_cameraParameters.principalPointY - 1.f) / m_cameraParameters.focalLengthY, 1.f }
+        };
+
+        for (UINT rowID = 0; rowID < m_cDepthHeight; rowID++)
+        {
+            const float rowFactor = float(rowID) / float(m_cDepthHeight - 1);
+            const CameraSpacePoint rowStart =
+            {
+                cameraFrameCorners[0].X + (cameraFrameCorners[2].X - cameraFrameCorners[0].X) * rowFactor,
+                cameraFrameCorners[0].Y + (cameraFrameCorners[2].Y - cameraFrameCorners[0].Y) * rowFactor,
+                1.f
+            };
+
+            const CameraSpacePoint rowEnd =
+            {
+                cameraFrameCorners[1].X + (cameraFrameCorners[3].X - cameraFrameCorners[1].X) * rowFactor,
+                cameraFrameCorners[1].Y + (cameraFrameCorners[3].Y - cameraFrameCorners[1].Y) * rowFactor,
+                1.f
+            };
+
+            const float stepFactor = 1.f / float(m_cDepthWidth - 1);
+            const CameraSpacePoint rowDelta =
+            {
+                (rowEnd.X - rowStart.X) * stepFactor,
+                (rowEnd.Y - rowStart.Y) * stepFactor,
+                0
+            };
+
+            _ASSERT(m_cDepthWidth == NUI_DEPTH_RAW_WIDTH);
+            CameraSpacePoint cameraCoordsRow[NUI_DEPTH_RAW_WIDTH];
+
+            CameraSpacePoint currentPoint = rowStart;
+            for (UINT i = 0; i < m_cDepthWidth; i++)
+            {
+                cameraCoordsRow[i] = currentPoint;
+                currentPoint.X += rowDelta.X;
+                currentPoint.Y += rowDelta.Y;
+            }
+
+            hr = m_pMapper->MapCameraPointsToDepthSpace(m_cDepthWidth, cameraCoordsRow, m_cDepthWidth, &m_pDepthDistortionMap[rowID * m_cDepthWidth]);
+            if (FAILED(hr))
+            {
+                SetStatusMessage(L"Failed to initialize Kinect Coordinate Mapper.");
+                return hr;
+            }
+        }
+
+        if (nullptr == m_pDepthDistortionLT)
+        {
+            SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion Lookup Table.");
+            return E_OUTOFMEMORY;
+        }
+
+        UINT* pLT = m_pDepthDistortionLT;
+        for (UINT i = 0; i < m_cDepthImagePixels; i++, pLT++)
+        {
+            //nearest neighbor depth lookup table 
+            UINT x = UINT(m_pDepthDistortionMap[i].X + 0.5f);
+            UINT y = UINT(m_pDepthDistortionMap[i].Y + 0.5f);
+
+            *pLT = (x < m_cDepthWidth && y < m_cDepthHeight) ? x + y * m_cDepthWidth : UINT_MAX;
+        }
+        m_bHaveValidCameraParameters = true;
+    }
+    else
+    {
+        m_bHaveValidCameraParameters = false;
+    }
+    return S_OK;
+}
+///////////////////////////////////////////////////////////////////////////////////////////
+/// <summary>
+/// Initialize Kinect Fusion volume and images for processing
+/// </summary>
+/// <returns>S_OK on success, otherwise failure code</returns>
+HRESULT CKinectFusionBasics::OnCoordinateMappingChanged()
+{
+    HRESULT hr = E_UNEXPECTED;
+
+    // Calculate the down sampled image sizes, which are used for the AlignPointClouds calculation frames
+    CameraIntrinsics intrinsics = {};
+
+    m_pMapper->GetDepthCameraIntrinsics(&intrinsics);
+
+    float focalLengthX = intrinsics.FocalLengthX / NUI_DEPTH_RAW_WIDTH;
+    float focalLengthY = intrinsics.FocalLengthY / NUI_DEPTH_RAW_HEIGHT;
+    float principalPointX = intrinsics.PrincipalPointX / NUI_DEPTH_RAW_WIDTH;
+    float principalPointY = intrinsics.PrincipalPointY / NUI_DEPTH_RAW_HEIGHT;
+
+    if (m_cameraParameters.focalLengthX == focalLengthX && m_cameraParameters.focalLengthY == focalLengthY &&
+        m_cameraParameters.principalPointX == principalPointX && m_cameraParameters.principalPointY == principalPointY)
+        return S_OK;
+
+    m_cameraParameters.focalLengthX = focalLengthX;
+    m_cameraParameters.focalLengthY = focalLengthY;
+    m_cameraParameters.principalPointX = principalPointX;
+    m_cameraParameters.principalPointY = principalPointY;
+
+    _ASSERT(m_cameraParameters.focalLengthX != 0);
+
+    UpdateIntrinsics(m_pDepthFloatImage, &m_cameraParameters);
+    UpdateIntrinsics(m_pPointCloud, &m_cameraParameters);
+    UpdateIntrinsics(m_pShadedSurface, &m_cameraParameters);
+
+    if (nullptr == m_pDepthDistortionMap)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion buffer.");
+        return E_OUTOFMEMORY;
+    }
+
+    hr = SetupUndistortion();
     return hr;
 }
 
@@ -676,7 +828,7 @@ HRESULT CKinectFusionBasics::InitializeKinectFusion()
     }
 
     // Frames generated from the depth input
-    hr = NuiFusionCreateImageFrame(NUI_FUSION_IMAGE_TYPE_FLOAT, m_cDepthWidth, m_cDepthHeight, nullptr, &m_pDepthFloatImage);
+    hr = NuiFusionCreateImageFrame(NUI_FUSION_IMAGE_TYPE_FLOAT, m_cDepthWidth, m_cDepthHeight, &m_cameraParameters, &m_pDepthFloatImage);
     if (FAILED(hr))
     {
         SetStatusMessage(L"Failed to initialize Kinect Fusion image.");
@@ -684,7 +836,7 @@ HRESULT CKinectFusionBasics::InitializeKinectFusion()
     }
 
     // Create images to raycast the Reconstruction Volume
-    hr = NuiFusionCreateImageFrame(NUI_FUSION_IMAGE_TYPE_POINT_CLOUD, m_cDepthWidth, m_cDepthHeight, nullptr, &m_pPointCloud);
+    hr = NuiFusionCreateImageFrame(NUI_FUSION_IMAGE_TYPE_POINT_CLOUD, m_cDepthWidth, m_cDepthHeight, &m_cameraParameters, &m_pPointCloud);
     if (FAILED(hr))
     {
         SetStatusMessage(L"Failed to initialize Kinect Fusion image.");
@@ -692,76 +844,48 @@ HRESULT CKinectFusionBasics::InitializeKinectFusion()
     }
 
     // Create images to raycast the Reconstruction Volume
-    hr = NuiFusionCreateImageFrame(NUI_FUSION_IMAGE_TYPE_COLOR, m_cDepthWidth, m_cDepthHeight, nullptr, &m_pShadedSurface);
+    hr = NuiFusionCreateImageFrame(NUI_FUSION_IMAGE_TYPE_COLOR, m_cDepthWidth, m_cDepthHeight, &m_cameraParameters, &m_pShadedSurface);
     if (FAILED(hr))
     {
         SetStatusMessage(L"Failed to initialize Kinect Fusion image.");
         return hr;
     }
 
-    m_pDepthImagePixelBuffer = new(std::nothrow) NUI_DEPTH_IMAGE_PIXEL[m_cDepthImagePixels];
+    _ASSERT(m_pDepthImagePixelBuffer == nullptr);
+    m_pDepthImagePixelBuffer = new(std::nothrow) UINT16[m_cDepthImagePixels];
     if (nullptr == m_pDepthImagePixelBuffer)
     {
         SetStatusMessage(L"Failed to initialize Kinect Fusion depth image pixel buffer.");
         return hr;
     }
 
+    _ASSERT(m_pDepthDistortionMap == nullptr);
+    m_pDepthDistortionMap = new(std::nothrow) DepthSpacePoint[m_cDepthImagePixels];
+    if (nullptr == m_pDepthDistortionMap)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion buffer.");
+        return E_OUTOFMEMORY;
+    }
+
+    SAFE_DELETE_ARRAY(m_pDepthDistortionLT);
+    m_pDepthDistortionLT = new(std::nothrow) UINT[m_cDepthImagePixels];
+
+    if (nullptr == m_pDepthDistortionLT)
+    {
+        SetStatusMessage(L"Failed to initialize Kinect Fusion depth image distortion Lookup Table.");
+        return E_OUTOFMEMORY;
+    }
+
+    // If we have valid parameters, let's go ahead and use them.
+    if (m_cameraParameters.focalLengthX != 0)
+    {
+        SetupUndistortion();
+    }
+
     m_fStartTime = m_timer.AbsoluteTime();
 
     // Set an introductory message
-    SetStatusMessage(
-        L"Click ‘Near Mode’ to change sensor range, and ‘Reset Reconstruction’ to clear!");
-
-    return hr;
-}
-
-/// <summary>
-/// Copy the extended depth data out of a Kinect image frame
-/// </summary>
-/// <param name="imageFrame">The extended depth image frame to copy.</param>
-/// <returns>S_OK on success, otherwise failure code</returns>
-HRESULT CKinectFusionBasics::CopyExtendedDepth(NUI_IMAGE_FRAME &imageFrame)
-{
-    HRESULT hr = S_OK;
-
-    if (nullptr == m_pDepthImagePixelBuffer)
-    {
-        SetStatusMessage(L"Error depth image pixel buffer is nullptr.");
-        return E_FAIL;
-    }
-
-    INuiFrameTexture *extendedDepthTex = nullptr;
-
-    // Extract the extended depth in NUI_DEPTH_IMAGE_PIXEL format from the frame
-    BOOL nearModeOperational = FALSE;
-    hr = m_pNuiSensor->NuiImageFrameGetDepthImagePixelFrameTexture(m_pDepthStreamHandle, &imageFrame, &nearModeOperational, &extendedDepthTex);
-    if (FAILED(hr))
-    {
-        SetStatusMessage(L"Error getting extended depth texture.");
-        return hr;
-    }
-
-    NUI_LOCKED_RECT extendedDepthLockedRect;
-
-    // Lock the frame data to access the un-clamped NUI_DEPTH_IMAGE_PIXELs
-    hr = extendedDepthTex->LockRect(0, &extendedDepthLockedRect, nullptr, 0);
-
-    if (FAILED(hr) || extendedDepthLockedRect.Pitch == 0)
-    {
-        SetStatusMessage(L"Error getting extended depth texture pixels.");
-        return hr;
-    }
-
-    // Copy the depth pixels so we can return the image frame
-    errno_t err = memcpy_s(m_pDepthImagePixelBuffer, m_cDepthImagePixels * sizeof(NUI_DEPTH_IMAGE_PIXEL), extendedDepthLockedRect.pBits, extendedDepthTex->BufferLen());
-
-    extendedDepthTex->UnlockRect(0);
-
-    if(0 != err)
-    {
-        SetStatusMessage(L"Error copying extended depth texture pixels.");
-        return hr;
-    }
+    SetStatusMessage(L"Click ‘Reset Reconstruction' to clear!");
 
     return hr;
 }
@@ -777,37 +901,13 @@ void CKinectFusionBasics::ProcessDepth()
     }
 
     HRESULT hr = S_OK;
-    NUI_IMAGE_FRAME imageFrame;
 
-    ////////////////////////////////////////////////////////
-    // Get an extended depth frame from Kinect
-
-    hr = m_pNuiSensor->NuiImageStreamGetNextFrame(m_pDepthStreamHandle, 0, &imageFrame);
-    if (FAILED(hr))
-    {
-        SetStatusMessage(L"Kinect NuiImageStreamGetNextFrame call failed.");
-        return;
-    }
-
-    hr = CopyExtendedDepth(imageFrame);
-
-    LARGE_INTEGER currentDepthFrameTime = imageFrame.liTimeStamp;
-
-    // Release the Kinect camera frame
-    m_pNuiSensor->NuiImageStreamReleaseFrame(m_pDepthStreamHandle, &imageFrame);
-
-    if (FAILED(hr))
-    {
-        return;
-    }
-
-    // To enable playback of a .xed file through Kinect Studio and reset of the reconstruction
-    // if the .xed loops, we test for when the frame timestamp has skipped a large number. 
+    // To enable playback of a .xef file through Kinect Studio and reset of the reconstruction
+    // if the .xef loops, we test for when the frame timestamp has skipped a large number. 
     // Note: this will potentially continually reset live reconstructions on slow machines which
     // cannot process a live frame in less time than the reset threshold. Increase the number of
     // milliseconds in cResetOnTimeStampSkippedMilliseconds if this is a problem.
-    if (m_bAutoResetReconstructionOnTimeout && m_cFrameCounter != 0 
-        && abs(currentDepthFrameTime.QuadPart - m_cLastDepthFrameTimeStamp.QuadPart) > cResetOnTimeStampSkippedMilliseconds)
+    if (m_bAutoResetReconstructionOnTimeout && m_cFrameCounter != 0 && m_bResetReconstruction)
     {
         ResetReconstruction();
 
@@ -816,8 +916,6 @@ void CKinectFusionBasics::ProcessDepth()
             return;
         }
     }
-
-    m_cLastDepthFrameTimeStamp = currentDepthFrameTime;
 
     // Return if the volume is not initialized
     if (nullptr == m_pVolume)
@@ -831,7 +929,7 @@ void CKinectFusionBasics::ProcessDepth()
 
     // Convert the pixels describing extended depth as unsigned short type in millimeters to depth
     // as floating point type in meters.
-    hr = m_pVolume->DepthToDepthFloatFrame(m_pDepthImagePixelBuffer, m_cDepthImagePixels * sizeof(NUI_DEPTH_IMAGE_PIXEL), m_pDepthFloatImage, m_fMinDepthThreshold, m_fMaxDepthThreshold, m_bMirrorDepthFrame);
+    hr = m_pVolume->DepthToDepthFloatFrame(m_pDepthImagePixelBuffer, m_cDepthImagePixels * sizeof(UINT16), m_pDepthFloatImage, m_fMinDepthThreshold, m_fMaxDepthThreshold, m_bMirrorDepthFrame);
 
     if (FAILED(hr))
     {
@@ -846,7 +944,7 @@ void CKinectFusionBasics::ProcessDepth()
     // This will create memory on the GPU, upload the image, run camera tracking and integrate the
     // data into the Reconstruction Volume if successful. Note that passing nullptr as the final 
     // parameter will use and update the internal camera pose.
-    hr = m_pVolume->ProcessFrame(m_pDepthFloatImage, 15, m_cMaxIntegrationWeight, &m_worldToCameraTransform);
+    hr = m_pVolume->ProcessFrame(m_pDepthFloatImage, NUI_FUSION_DEFAULT_ALIGN_ITERATION_COUNT, m_cMaxIntegrationWeight, nullptr, &m_worldToCameraTransform);
 
     // Test to see if camera tracking failed. 
     // If it did fail, no data integration or raycast for reference points and normals will have taken 
@@ -908,27 +1006,10 @@ void CKinectFusionBasics::ProcessDepth()
     //}
 
     //// Draw the shaded raycast volume image
-    //INuiFrameTexture * pShadedImageTexture = m_pShadedSurface->pFrameTexture;
-    //NUI_LOCKED_RECT ShadedLockedRect;
+    //BYTE * pBuffer = m_pShadedSurface->pFrameBuffer->pBits;
 
-    //// Lock the frame data so the Kinect knows not to modify it while we're reading it
-    //hr = pShadedImageTexture->LockRect(0, &ShadedLockedRect, nullptr, 0);
-    //if (FAILED(hr))
-    //{
-    //    return;
-    //}
-
-    //// Make sure we've received valid data
-    //if (ShadedLockedRect.Pitch != 0)
-    //{
-    //    BYTE * pBuffer = (BYTE *)ShadedLockedRect.pBits;
-
-    //    // Draw the data with Direct2D
-    //    m_pDrawDepth->Draw(pBuffer, m_cDepthWidth * m_cDepthHeight * cBytesPerPixel);
-    //}
-
-    //// We're done with the texture so unlock it
-    //pShadedImageTexture->UnlockRect(0);
+    //// Draw the data with Direct2D
+    //m_pDrawDepth->Draw(pBuffer, m_cDepthWidth * m_cDepthHeight * cBytesPerPixel);
 
     //////////////////////////////////////////////////////////
     //// Periodically Display Fps

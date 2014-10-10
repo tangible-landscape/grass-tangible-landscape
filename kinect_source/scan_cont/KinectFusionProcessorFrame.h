@@ -51,9 +51,6 @@ public:
     /// <param name="szMessage">The status message.</param>
     void SetStatusMessage(const WCHAR* szMessage);
 
-    // Indicates whether integration spontaneously resumed (due to a reset)
-    bool m_bIntegrationResumed;
-
     // Frame buffer data
     BYTE* m_pReconstructionRGBX;
     BYTE* m_pDepthRGBX;

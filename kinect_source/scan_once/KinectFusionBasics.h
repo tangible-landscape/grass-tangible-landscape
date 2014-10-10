@@ -25,7 +25,6 @@
 #pragma once
 
 #include "resource.h"
-#include <NuiApi.h>
 #include <NuiKinectFusionApi.h>
 #include "ImageRenderer.h"
 
@@ -35,7 +34,7 @@
 class CKinectFusionBasics
 {
     static const int            cBytesPerPixel = 4; // for depth float and int-per-pixel raycast images
-    static const int            cResetOnTimeStampSkippedMilliseconds = 1000;
+    static const int            cResetOnTimeStampSkippedMilliseconds = 1000;  // ms
     static const int            cResetOnNumberOfLostFrames = 100;
     static const int            cStatusMessageMaxLen = MAX_PATH*2;
     static const int            cTimeDisplayInterval = 10;
@@ -44,7 +43,7 @@ public:
     /// <summary>
     /// Constructor
     /// </summary>
-    CKinectFusionBasics(double minZ, double maxZ);
+    CKinectFusionBasics(double minZ, double maxZ, int voxelCountX, int voxelCountY);
 
     /// <summary>
     /// Destructor
@@ -80,20 +79,19 @@ public:
 
 private:
     HWND                        m_hWnd;
-    bool                        m_bNearMode;
 
     // Current Kinect
-    INuiSensor*                 m_pNuiSensor;
+    IKinectSensor*              m_pNuiSensor;
 
-    NUI_IMAGE_RESOLUTION        m_depthImageResolution;
-    int                         m_cDepthWidth;
-    int                         m_cDepthHeight;
-    int                         m_cDepthImagePixels;
+    // Depth reader
+    IDepthFrameReader*          m_pDepthFrameReader;
 
-    HANDLE                      m_pDepthStreamHandle;
-    HANDLE                      m_hNextDepthFrameEvent;
+    UINT                         m_cDepthWidth;
+    UINT                         m_cDepthHeight;
+    UINT                         m_cDepthImagePixels;
 
-    LARGE_INTEGER               m_cLastDepthFrameTimeStamp;
+    INT64                       m_lastFrameTimeStamp;
+    bool                        m_bResetReconstruction;
 
     // Direct2D
     ImageRenderer*              m_pDrawDepth;
@@ -113,16 +111,21 @@ private:
     HRESULT                     CreateFirstConnected();
 
     /// <summary>
+    /// Setup or update the Undistortion calculation for the connected camera
+    /// </summary>
+    HRESULT                     SetupUndistortion();
+
+    /// <summary>
+    /// Handle Coordinate Mapping changed event.
+    /// Note, this happens after sensor connect, or when Kinect Studio connects
+    /// </summary>
+    HRESULT                     OnCoordinateMappingChanged();
+
+    /// <summary>
     /// Initialize Kinect Fusion volume and images for processing
     /// </summary>
     /// <returns>S_OK on success, otherwise failure code</returns>
     HRESULT                     InitializeKinectFusion();
-
-    /// <summary>
-    /// Copy the extended depth data out of a Kinect image frame
-    /// </summary>
-    /// <returns>S_OK on success, otherwise failure code</returns>
-    HRESULT                     CopyExtendedDepth(NUI_IMAGE_FRAME &imageFrame);
 
     /// <summary>
     /// Handle new depth data
@@ -164,8 +167,22 @@ private:
     /// <summary>
     /// Frames from the depth input
     /// </summary>
-    NUI_DEPTH_IMAGE_PIXEL*      m_pDepthImagePixelBuffer;
+    UINT16*                     m_pDepthImagePixelBuffer;
     NUI_FUSION_IMAGE_FRAME*     m_pDepthFloatImage;
+
+    /// <summary>
+    /// For depth distortion correction
+    /// </summary>
+    ICoordinateMapper*          m_pMapper;
+    DepthSpacePoint*            m_pDepthDistortionMap;
+    UINT*                       m_pDepthDistortionLT;
+    WAITABLE_HANDLE             m_coordinateMappingChangedEvent;
+
+    /// <summary>
+    /// Kinect camera parameters.
+    /// </summary>
+    NUI_FUSION_CAMERA_PARAMETERS m_cameraParameters;
+    bool                        m_bHaveValidCameraParameters;
 
     /// <summary>
     /// Frames generated from ray-casting the Reconstruction Volume
@@ -193,7 +210,7 @@ private:
     /// <summary>
     /// Parameter to enable automatic reset of the reconstruction when there is a large
     /// difference in timestamp between subsequent frames. This should usually be set true as 
-    /// default to enable recorded .xed files to generate a reconstruction reset on looping of
+    /// default to enable recorded .xef files to generate a reconstruction reset on looping of
     /// the playback or scrubbing, however, for debug purposes, it can be set false to prevent
     /// automatic reset on timeouts.
     /// </summary>
@@ -212,7 +229,7 @@ private:
     int                         m_cFrameCounter;
     double                      m_fStartTime;
     Timing::Timer               m_timer;
-    int                         m_depthFrameCount;
+   int                         m_depthFrameCount;
 
     /// <summary>
     /// Parameter to translate the reconstruction based on the minimum depth setting. When set to

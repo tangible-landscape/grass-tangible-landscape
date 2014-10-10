@@ -1,4 +1,4 @@
-//------------------------------------------------------------------------------
+﻿//------------------------------------------------------------------------------
 // <copyright file="KinectFusionExplorer.h" company="Microsoft">
 // 	 
 //	 Copyright 2013 Microsoft Corporation 
@@ -25,7 +25,6 @@
 #pragma once
 
 #include "ImageRenderer.h"
-#include <NuiSensorChooserUI.h>
 #include "KinectFusionParams.h"
 #include "KinectFusionProcessor.h"
 
@@ -34,7 +33,7 @@
 /// </summary>
 class CKinectFusionExplorer
 {
-    static const DWORD          cStatusTimeoutInMilliseconds = 5000;
+    static const ULONGLONG          cStatusTimeoutInMilliseconds = 5000;
 
 public:
     /// <summary>
@@ -76,7 +75,6 @@ public:
 
 private:
     HWND                        m_hWnd;
-    NuiSensorChooserUI*         m_pSensorChooserUI;
 
     /// <summary>
     /// Direct2D
@@ -159,7 +157,7 @@ private:
     /// <summary>
     /// Time since last status message update
     /// </summary>
-    DWORD                       m_tickLastStatus;
+    ULONGLONG                   m_tickLastStatus;
 
     std::string m_fileName;
     int m_nFrames;

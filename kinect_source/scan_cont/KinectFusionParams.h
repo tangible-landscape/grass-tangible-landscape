@@ -24,8 +24,7 @@
 
 #pragma once
 
-#include <NuiApi.h>
-#include <NuiKinectFusionApi.h>
+#include "NuiKinectFusionApi.h"
 
 enum KinectFusionMeshTypes
 {
@@ -47,11 +46,8 @@ struct KinectFusionParams
     /// </summary>
     KinectFusionParams() :
         m_bPauseIntegration(false),
-        m_bNearMode(true),
-        m_depthImageResolution(NUI_IMAGE_RESOLUTION_640x480),
-        m_colorImageResolution(NUI_IMAGE_RESOLUTION_640x480),
         m_bAutoResetReconstructionWhenLost(false),
-        m_bAutoResetReconstructionOnTimeout(false), // We now try to find the camera pose, however, setting this false will no longer auto reset on .xed file playback
+        m_bAutoResetReconstructionOnTimeout(false), // We now try to find the camera pose, however, setting this false will no longer auto reset on .xef file playback
         m_bAutoFindCameraPoseWhenLost(true),
         m_fMinDepthThreshold(NUI_FUSION_DEFAULT_MINIMUM_DEPTH),
         m_fMaxDepthThreshold(NUI_FUSION_DEFAULT_MAXIMUM_DEPTH),
@@ -84,24 +80,21 @@ struct KinectFusionParams
     {
         // Get the depth frame size from the NUI_IMAGE_RESOLUTION enum.
         // You can use NUI_IMAGE_RESOLUTION_640x480 or NUI_IMAGE_RESOLUTION_320x240 in this sample.
-        // Smaller resolutions will be faster in per-frame computations, but show less detail in reconstructions.
-        DWORD width = 0, height = 0;
-        NuiImageResolutionToSize(m_depthImageResolution, width, height);
-        m_cDepthWidth = width;
-        m_cDepthHeight = height;
+        // Smaller resolutions will be faster in per-frame computations, but show less detail in reconstructions
+        m_cDepthWidth = NUI_DEPTH_RAW_WIDTH;
+        m_cDepthHeight = NUI_DEPTH_RAW_HEIGHT;
         m_cDepthImagePixels = m_cDepthWidth*m_cDepthHeight;
 
-        NuiImageResolutionToSize(m_colorImageResolution, width, height);
-        m_cColorWidth  = width;
-        m_cColorHeight = height;
+        m_cColorWidth  = 1920;
+        m_cColorHeight = 1080;
         m_cColorImagePixels = m_cColorWidth*m_cColorHeight;
 
         // Define a cubic Kinect Fusion reconstruction volume, with the sensor at the center of the
         // front face and the volume directly in front of sensor.
-        m_reconstructionParams.voxelsPerMeter = 512;    // 1000mm / 256vpm = ~3.9mm/voxel
-        m_reconstructionParams.voxelCountX = 512;       // 512 / 256vpm = 2m wide reconstruction
-        m_reconstructionParams.voxelCountY = 384;       // Memory = 512*384*512 * 4bytes per voxel
-        m_reconstructionParams.voxelCountZ = 512;       // This will require a GPU with at least 512MB
+        m_reconstructionParams.voxelsPerMeter = 640;    // 1000mm / 256vpm = ~3.9mm/voxel
+        m_reconstructionParams.voxelCountX = 384;       // 384 / 256vpm = 1.5m wide reconstruction
+        m_reconstructionParams.voxelCountY = 384;       // Memory = 384*384*384 * 4bytes per voxel
+        m_reconstructionParams.voxelCountZ = 384;       // This will require a GPU with at least 256MB
 
         // This parameter sets whether GPU or CPU processing is used. Note that the CPU will likely be 
         // too slow for real-time processing.
@@ -143,25 +136,18 @@ struct KinectFusionParams
     bool                        m_bPauseIntegration;
 
     /// <summary>
-    /// Parameter to select the sensor's near mode
-    /// </summary>
-    bool                        m_bNearMode;
-
-    /// <summary>
     /// Depth image resolution and size
     /// </summary>
-    NUI_IMAGE_RESOLUTION        m_depthImageResolution;
-    int                         m_cDepthWidth;
-    int                         m_cDepthHeight;
-    int                         m_cDepthImagePixels;
+    UINT                        m_cDepthWidth;
+    UINT                        m_cDepthHeight;
+    UINT                        m_cDepthImagePixels;
 
     /// <summary>
     /// Color image resolution and size
     /// </summary>
-    NUI_IMAGE_RESOLUTION        m_colorImageResolution;
-    int                         m_cColorWidth;
-    int                         m_cColorHeight;
-    int                         m_cColorImagePixels;
+    UINT                        m_cColorWidth;
+    UINT                        m_cColorHeight;
+    UINT                        m_cColorImagePixels;
 
     /// <summary>
     /// The Kinect Fusion Volume Parameters
@@ -178,7 +164,7 @@ struct KinectFusionParams
     /// <summary>
     /// Parameter to enable automatic reset of the reconstruction when there is a large
     /// difference in timestamp between subsequent frames. This should usually be set true as 
-    /// default to enable recorded .xed files to generate a reconstruction reset on looping of
+    /// default to enable recorded .xef files to generate a reconstruction reset on looping of
     /// the playback or scrubbing, however, for debug purposes, it can be set false to prevent
     /// automatic reset on timeouts.
     /// </summary>
