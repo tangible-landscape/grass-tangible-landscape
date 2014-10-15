@@ -187,7 +187,7 @@ def runImport(guiParent, fileName, elevation, data, scan, calib_matrix, stopEven
             print 'RUNNING IMPORT'
             import_scan(input_file=fileName, real_elev=elevation, output_elev=data['scan_name'],
                                mm_resolution=0.001, calib_matrix=calib_matrix, table_mm=5, zexag=3, interpolate=False)
-#            compute_crosssection(real_elev='extent', output_elev=scan, output_diff='diff', output_cross='cross', voxel='interp_2002_08_25',
+#            compute_crosssection(real_elev='extent', output_elev=scan, output_cross='cross', voxel='interp_2002_08_25',
 #                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=0.7, table_mm=2, edge_mm=[10, 10, 0, 0], mm_resolution=0.001)
             print 'IMPORT END'
             evt = updateGUIEvt(guiParent.GetId())
