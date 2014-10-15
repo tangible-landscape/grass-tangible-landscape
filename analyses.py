@@ -104,7 +104,7 @@ def contours(scanned_elev, new, env, step=None):
         pass
 
 
-def change_detection(before, after, change, height_threshold, cells_threshold, add, env):
+def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
     tmp_regions = []
     env = get_environment(tmp_regions, rast=before, n='n-20', s='s+20', e='e-20', w='w+20')
     diff_thr = 'diff_thr_' + str(os.getpid())
@@ -118,14 +118,19 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
     else:
         gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({before} - {after}) > {thr}, 1, null())".format(diff_thr=diff_thr,
                           after=after, before=before, thr=height_threshold), env=env)
+
     gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
 
     stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split(os.linesep)
     if len(stats) > 0 and stats[0]:
         print stats
         cats = []
+        found = 0
         for stat in stats:
+            if found >= max_detected:
+                break
             if float(stat.split()[1]) < cells_threshold[1] and float(stat.split()[1]) > cells_threshold[0]: # larger than specified number of cells
+                found += 1
                 cat, value = stat.split()
                 cats.append(cat)
         if cats:
