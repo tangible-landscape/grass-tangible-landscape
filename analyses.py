@@ -210,3 +210,15 @@ def trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
     for i in range(len(points_to)):
         gcore.run_command('r.drain', overwrite=True, input=walk, indir=walk_dir, flags='d', vector_output=vector_routes[i],
                           output=raster_route, start_coordinates=points_to[i], env=env)
+
+
+def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7, env=None):   
+    coordinates = gcore.read_command('v.out.ascii', input=vector, separator=',', env=env).strip()
+    coordinate = None
+    for line in coordinates.split(os.linesep):
+        coordinate = [float(c) for c in line.split(',')[0:2]]
+        break
+    if coordinate:
+        gcore.run_command('r.viewshed', flags='b', input=scanned_elev, output=output, coordinates=coordinate, obs_elev=obs_elev, env=env, overwrite=True)
+        gcore.run_command('r.null', map=output, null=0)
+        gcore.write_command('r.colors', map=output,  rules='-', stdin='0 {invis}\n1 {vis}'.format(vis=visible_color, invis=invisible_color), env=env)
