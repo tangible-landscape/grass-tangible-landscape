@@ -8,10 +8,14 @@ import threading
 import wx
 import subprocess
 import os
+import sys
 import numpy as np
 from tempfile import gettempdir
 
 import wx.lib.newevent
+sys.path.append(os.path.join(os.environ['GISBASE'], "etc", "gui", "wxpython"))
+from gui_core.gselect import Select
+
 from import_xyz import import_scan
 from subsurface import compute_crosssection
 
@@ -25,6 +29,8 @@ class TangeomsPlugin(wx.Dialog):
         self.parent=parent
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        modelBox = wx.StaticBox(self, label="Model parameters")
+        modelSizer = wx.StaticBoxSizer(modelBox, wx.VERTICAL)
 
         # create widgets
         btnCalibrate = wx.Button(self, label="Calibrate")
@@ -35,6 +41,15 @@ class TangeomsPlugin(wx.Dialog):
         btnScanOnce = wx.Button(self, label="Scan once")
         self.scan_name = wx.TextCtrl(self, value='scan')
         self.status = wx.StaticText(self)
+        self.textInfo = wx.TextCtrl(self, size=(-1, 100), style=wx.TE_MULTILINE | wx.TE_READONLY)
+        # widgets for model
+        self.elevInput = Select(self, size=(-1, -1), type='rast')
+        self.zexag = wx.TextCtrl(self)
+        self.height = wx.TextCtrl(self)
+        self.trim = {}
+        for each in 'nsew':
+            self.trim[each] = wx.TextCtrl(self, size=(25, -1))
+        self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
 
         # layout
         hSizer.Add(btnStart, flag=wx.EXPAND | wx.ALL, border=5)
@@ -51,6 +66,32 @@ class TangeomsPlugin(wx.Dialog):
         hSizer.Add(self.status, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(hSizer)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(self.textInfo, flag=wx.EXPAND | wx.ALL, proportion=1, border=5)
+        mainSizer.Add(hSizer, proportion=1, flag=wx.EXPAND)
+        # model parameters
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(self, label="Reference DEM:"), flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.elevInput, proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.zexag, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(self, label="Height above table [mm]:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.height, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(self, label="Trim scan N, S, E, W [mm]:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        for each in 'nsew':
+            hSizer.Add(self.trim[each], flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(self.interpolate, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        mainSizer.Add(modelSizer, flag=wx.EXPAND|wx.ALL, border=5)
+
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(btnCalibrate, flag=wx.EXPAND | wx.ALL, border=5)
         hSizer.AddStretchSpacer()
         hSizer.Add(btnClose, flag=wx.EXPAND | wx.ALL, border=5)
@@ -66,6 +107,13 @@ class TangeomsPlugin(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(EVT_UPDATE_GUI, self.OnUpdate)
         self.scan_name.Bind(wx.EVT_TEXT, self.OnScanName)
+        # model parameters
+        self.elevInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.zexag.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.height.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
+        for each in 'nsew':
+            self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -82,6 +130,7 @@ class TangeomsPlugin(wx.Dialog):
 
     def OnUpdate(self, event):
         self.giface.updateMap()
+        self.UpdateText()
 
     def Calibrate(self, event):
         from prepare_calibration import write_matrix
@@ -93,12 +142,23 @@ class TangeomsPlugin(wx.Dialog):
 class TangeomsImportPlugin(TangeomsPlugin):
     def __init__(self, giface, guiparent,  elev_real, scan, scanFile, minZ, maxZ):
         TangeomsPlugin.__init__(self, giface, guiparent)
-        self.elevation=elev_real
         self.output = scan
         self.tmp_file = scanFile
         self.minZ = minZ
         self.maxZ = maxZ
-        self.data = {'scan_name': self.scan_name.GetValue()}
+        self.data = {'scan_name': self.output, 'info_text': [],
+                     'elevation': elev_real,
+                     'zexag': 1., 'height': 5.,
+                     'trim_nsew': [0, 0, 0, 0],
+                     'interpolate': True}
+        self.elevInput.SetValue(self.data['elevation'])
+        self.zexag.SetValue(str(self.data['zexag']))
+        self.height.SetValue(str(self.data['height']))
+        self.interpolate.SetValue(self.data['interpolate'])
+        for i, each in enumerate('nsew'):
+            self.trim[each].SetValue(str(self.data['trim_nsew'][i]))
+        self.interpolate.SetValue(self.data['interpolate'])
+
         calib = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy')
         if os.path.exists(calib):
             self.calib_matrix = np.load(calib)
@@ -114,10 +174,10 @@ class TangeomsImportPlugin(TangeomsPlugin):
         if 'KinectFusionExplorer' in tasks:
             return True
         return False
-            
+
     def ScanOnce(self, event):
         if self._isRunning():
-            dlg = wx.MessageDialog(self, 'Kinect application is running, please close it first.', '', 
+            dlg = wx.MessageDialog(self, 'Kinect application is running, please close it first.', '',
             wx.OK | wx.ICON_EXCLAMATION)
             dlg.ShowModal()
             return
@@ -127,9 +187,9 @@ class TangeomsImportPlugin(TangeomsPlugin):
         subprocess.call([kinect_app, self.tmp_file, '40', '0.4', '1.2', '512', '384']) # last 2 parameters must be 128/384/512 (larger for bigger models)
         self.status.SetLabel("Importing scan ...")
         import_scan(input_file=self.tmp_file,
-                    real_elev=self.elevation, output_elev=self.data['scan_name'],
-                    mm_resolution=0.001, calib_matrix=self.calib_matrix,
-                    table_mm=5, zexag=3, interpolate=False)
+                    real_elev=self.data['elevation'], output_elev=self.data['scan_name'], info_text=self.data['info_text'],
+                    mm_resolution=0.001, calib_matrix=self.calib_matrix, trim_nsew=self.data['trim_nsew'],
+                    table_mm=self.data['height'], zexag=self.data['zexag'], interpolate=self.data['interpolate'])
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
 
@@ -137,10 +197,25 @@ class TangeomsImportPlugin(TangeomsPlugin):
         name = self.scan_name.GetValue()
         self.data['scan_name'] = name
 
+    def OnModelProperties(self, event):
+        try:
+            self.data['elevation'] = self.elevInput.GetValue()
+            self.data['zexag'] = float(self.zexag.GetValue())
+            self.data['height'] = float(self.height.GetValue())
+            for i, each in enumerate('nsew'):
+                self.data['trim_nsew'][i] = float(self.trim[each].GetValue())
+            self.data['interpolate'] = self.interpolate.IsChecked()
+        except ValueError:
+            pass
+
+    def UpdateText(self):
+        self.textInfo.SetValue(os.linesep.join(self.data['info_text']))
+        del self.data['info_text'][:]
+
     def CreateThread(self):
         self.stopEvt = threading.Event()
-        self.threadI = threading.Thread(target=runImport, args=[self, self.tmp_file, self.elevation, self.data,
-                                                                self.output, self.calib_matrix, self.stopEvt])
+        self.threadI = threading.Thread(target=runImport, args=[self, self.tmp_file, self.data,
+                                                                self.calib_matrix, self.stopEvt])
 
     def Start(self):
         if not self.threadI or not self.threadI.isAlive():
@@ -169,7 +244,7 @@ class TangeomsImportPlugin(TangeomsPlugin):
             self.status.SetLabel("Real-time scanning is running now.")
 
 
-def runImport(guiParent, fileName, elevation, data, scan, calib_matrix, stopEvent):
+def runImport(guiParent, fileName, data, calib_matrix, stopEvent):
     lockFilePath = fileName + 'lock'
     if os.path.exists(fileName):
         lastTime = os.path.getmtime(fileName)
@@ -184,19 +259,19 @@ def runImport(guiParent, fileName, elevation, data, scan, calib_matrix, stopEven
             if currTime == lastTime:
                 continue
             lastTime = currTime
-            print 'RUNNING IMPORT'
-            import_scan(input_file=fileName, real_elev=elevation, output_elev=data['scan_name'],
-                               mm_resolution=0.001, calib_matrix=calib_matrix, table_mm=5, zexag=3, interpolate=False)
+            import_scan(input_file=fileName, real_elev=data['elevation'], output_elev=data['scan_name'], info_text=data['info_text'],
+                        mm_resolution=0.001, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'],
+                        table_mm=data['height'], zexag=data['zexag'], interpolate=data['interpolate'])
 #            compute_crosssection(real_elev='extent', output_elev=scan, output_cross='cross', voxel='interp_2002_08_25',
 #                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=0.7, table_mm=2, edge_mm=[10, 10, 0, 0], mm_resolution=0.001)
-            print 'IMPORT END'
+
             evt = updateGUIEvt(guiParent.GetId())
             wx.PostEvent(guiParent, evt)
 
 
 def run(giface, guiparent):
     dlg = TangeomsImportPlugin(giface, guiparent, elev_real='elevation', scan='scan',
-                scanFile=os.path.join(os.path.realpath(gettempdir()), 'kinect_scan.txt'), minZ=0.4, maxZ=0.85)
+                scanFile=os.path.join(os.path.realpath(gettempdir()), 'kinect_scan.txt'), minZ=0.4, maxZ=1.2)
     dlg.CenterOnParent()
     dlg.Show()
 
