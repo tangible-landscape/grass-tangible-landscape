@@ -262,9 +262,9 @@ def runImport(guiParent, fileName, data, calib_matrix, stopEvent):
             import_scan(input_file=fileName, real_elev=data['elevation'], output_elev=data['scan_name'], info_text=data['info_text'],
                         mm_resolution=0.001, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'],
                         table_mm=data['height'], zexag=data['zexag'], interpolate=data['interpolate'])
-#            compute_crosssection(real_elev='extent', output_elev=scan, output_cross='cross', voxel='interp_2002_08_25',
-#                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=0.7, table_mm=2, edge_mm=[10, 10, 0, 0], mm_resolution=0.001)
-
+#            compute_crosssection(real_elev=data['elevation'], output_elev=data['scan_name'], output_cross='cross', voxel='interp_2002_08_25',
+#                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=data['zexag'],
+#                                 table_mm=data['height'], trim_nsew=data['trim_nsew'], mm_resolution=0.001, info_text=data['info_text'])
             evt = updateGUIEvt(guiParent.GetId())
             wx.PostEvent(guiParent, evt)
 
