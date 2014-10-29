@@ -59,7 +59,7 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
     # scale Z to original and apply exaggeration
     raster_info = grast.raster_info(real_elev)
     try:
-        array = scale_z_exag(array, raster_info, zexag)
+        array = scale_z_exag(array, raster_info, zexag, info_text)
     except StandardError, e:
         print e
         return
