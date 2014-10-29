@@ -24,7 +24,7 @@ updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
 
 class TangeomsPlugin(wx.Dialog):
     def __init__(self, giface, parent):
-        wx.Dialog.__init__(self, parent, title="Tangeoms plugin")
+        wx.Dialog.__init__(self, parent, title="Tangeoms plugin", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.giface=giface
         self.parent=parent
         mainSizer = wx.BoxSizer(wx.VERTICAL)
