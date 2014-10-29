@@ -19,7 +19,7 @@ from grass.script import raster as grast
 
 from scan_processing import  get_environment, remove_temp_regions, read_from_ascii, \
     adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag, \
-    interpolate_surface, bin_surface, trim_edges_nsew
+    interpolate_surface, bin_surface, trim_edges_nsew, remove_vector
 import current_analyses
 
 
