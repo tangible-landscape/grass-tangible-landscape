@@ -38,6 +38,7 @@ def aspect(scanned_elev, new, env):
     
 def slope_aspect(scanned_elev, slope, aspect, env):
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=aspect, slope=slope, overwrite=True, env=env)
+    gcore.run_command('r.colors', map=aspect, color='aspectcolr', env=env)
 
 
 def shaded_relief(scanned_elev, new, zmult=10, env=None):

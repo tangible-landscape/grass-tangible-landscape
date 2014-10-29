@@ -19,12 +19,12 @@ from grass.script import raster as grast
 
 from scan_processing import  get_environment, remove_temp_regions, read_from_ascii, \
     adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag, \
-    interpolate_surface, bin_surface, remove_vector
+    interpolate_surface, bin_surface, trim_edges_nsew
 import current_analyses
 
 
 
-def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, table_mm, zexag, interpolate):
+def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, trim_nsew, table_mm, zexag, interpolate, info_text):
     output_tmp1 = "output_scan_tmp1"
 
     fd, temp_path = mkstemp()
@@ -63,6 +63,8 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
     except StandardError, e:
         print e
         return
+    # trim edges
+    array = trim_edges_nsew(array, trim_nsew)
 
     # save resulting array
     np.savetxt(temp_path, array, delimiter=" ")
@@ -108,7 +110,7 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
         pass
     functions = [func for func in dir(current_analyses) if func.startswith('run_')]
     for func in functions:
-        exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, env=env)')
+        exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, info_text=info_text, env=env)')
 
     # cleanup
     if interpolate:
@@ -133,7 +135,9 @@ def main():
                 mm_resolution=0.001,
                 calib_matrix=calib_matrix,
                 table_mm=5, zexag=3,
-                interpolate=True)
+                interpolate=False,
+                trim_nsew=[0, 0, 0, 0],
+                info_text=[])
 
 def cleanup():
     pass
