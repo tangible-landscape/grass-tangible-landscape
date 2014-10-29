@@ -138,7 +138,7 @@ def remove_table(array, height):
     return array
 
 
-def scale_z_exag(array, raster_info, zexag):
+def scale_z_exag(array, raster_info, zexag, info_text):
     """Change z range to match z-exag"""
     old_min_z = np.min(array[:, 2])
 #    old_max_z = np.max(array[:, 2])
@@ -151,9 +151,8 @@ def scale_z_exag(array, raster_info, zexag):
     ew_scale = (raster_info['east'] - raster_info['west'] ) / (old_max_x - old_min_x)
     hor_scale = (ns_scale + ew_scale) / 2
     scale = float(hor_scale) / zexag
-    print "SCALE: " + str(hor_scale)
-    print "Z-EXAGGERATION: " + str(zexag)
-    print "1 cm in height ~ {} m".format(0.01 * scale)
+    info_text.append("Model scale 1:{0:.0f}".format(hor_scale))
+    info_text.append("1 cm in height ~ {0:.1f} m".format(0.01 * scale))
     array[:, 2] = array[:, 2] * scale + raster_info['min'] - old_min_z * scale
     return array
 
@@ -168,7 +167,7 @@ def scale_z_raster(array, raster_info):
     return array
 
 
-def scale_subsurface_flat(real_elev, array, zexag, base, height_mm):
+def scale_subsurface_flat(real_elev, array, zexag, base, height_mm, info_text):
     raster_info = grast.raster_info(real_elev)
     old_min_x = np.min(array[:, 0])
     old_max_x = np.max(array[:, 0])
@@ -182,9 +181,8 @@ def scale_subsurface_flat(real_elev, array, zexag, base, height_mm):
 
     array[:, 2] = array[:, 2] * scale - (real_height * scale - raster_info['max'])
 
-    print "SCALE: " + str(hor_scale)
-    print "Z-EXAGGERATION: " + str(zexag)
-    print "1 cm in height ~ {} m".format(0.01 * scale)
+    info_text.append("Model scale 1:{0:.0f}".format(hor_scale))
+    info_text.append("1 cm in height ~ {0:.1f} m".format(0.01 * scale))
 
     return array
 
