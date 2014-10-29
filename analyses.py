@@ -212,6 +212,16 @@ def trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
         gcore.run_command('r.drain', overwrite=True, input=walk, indir=walk_dir, flags='d', vector_output=vector_routes[i],
                           output=raster_route, start_coordinates=points_to[i], env=env)
 
+def trail_salesman(trails, points, output, env):
+    net_tmp = 'net_tmp'
+    gcore.run_command('v.net', input=trails, points=points, output=net_tmp,
+                      operation='connect', threshold=10, overwrite=True, env=env)
+    cats = gcore.read_command('v.category', input=net_tmp, layer=2,
+                              option='print').strip().split(os.linesep)
+    gcore.run_command('v.net.salesman', input=net_tmp, output=output,
+                      ccats=','.join(cats), alayer=1, nlayer=2, overwrite=True)
+    remove_vector(net_tmp)
+
 
 def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7, env=None):   
     coordinates = gcore.read_command('v.out.ascii', input=vector, separator=',', env=env).strip()

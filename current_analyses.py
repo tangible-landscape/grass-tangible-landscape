@@ -40,5 +40,7 @@ import analyses
 #                                 _lambda=.5, slope_factor=-.8125, walk='walk_result',
 #                                 walking_dir='walkdir_result', points='change', raster_route='route_result',
 #                                 vector_routes='route_result', mask=None, env=env)
+#    analyses.trail_salesman(trails='route_result', points='change', output='route_salesman', env=env)
+
 #def run_viewshed(real_elev, scanned_elev, env, **kwargs):
 #    analyses.viewshed(real_elev, output='viewshed', obs_elev=1.75, vector='change', visible_color='green', invisible_color='red', env=env)
