@@ -18,7 +18,8 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 
 
-def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_path, calib_matrix, zexag, table_mm, edge_mm, mm_resolution):
+def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_path,
+                         calib_matrix, zexag, trim_nsew, table_mm, mm_resolution, info_text):
     output_tmp1 = "output_scan_tmp1"
     fd, temp_path = tempfile.mkstemp()
     os.close(fd)
@@ -47,10 +48,10 @@ def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_
         print e
         gcore.warning("Failed to remove fuzzy edges")
         return
-    array = trim_edges_nsew(array, edge_mm)
+    array = trim_edges_nsew(array, trim_nsew)
     gcore.run_command('g.region', rast=real_elev)
-    array = scale_subsurface_flat(real_elev, array, zexag, base=table_height, height_mm=35)
 
+    array = scale_subsurface_flat(real_elev, array, zexag, base=table_height, height_mm=37, info_text=info_text)
     # save resulting array
     np.savetxt(temp_path, array, delimiter=" ")
 
@@ -120,4 +121,5 @@ if __name__ == '__main__':
                          zexag=0.7,
                          table_mm=0,
                          edge_mm=[5, 5, 5, 5],
-                         mm_resolution=0.001)
+                         mm_resolution=0.001,
+                         info_text=[])
