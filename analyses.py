@@ -29,15 +29,15 @@ def flowacc(scanned_elev, new, env):
     gcore.run_command('r.flow', elevation=scanned_elev, flowaccumulation=new, overwrite=True, env=env)
 
 
-def slope(scanned_elev, new, env):
-    gcore.run_command('r.slope.aspect', elevation=scanned_elev, slope=new, overwrite=True, env=env)
+def slope(scanned_elev, new, env, zfactor=1.):
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev, zfactor=zfactor, slope=new, overwrite=True, env=env)
 
 
 def aspect(scanned_elev, new, env):
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=new, overwrite=True, env=env)
     
-def slope_aspect(scanned_elev, slope, aspect, env):
-    gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=aspect, slope=slope, overwrite=True, env=env)
+def slope_aspect(scanned_elev, slope, aspect, env, zfactor=1.):
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev,  zfactor=zfactor, aspect=aspect, slope=slope, overwrite=True, env=env)
     gcore.run_command('r.colors', map=aspect, color='aspectcolr', env=env)
 
 
