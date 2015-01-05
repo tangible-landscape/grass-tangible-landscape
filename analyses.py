@@ -57,6 +57,23 @@ def simwe(scanned_elev, depth, rain_value, niter, slope=None, aspect=None, env=N
     gcore.run_command('g.remove', rast=['dx_' + pid, 'dy' + pid])
 
 
+def erosion(scanned_elev, rain_value, depth, detachment, transport, shearstress, niter, flux, erdep, slope=None, aspect=None, env=None):
+    pid = str(os.getpid())
+    options = {}
+    if slope:
+        options['slope'] = slope
+    if aspect:
+        options['aspect'] = aspect
+    dc, tc, tau = 'dc' + pid, 'tc' + pid, 'tau' + pid
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, overwrite=True, env=env, **options)
+    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, rain_value=rain_value, depth=depth, nwalk=10000, niter=niter, overwrite=True, env=env)
+    gcore.run_command('r.mapcalc', expression="{dc} = {detachment}".format(dc=dc, detachment=detachment), overwrite=True, env=env)
+    gcore.run_command('r.mapcalc', expression="{tc} = {transport}".format(tc=tc, transport=transport), overwrite=True, env=env)
+    gcore.run_command('r.mapcalc', expression="{tau} = {shearstress}".format(tau=tau, shearstress=shearstress), overwrite=True, env=env)
+    gcore.run_command('r.sim.sediment', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, wdepth=depth, det=dc, tran=tc, tau=tau, flux=flux, erdep=erdep, niter=niter, nwalk=10000, overwrite=True, env=env)
+    gcore.run_command('g.remove', rast=[dc, tc, tau, 'dx_' + pid, 'dy' + pid], env=env)
+
+
 def max_curv(scanned_elev, new, size=15, zscale=5, env=None):
     gcore.run_command('r.param.scale', overwrite=True, input=scanned_elev, output=new, size=size, param='maxic', zscale=zscale, env=env)
     gcore.run_command('r.colors', map=new, color='byr', env=env)

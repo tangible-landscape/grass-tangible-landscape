@@ -19,7 +19,9 @@ import analyses
 #def run_simwe(scanned_elev, env, **kwargs):
 #    analyses.simwe(scanned_elev=scanned_elev, depth='depth', rain_value=300, niter=4, env=env)
 #
-#    
+#
+#def run_erosion(scanned_elev, env, **kwargs):
+#    analyses.erosion(scanned_elev=scanned_elev, rain_value=200, depth='depth', detachment=0.001, transport=0.01, shearstress=0, flux='flux', erdep='erdep', niter=4, env=env)  
 #def run_geomorphon(scanned_elev, env, **kwargs):
 #    analyses.geomorphon(scanned_elev, new='geomorphon', search=22, skip=12, flat=1, dist=0, env=env)
 
