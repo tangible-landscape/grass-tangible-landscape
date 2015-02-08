@@ -121,6 +121,34 @@ def contours(scanned_elev, new, env, step=None):
         # catching exception when a vector is added to GUI in the same time
         pass
 
+def change_detection_area(before, after, change, height_threshold, add, env):
+    """Detects change in area. Result are areas with value
+    equals the max difference between the scans as a positive value."""
+    slope = 'slope_tmp_get_change'
+    changes = 'found_tmp_get_change'
+    changes_singleval = 'found_singleval_tmp_get_change'
+    changes_clumped = 'found_clumped_tmp_get_change'
+    changes_max = 'found_max_tmp_get_change'
+
+    # slope is used to filter areas of change with high slope (edge of model)
+    gcore.run_command('r.slope.aspect', elevation=scan_before, slope=slope, env=env)
+    if not add:
+        after, before = before, after
+
+    grast.mapcalc(exp="{changes} = if({slope} < 50 && {before} - {after} > {min_z_diff}, {before} - {after}, null());"
+                      "{changes_singleval} = if({slope} < 50 && ({before} - {after}) > {min_z_diff}, 1, null())".format(
+                          changes=changes, slope=slope, before=scan_before, after=scan_after, min_z_diff=height_threshold,
+                          changes_singleval=changes_singleval), env=env)
+
+    gcore.run_command('r.clump', input=changes_singleval, output=changes_clumped, env=env)
+    gcore.run_command('r.stats.zonal', base=changes_clumped, cover=changes,
+                      method='max', output=changes_max, env=env)
+    # this is an addon, must be installed!
+    gcore.run_command('r.grow.shrink', input=changes_max, output=change, env=env)
+
+    #gcore.run_command('g.remove', type='raster', pattern="*tmp_get_change", flags='f')
+    gcore.run_command('g.mremove', rast="*tmp_get_change", flags='f')
+
 
 def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
     tmp_regions = []
