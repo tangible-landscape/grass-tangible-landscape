@@ -149,6 +149,40 @@ def change_detection_area(before, after, change, height_threshold, add, env):
     #gcore.run_command('g.remove', type='raster', pattern="*tmp_get_change", flags='f')
     gcore.run_command('g.mremove', rast="*tmp_get_change", flags='f')
 
+def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
+    """Detects markers based on current scan only (no difference)."""
+    slope = 'slope_tmp_get_marker'
+    range = 'range_tmp_get_marker'
+    slope_sum = 'slope_sum_tmp_get_marker'
+    flowacc = 'flowacc_tmp_get_marker'
+    raster_points = "raster_points_tmp_get_marker"
+
+    save_height = True
+    gcore.run_command('r.watershed', elevation=scanned_elev, accumulation=flowacc, env=env)
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev, slope=slope, env=env)
+    gcore.run_command('r.neighbors', input=slope, method='median',
+                      output=slope_sum, size=5, flags='c', env=env)
+    if save_height:
+        gcore.run_command('r.neighbors', input=scanned_elev, method='range',
+                          output=range, size=13, env=env)
+
+    if save_height:
+        range_ = range
+    else:
+        range_ = 1
+
+    grast.mapcalc(exp='{raster_points} = if({flowacc} == 1 && {slope_sum} > {slope_threshold}, {range}, null())'.format(
+                  raster_points=raster_points, flowacc=flowacc, slope_sum=slope_sum,
+                  slope_threshold=slope_threshold, range=range_), env=env)
+
+    options = {}
+    if save_height:
+        options['column'] = 'height'
+
+    gcore.run_command('r.to.vect', input=raster_points, output=points, type='point', env=env, **options)
+    #gcore.run_command('g.remove', type='raster', pattern="*tmp_get_marker", flags='f')
+    gcore.run_command('g.mremove', rast="*tmp_get_marker", flags='f')
+
 
 def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
     tmp_regions = []
