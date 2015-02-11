@@ -30,6 +30,7 @@ import analyses
 
 #    
 #def run_usped(scanned_elev, env, **kwargs):
+#    analyses.flowacc(scanned_elev, new='flowacc', env=env)
 #    analyses.usped(scanned_elev, k_factor='soils_Kfactor', c_factor='cfactorbare_1m', flowacc='flowacc', slope='slope', aspect='aspect', new='erdep', env=env)
 
 #def run_change_detection(scanned_elev, env, **kwargs):
@@ -46,3 +47,9 @@ import analyses
 
 #def run_viewshed(real_elev, scanned_elev, env, **kwargs):
 #    analyses.viewshed(real_elev, output='viewshed', obs_elev=1.75, vector='change', visible_color='green', invisible_color='red', env=env)
+
+#def run_subsurface(scanned_elev, env, **kwargs):
+#    voxel = 'interp_no_terrain_2002_08_25@soils_base_data'
+#
+#    analyses.cross_section(scanned_elev=scanned_elev, voxel=voxel, new='cross', env=env)
+#    analyses.contours(scanned_elev=scanned_elev, new='scanned_contours', step=5., maxlevel=0, env=env)

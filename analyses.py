@@ -107,7 +107,7 @@ def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
     gcore.run_command('g.remove', flags='f', type='raster', name=[sedflow, qsx, qsxdx, qsy, qsydy, slope_sm])
 
 
-def contours(scanned_elev, new, env, step=None):
+def contours(scanned_elev, new, env, maxlevel=None, step=None):
     if not step:
         info = grast.raster_info(scanned_elev)
         step = (info['max'] - info['min']) / 12.
@@ -116,9 +116,13 @@ def contours(scanned_elev, new, env, step=None):
             gisenv = gcore.gisenv()
             path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', new)
             shutil.rmtree(path_to_vector)
-        gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, flags='t', env=env)
-    except:
+        if maxlevel is None:
+            gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, flags='t', env=env)
+        else:
+            gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, maxlevel=maxlevel, flags='t', env=env)
+    except StandardError, e:
         # catching exception when a vector is added to GUI in the same time
+        print e
         pass
 
 def change_detection_area(before, after, change, height_threshold, add, env):
@@ -134,6 +138,7 @@ def change_detection_area(before, after, change, height_threshold, add, env):
     gcore.run_command('r.slope.aspect', elevation=scan_before, slope=slope, env=env)
     if not add:
         after, before = before, after
+
 
     grast.mapcalc(exp="{changes} = if({slope} < 50 && {before} - {after} > {min_z_diff}, {before} - {after}, null());"
                       "{changes_singleval} = if({slope} < 50 && ({before} - {after}) > {min_z_diff}, 1, null())".format(
@@ -294,9 +299,10 @@ def trail_salesman(trails, points, output, env):
     gcore.run_command('v.net', input=trails, points=points, output=net_tmp,
                       operation='connect', threshold=10, overwrite=True, env=env)
     cats = gcore.read_command('v.category', input=net_tmp, layer=2,
-                              option='print').strip().split(os.linesep)
+                              option='print', env=env).strip().split(os.linesep)
+    remove_vector(output)
     gcore.run_command('v.net.salesman', input=net_tmp, output=output,
-                      ccats=','.join(cats), alayer=1, nlayer=2, overwrite=True)
+                      ccats=','.join(cats), alayer=1, nlayer=2, overwrite=True, env=env)
     remove_vector(net_tmp)
 
 
@@ -310,3 +316,8 @@ def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_e
         gcore.run_command('r.viewshed', flags='b', input=scanned_elev, output=output, coordinates=coordinate, observer_elevation=obs_elev, env=env, overwrite=True)
         gcore.run_command('r.null', map=output, null=0)
         gcore.write_command('r.colors', map=output,  rules='-', stdin='0 {invis}\n1 {vis}'.format(vis=visible_color, invis=invisible_color), env=env)
+
+
+def cross_section(scanned_elev, voxel, new, env):
+    gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True, env=env)
+    gcore.run_command('r.colors', map=new, volume=voxel, env=env)

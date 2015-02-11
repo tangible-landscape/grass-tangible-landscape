@@ -129,14 +129,15 @@ class TangeomsPlugin(wx.Dialog):
         raise NotImplementedError
 
     def OnUpdate(self, event):
-        self.giface.updateMap()
+        for each in self.giface.GetAllMapDisplays():
+            each.GetMapWindow().UpdateMap()
         self.UpdateText()
 
     def Calibrate(self, event):
         from prepare_calibration import write_matrix
         print 'REMOVE EVERYTHING FROM TABLE'
         matrix_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy')
-        write_matrix(matrix_path=matrix_file_path, min_z=0.5, max_z=0.8)
+        write_matrix(matrix_path=matrix_file_path, min_z=0.5, max_z=1.2)
 
 
 class TangeomsImportPlugin(TangeomsPlugin):
@@ -262,7 +263,7 @@ def runImport(guiParent, fileName, data, calib_matrix, stopEvent):
             import_scan(input_file=fileName, real_elev=data['elevation'], output_elev=data['scan_name'], info_text=data['info_text'],
                         mm_resolution=0.001, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'],
                         table_mm=data['height'], zexag=data['zexag'], interpolate=data['interpolate'])
-#            compute_crosssection(real_elev=data['elevation'], output_elev=data['scan_name'], output_cross='cross', voxel='interp_2002_08_25',
+#            compute_crosssection(real_elev=data['elevation'], output_elev=data['scan_name'], voxel='interp_2002_08_25',
 #                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=data['zexag'],
 #                                 table_mm=data['height'], trim_nsew=data['trim_nsew'], mm_resolution=0.001, info_text=data['info_text'])
             evt = updateGUIEvt(guiParent.GetId())
