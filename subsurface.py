@@ -11,14 +11,15 @@ import shutil
 from scan_processing import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, \
     scale_subsurface_flat, remove_fuzzy_edges, get_environment, adjust_boundaries, remove_temp_regions, \
     bin_surface
-from analyses import difference
+
+import current_analyses
 import numpy as np
 
 from grass.script import core as gcore
 from grass.script import raster as grast
 
 
-def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_path,
+def compute_crosssection(real_elev, output_elev, voxel, scan_file_path,
                          calib_matrix, zexag, trim_nsew, table_mm, mm_resolution, info_text):
     output_tmp1 = "output_scan_tmp1"
     fd, temp_path = tempfile.mkstemp()
@@ -64,19 +65,19 @@ def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_
     env = get_environment(tmp_regions, rast=output_elev)
     gcore.write_command('r.colors', map=output_elev, rules='-', stdin="0% 0:66:0\n100% 197:255:138")
 
-#    gcore.run_command('r.colors', map=output_elev, color='elevation')
-        
-
-    difference(real_elev=real_elev, scanned_elev=output_elev, new='diff', env=env)
-
     env = get_environment(tmp_regions, rast3d=voxel, nsres=3, ewres=3)
-#    voxels = gcore.read_command('g.mlist', quiet=True, type='rast3d', pattern='interp_2003*', separator=',').strip()
-#    for voxel in voxels.split(','):
-#        output_cross_ = output_cross + '2' + voxel
-    cross_section(output_elev, voxel, output_cross, env=env)
-    contours(scanned_elev=output_elev, new='scanned_contours', step=5., env=env)
-#    cross_section_fill(output_elev, voxel, output_cross)
-#    gcore.run_command('r3.cross.rast', input=voxel, elevation=output_elev, output=output_cross, overwrite=True)
+    
+    # run analyses
+    functions = [func for func in dir(current_analyses) if func.startswith('run_')]
+    for func in functions:
+        exec('del current_analyses.' + func)
+    try:
+        reload(current_analyses)
+    except:
+        pass
+    functions = [func for func in dir(current_analyses) if func.startswith('run_')]
+    for func in functions:
+        exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, info_text=info_text, env=env)')
 
     remove_temp_regions(tmp_regions)
     gcore.run_command('g.remove', flags='f', type='raster', name=output_tmp1, env=env)
@@ -85,25 +86,6 @@ def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_
     except:  # WindowsError
         gcore.warning("Failed to remove temporary file {path}".format(path=temp_path))
 
-
-def contours(scanned_elev, new, env, step=None):
-    if not step:
-        info = grast.raster_info(scanned_elev)
-        step = (info['max'] - info['min']) / 12.
-    try:
-        if gcore.find_file(new, element='vector')['name']:
-            gisenv = gcore.gisenv()
-            path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', new)
-            shutil.rmtree(path_to_vector)
-        gcore.run_command('r.contour', flags='t', input=scanned_elev, output=new, maxlevel=0, step=step, env=env)
-    except:
-        # catching exception when a vector is added to GUI in the same time
-        pass
-
-
-def cross_section(scanned_elev, voxel, new, env):
-    gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True, env=env)
-    gcore.run_command('r.colors', map=new, raster_3d=voxel, env=env)
 
 
 if __name__ == '__main__':
