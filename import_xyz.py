@@ -116,7 +116,7 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
     if interpolate:
         remove_vector(output_tmp1)
     else:
-        gcore.run_command('g.remove', rast=output_tmp1, env=env)
+        gcore.run_command('g.remove', flags='f', type='raster', name=output_tmp1, env=env)
 
     remove_temp_regions(tmp_regions)
 
