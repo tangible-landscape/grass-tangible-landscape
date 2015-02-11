@@ -79,7 +79,7 @@ def compute_crosssection(real_elev, output_elev, output_cross, voxel, scan_file_
 #    gcore.run_command('r3.cross.rast', input=voxel, elevation=output_elev, output=output_cross, overwrite=True)
 
     remove_temp_regions(tmp_regions)
-    gcore.run_command('g.remove', rast=output_tmp1, env=env)
+    gcore.run_command('g.remove', flags='f', type='raster', name=output_tmp1, env=env)
     try:
         os.remove(temp_path)
     except:  # WindowsError
@@ -103,7 +103,7 @@ def contours(scanned_elev, new, env, step=None):
 
 def cross_section(scanned_elev, voxel, new, env):
     gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True, env=env)
-    gcore.run_command('r.colors', map=new, volume=voxel, env=env)
+    gcore.run_command('r.colors', map=new, raster_3d=voxel, env=env)
 
 
 if __name__ == '__main__':
