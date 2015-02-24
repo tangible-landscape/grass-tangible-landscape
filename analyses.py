@@ -113,9 +113,7 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
         step = (info['max'] - info['min']) / 12.
     try:
         if gcore.find_file(new, element='vector')['name']:
-            gisenv = gcore.gisenv()
-            path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', new)
-            shutil.rmtree(path_to_vector)
+            remove_vector(new)
         if maxlevel is None:
             gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, flags='t', env=env)
         else:
@@ -125,7 +123,7 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
         print e
         pass
 
-def change_detection_area(before, after, change, height_threshold, add, env):
+def change_detection_area(before, after, change, height_threshold, filter_slope_threshold, add, env):
     """Detects change in area. Result are areas with value
     equals the max difference between the scans as a positive value."""
     slope = 'slope_tmp_get_change'
@@ -133,23 +131,29 @@ def change_detection_area(before, after, change, height_threshold, add, env):
     changes_singleval = 'found_singleval_tmp_get_change'
     changes_clumped = 'found_clumped_tmp_get_change'
     changes_max = 'found_max_tmp_get_change'
+    before_after_regression = 'before_after_regression_tmp'
+    shrink = 'shrink_tmp'
 
     # slope is used to filter areas of change with high slope (edge of model)
-    gcore.run_command('r.slope.aspect', elevation=scan_before, slope=slope, env=env)
-    if not add:
+    gcore.run_command('r.slope.aspect', elevation=before, slope=slope, env=env)
+    if add:
         after, before = before, after
 
+    # regression
+    reg_params = gcore.parse_command('r.regression.line', flags='g', mapx=before, mapy=after, env=env)
+    grast.mapcalc(exp='{before_after_regression} = {a} + {b} * {before}'.format(a=reg_params['a'], b=reg_params['b'], before=before, before_after_regression=before_after_regression), env=env)
 
-    grast.mapcalc(exp="{changes} = if({slope} < 50 && {before} - {after} > {min_z_diff}, {before} - {after}, null());"
-                      "{changes_singleval} = if({slope} < 50 && ({before} - {after}) > {min_z_diff}, 1, null())".format(
-                          changes=changes, slope=slope, before=scan_before, after=scan_after, min_z_diff=height_threshold,
+    grast.mapcalc(exp="{changes} = if({slope} < {filter_slope_threshold} && {before_after_regression} - {after} > {min_z_diff}, {before_after_regression} - {after}, null());"
+                      "{changes_singleval} = if({slope} < {filter_slope_threshold} && ({before_after_regression} - {after}) > {min_z_diff}, 1, null())".format(
+                          changes=changes, slope=slope, filter_slope_threshold=filter_slope_threshold, before_after_regression=before_after_regression, after=after, min_z_diff=height_threshold,
                           changes_singleval=changes_singleval), env=env)
 
     gcore.run_command('r.clump', input=changes_singleval, output=changes_clumped, env=env)
     gcore.run_command('r.stats.zonal', base=changes_clumped, cover=changes,
                       method='max', output=changes_max, env=env)
     # this is an addon, must be installed!
-    gcore.run_command('r.grow.shrink', input=changes_max, output=change, env=env)
+    gcore.run_command('r.grow.shrink', input=changes_max, output=shrink, radius=0.99, env=env)
+    gcore.run_command('r.grow.shrink', input=shrink, output=change, env=env)
 
     gcore.run_command('g.remove', type='raster', pattern="*tmp_get_change", flags='f')
 
