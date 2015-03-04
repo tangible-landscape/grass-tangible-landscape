@@ -43,7 +43,7 @@ class TangeomsPlugin(wx.Dialog):
         self.status = wx.StaticText(self)
         self.textInfo = wx.TextCtrl(self, size=(-1, 100), style=wx.TE_MULTILINE | wx.TE_READONLY)
         # widgets for model
-        self.elevInput = Select(self, size=(-1, -1), type='rast')
+        self.elevInput = Select(self, size=(-1, -1), type='raster')
         self.zexag = wx.TextCtrl(self)
         self.height = wx.TextCtrl(self)
         self.trim = {}
