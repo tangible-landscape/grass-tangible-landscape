@@ -189,7 +189,7 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.status.SetLabel("Importing scan ...")
         import_scan(input_file=self.tmp_file,
                     real_elev=self.data['elevation'], output_elev=self.data['scan_name'], info_text=self.data['info_text'],
-                    mm_resolution=0.001, calib_matrix=self.calib_matrix, trim_nsew=self.data['trim_nsew'],
+                    mm_resolution=0.002, calib_matrix=self.calib_matrix, trim_nsew=self.data['trim_nsew'],
                     table_mm=self.data['height'], zexag=self.data['zexag'], interpolate=self.data['interpolate'])
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
@@ -261,7 +261,7 @@ def runImport(guiParent, fileName, data, calib_matrix, stopEvent):
                 continue
             lastTime = currTime
             import_scan(input_file=fileName, real_elev=data['elevation'], output_elev=data['scan_name'], info_text=data['info_text'],
-                        mm_resolution=0.001, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'],
+                        mm_resolution=0.002, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'],
                         table_mm=data['height'], zexag=data['zexag'], interpolate=data['interpolate'])
 #            compute_crosssection(real_elev=data['elevation'], output_elev=data['scan_name'], voxel='interp_2002_08_25',
 #                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=data['zexag'],
