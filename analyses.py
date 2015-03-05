@@ -127,12 +127,7 @@ def change_detection_area(before, after, change, height_threshold, filter_slope_
     """Detects change in area. Result are areas with value
     equals the max difference between the scans as a positive value."""
     slope = 'slope_tmp_get_change'
-    changes = 'found_tmp_get_change'
-    changes_singleval = 'found_singleval_tmp_get_change'
-    changes_clumped = 'found_clumped_tmp_get_change'
-    changes_max = 'found_max_tmp_get_change'
     before_after_regression = 'before_after_regression_tmp'
-    shrink = 'shrink_tmp'
 
     # slope is used to filter areas of change with high slope (edge of model)
     gcore.run_command('r.slope.aspect', elevation=before, slope=slope, env=env)
@@ -143,19 +138,11 @@ def change_detection_area(before, after, change, height_threshold, filter_slope_
     reg_params = gcore.parse_command('r.regression.line', flags='g', mapx=before, mapy=after, env=env)
     grast.mapcalc(exp='{before_after_regression} = {a} + {b} * {before}'.format(a=reg_params['a'], b=reg_params['b'], before=before, before_after_regression=before_after_regression), env=env)
 
-    grast.mapcalc(exp="{changes} = if({slope} < {filter_slope_threshold} && {before_after_regression} - {after} > {min_z_diff}, {before_after_regression} - {after}, null());"
-                      "{changes_singleval} = if({slope} < {filter_slope_threshold} && ({before_after_regression} - {after}) > {min_z_diff}, 1, null())".format(
-                          changes=changes, slope=slope, filter_slope_threshold=filter_slope_threshold, before_after_regression=before_after_regression, after=after, min_z_diff=height_threshold,
-                          changes_singleval=changes_singleval), env=env)
+    grast.mapcalc(exp="{change} = if({slope} < {filter_slope_threshold} && {before_after_regression} - {after} > {min_z_diff}, {before_after_regression} - {after}, null())".format(
+                  change=change, slope=slope, filter_slope_threshold=filter_slope_threshold, before_after_regression=before_after_regression, after=after, min_z_diff=height_threshold), env=env)
 
-    gcore.run_command('r.clump', input=changes_singleval, output=changes_clumped, env=env)
-    gcore.run_command('r.stats.zonal', base=changes_clumped, cover=changes,
-                      method='max', output=changes_max, env=env)
-    # this is an addon, must be installed!
-    gcore.run_command('r.grow.shrink', input=changes_max, output=shrink, radius=0.99, env=env)
-    gcore.run_command('r.grow.shrink', input=shrink, output=change, env=env)
+    gcore.run_command('g.remove', type='raster', name=['slope_tmp_get_change', 'before_after_regression_tmp'], flags='f', env=env)
 
-    gcore.run_command('g.remove', type='raster', pattern="*tmp_get_change", flags='f')
 
 def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
     """Detects markers based on current scan only (no difference)."""
@@ -325,3 +312,39 @@ def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_e
 def cross_section(scanned_elev, voxel, new, env):
     gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True, env=env)
     gcore.run_command('r.colors', map=new, volume=voxel, env=env)
+
+
+def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env):
+    topo = gvect.vector_info_topo(points)
+    if topo:
+        if topo['points'] != 2:
+            grast.mapcalc(exp=slice_ + " = null()", overwrite=True)
+            return
+
+    coordinates = gcore.read_command('v.out.ascii', input=points, format='point', separator=',', env=env).strip()
+    coords_list = []
+    i = 0
+    for coords in coordinates.split(os.linesep):
+        coords_list.extend(coords.split(',')[:2])
+        i += 1
+        if i >= 2:
+            break
+    if axes:
+        gcore.run_command('db.droptable', flags='f', table=axes, env=env)
+        remove_vector(axes)
+    if slice_line:
+        remove_vector(slice_line)
+    gcore.run_command('r3.slice', overwrite=True, input=voxel, output=slice_,
+                      coordinates=','.join(coords_list), axes=axes, slice_line=slice_line, units=units, offset=offset, env=env)
+
+
+def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env):
+    coordinates = gcore.read_command('v.out.ascii', input=points, format='point', separator=',', env=env).strip()
+    coords_list = []
+
+    for coords in coordinates.split(os.linesep):
+        coords_list.extend(coords.split(',')[:2])
+    if axes:
+        remove_vector(axes)
+    gcore.run_command('r3.borehole', overwrite=True, input=voxel, output=new,
+                      coordinates=','.join(coords_list), size=size, offset_size=offset, axes=axes, unit=unit, env=env)

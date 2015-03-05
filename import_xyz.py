@@ -16,6 +16,7 @@ from tempfile import mkstemp, gettempdir
 
 from grass.script import core as gcore
 from grass.script import raster as grast
+from grass.exceptions import CalledModuleError
 
 from scan_processing import  get_environment, remove_temp_regions, read_from_ascii, \
     adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag, \
@@ -59,7 +60,7 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
     # scale Z to original and apply exaggeration
     raster_info = grast.raster_info(real_elev)
     try:
-        array = scale_z_exag(array, raster_info, zexag, info_text)
+        array, scale = scale_z_exag(array, raster_info, zexag, info_text)
     except StandardError, e:
         print e
         return
@@ -101,16 +102,19 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
 ########################################################
 
     # run analyses
-    functions = [func for func in dir(current_analyses) if func.startswith('run_')]
+    functions = [func for func in dir(current_analyses) if func.startswith('run_') and func != 'run_command']
     for func in functions:
         exec('del current_analyses.' + func)
     try:
         reload(current_analyses)
     except:
         pass
-    functions = [func for func in dir(current_analyses) if func.startswith('run_')]
+    functions = [func for func in dir(current_analyses) if func.startswith('run_') and func != 'run_command']
     for func in functions:
-        exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, info_text=info_text, env=env)')
+        try:
+            exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, info_text=info_text, scale=scale, zexag=zexag, env=env)')
+        except CalledModuleError, e:
+            print e
 
     # cleanup
     if interpolate:

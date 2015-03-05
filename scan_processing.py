@@ -14,6 +14,7 @@ import shutil
 
 from grass.script import core as gcore
 from grass.script import raster as grast
+from grass.exceptions import CalledModuleError
 
 
 ###################### numpy ###########################
@@ -154,7 +155,7 @@ def scale_z_exag(array, raster_info, zexag, info_text):
     info_text.append("Model scale 1:{0:.0f}".format(hor_scale))
     info_text.append("1 cm in height ~ {0:.1f} m".format(0.01 * scale))
     array[:, 2] = array[:, 2] * scale + raster_info['min'] - old_min_z * scale
-    return array
+    return array, hor_scale
 
 
 def scale_z_raster(array, raster_info):
@@ -324,6 +325,7 @@ def get_environment(tmp_regions, **kwargs):
     tmp_regions.append(name)
     env = os.environ.copy()
     env['WIND_OVERRIDE'] = name
+    env['GRASS_OVERWRITE'] = '1'
     env['GRASS_VERBOSE'] = '0'
     env['GRASS_MESSAGE_FORMAT'] = 'standard'
     if 'GRASS_REGION' in env:
@@ -331,12 +333,20 @@ def get_environment(tmp_regions, **kwargs):
     return env
 
 
-def remove_vector(name):
+def remove_vector(name, deleteTable=False):
     """Helper function to workaround problem with deleting vectors"""
     gisenv = gcore.gisenv()
     path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', name)
+    if deleteTable:
+        try:
+            gcore.run_command('db.droptable', table=name, flags='f')
+        except CalledModuleError:
+            pass
     if os.path.exists(path_to_vector):
-        shutil.rmtree(path_to_vector)
+        try:
+            shutil.rmtree(path_to_vector)
+        except WindowsError:
+            pass
 
 
 def remove_temp_regions(regions):

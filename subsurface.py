@@ -68,14 +68,14 @@ def compute_crosssection(real_elev, output_elev, voxel, scan_file_path,
     env = get_environment(tmp_regions, rast3d=voxel, nsres=3, ewres=3)
     
     # run analyses
-    functions = [func for func in dir(current_analyses) if func.startswith('run_')]
+    functions = [func for func in dir(current_analyses) if func.startswith('run_') and func != 'run_command']
     for func in functions:
         exec('del current_analyses.' + func)
     try:
         reload(current_analyses)
     except:
         pass
-    functions = [func for func in dir(current_analyses) if func.startswith('run_')]
+    functions = [func for func in dir(current_analyses) if func.startswith('run_') and func != 'run_command']
     for func in functions:
         exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, info_text=info_text, env=env)')
 
