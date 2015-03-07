@@ -117,6 +117,14 @@ def calibrate_points(array, calib_matrix):
     return np.dot(calib_matrix, array.T)
 
 
+def rotate_points(array, angle):
+    """Rotates point cloud by angle in degrees, counterclockwise"""
+    angle = angle / 180. *np.pi
+    rotmat = np.array([[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
+    array = np.dot(rotmat, array.T).T
+    return array
+
+
 def remove_table(array, height):
     """Removes points under the model (table).
     height is in mm.

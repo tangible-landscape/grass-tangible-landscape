@@ -8,7 +8,7 @@ import os
 import subprocess
 import tempfile
 import shutil
-from scan_processing import read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, \
+from scan_processing import rotate_points, read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, \
     scale_subsurface_flat, remove_fuzzy_edges, get_environment, adjust_boundaries, remove_temp_regions, \
     bin_surface
 
@@ -17,16 +17,17 @@ import numpy as np
 
 from grass.script import core as gcore
 from grass.script import raster as grast
+from grass.exceptions import CalledModuleError
 
 
-def compute_crosssection(real_elev, output_elev, voxel, scan_file_path,
-                         calib_matrix, zexag, trim_nsew, table_mm, mm_resolution, info_text):
+def compute_crosssection(real_elev, output_elev, voxel, input_file,
+                         calib_matrix, zexag, trim_nsew, rotation_angle, table_mm, mm_resolution, info_text):
     output_tmp1 = "output_scan_tmp1"
     fd, temp_path = tempfile.mkstemp()
     os.close(fd)
     os.remove(temp_path)
     try:
-        read_from_ascii(input_file=scan_file_path, output_file=temp_path)
+        read_from_ascii(input_file=scan_file_path, output_file=temp_path, rotate_180=False)
     except:
         gcore.warning("Failed to read from ascii")
         return
@@ -38,6 +39,9 @@ def compute_crosssection(real_elev, output_elev, voxel, scan_file_path,
     # calibrate points by given matrix
     array = calibrate_points(array, calib_matrix).T
     table_height = np.percentile(array[:, 2], 10)
+    
+    # rotate points
+    array = rotate_points(array, rotation_angle)
 
     # remove underlying table   
     array = remove_table(array, table_mm)
@@ -49,8 +53,8 @@ def compute_crosssection(real_elev, output_elev, voxel, scan_file_path,
         print e
         gcore.warning("Failed to remove fuzzy edges")
         return
+
     array = trim_edges_nsew(array, trim_nsew)
-    gcore.run_command('g.region', rast=real_elev)
 
     array = scale_subsurface_flat(real_elev, array, zexag, base=table_height, height_mm=37, info_text=info_text)
     # save resulting array
@@ -76,8 +80,12 @@ def compute_crosssection(real_elev, output_elev, voxel, scan_file_path,
     except:
         pass
     functions = [func for func in dir(current_analyses) if func.startswith('run_') and func != 'run_command']
+
     for func in functions:
-        exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, info_text=info_text, env=env)')
+        try:
+            exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, info_text=info_text, env=env)')
+        except CalledModuleError, e:
+            print e
 
     remove_temp_regions(tmp_regions)
     gcore.run_command('g.remove', flags='f', type='raster', name=output_tmp1, env=env)
@@ -98,7 +106,7 @@ if __name__ == '__main__':
                          output_diff='diff',
                          output_cross='cross',
                          voxel='interp_2002_08_25',
-                         scan_file_path=scan_file_path,
+                         input_file=scan_file_path,
                          calib_matrix=calib_matrix,
                          zexag=0.7,
                          table_mm=0,
