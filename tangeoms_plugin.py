@@ -46,6 +46,7 @@ class TangeomsPlugin(wx.Dialog):
         self.elevInput = Select(self, size=(-1, -1), type='raster')
         self.zexag = wx.TextCtrl(self)
         self.height = wx.TextCtrl(self)
+        self.rotate = wx.SpinCtrl(self, min=0, max=360, initial=180)
         self.trim = {}
         for each in 'nsew':
             self.trim[each] = wx.TextCtrl(self, size=(25, -1))
@@ -82,6 +83,10 @@ class TangeomsPlugin(wx.Dialog):
         hSizer.Add(self.height, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         modelSizer.Add(hSizer, flag=wx.EXPAND)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(self, label="Rotation angle:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.rotate, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(wx.StaticText(self, label="Trim scan N, S, E, W [mm]:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         for each in 'nsew':
             hSizer.Add(self.trim[each], flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
@@ -111,6 +116,8 @@ class TangeomsPlugin(wx.Dialog):
         self.elevInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.zexag.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.height.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.rotate.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
+        self.rotate.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
         for each in 'nsew':
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
@@ -150,11 +157,13 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.data = {'scan_name': self.output, 'info_text': [],
                      'elevation': elev_real,
                      'zexag': 1., 'height': 5.,
+                     'rotation_angle': 180,
                      'trim_nsew': [0, 0, 0, 0],
                      'interpolate': True}
         self.elevInput.SetValue(self.data['elevation'])
         self.zexag.SetValue(str(self.data['zexag']))
         self.height.SetValue(str(self.data['height']))
+        self.rotate.SetValue(self.data['rotation_angle'])
         self.interpolate.SetValue(self.data['interpolate'])
         for i, each in enumerate('nsew'):
             self.trim[each].SetValue(str(self.data['trim_nsew'][i]))
@@ -189,7 +198,7 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.status.SetLabel("Importing scan ...")
         import_scan(input_file=self.tmp_file,
                     real_elev=self.data['elevation'], output_elev=self.data['scan_name'], info_text=self.data['info_text'],
-                    mm_resolution=0.002, calib_matrix=self.calib_matrix, trim_nsew=self.data['trim_nsew'],
+                    mm_resolution=0.002, calib_matrix=self.calib_matrix, rotation_angle=self.data['rotation_angle'], trim_nsew=self.data['trim_nsew'],
                     table_mm=self.data['height'], zexag=self.data['zexag'], interpolate=self.data['interpolate'])
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
@@ -199,13 +208,14 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.data['scan_name'] = name
 
     def OnModelProperties(self, event):
+        self.data['elevation'] = self.elevInput.GetValue()
+        self.data['rotation_angle'] = self.rotate.GetValue()
+        self.data['interpolate'] = self.interpolate.IsChecked()
         try:
-            self.data['elevation'] = self.elevInput.GetValue()
             self.data['zexag'] = float(self.zexag.GetValue())
             self.data['height'] = float(self.height.GetValue())
             for i, each in enumerate('nsew'):
                 self.data['trim_nsew'][i] = float(self.trim[each].GetValue())
-            self.data['interpolate'] = self.interpolate.IsChecked()
         except ValueError:
             pass
 
@@ -262,10 +272,10 @@ def runImport(guiParent, fileName, data, calib_matrix, stopEvent):
             lastTime = currTime
             import_scan(input_file=fileName, real_elev=data['elevation'], output_elev=data['scan_name'], info_text=data['info_text'],
                         mm_resolution=0.002, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'],
-                        table_mm=data['height'], zexag=data['zexag'], interpolate=data['interpolate'])
+                        table_mm=data['height'], zexag=data['zexag'], rotation_angle=data['rotation_angle'], interpolate=data['interpolate'])
 #            compute_crosssection(real_elev=data['elevation'], output_elev=data['scan_name'], voxel='interp_2002_08_25',
-#                                 scan_file_path=fileName, calib_matrix=calib_matrix, zexag=data['zexag'],
-#                                 table_mm=data['height'], trim_nsew=data['trim_nsew'], mm_resolution=0.001, info_text=data['info_text'])
+#                                 input_file=fileName, calib_matrix=calib_matrix, zexag=data['zexag'],
+#                                 table_mm=data['height'], rotation_angle=data['rotation_angle'], trim_nsew=data['trim_nsew'], mm_resolution=0.001, info_text=data['info_text'])
             evt = updateGUIEvt(guiParent.GetId())
             wx.PostEvent(guiParent, evt)
 

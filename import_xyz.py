@@ -18,21 +18,21 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 from grass.exceptions import CalledModuleError
 
-from scan_processing import  get_environment, remove_temp_regions, read_from_ascii, \
+from scan_processing import  get_environment, remove_temp_regions, rotate_points, read_from_ascii, \
     adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag, \
     interpolate_surface, bin_surface, trim_edges_nsew, remove_vector
 import current_analyses
 
 
 
-def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, trim_nsew, table_mm, zexag, interpolate, info_text):
+def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, rotation_angle, trim_nsew, table_mm, zexag, interpolate, info_text):
     output_tmp1 = "output_scan_tmp1"
 
     fd, temp_path = mkstemp()
     os.close(fd)
     os.remove(temp_path)
     try:
-        read_from_ascii(input_file=input_file, output_file=temp_path)
+        read_from_ascii(input_file=input_file, output_file=temp_path, rotate_180=False)
     except:
         return
 
@@ -41,7 +41,11 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
     fh.close()
 
     # calibrate points by given matrix
-    array = calibrate_points(array, calib_matrix).T
+    if calib_matrix is not None:
+        array = calibrate_points(array, calib_matrix).T
+    
+    # rotate points
+    array = rotate_points(array, rotation_angle)
 
     # remove underlying table
     try:
