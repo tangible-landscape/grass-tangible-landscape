@@ -18,25 +18,16 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 from grass.exceptions import CalledModuleError
 
-from scan_processing import  get_environment, remove_temp_regions, rotate_points, read_from_ascii, \
+from scan_processing import  get_environment, remove_temp_regions, rotate_points, \
     adjust_boundaries, remove_fuzzy_edges, calibrate_points, remove_table, scale_z_exag, \
     interpolate_surface, bin_surface, trim_edges_nsew, remove_vector
 import current_analyses
 
 
-
 def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, rotation_angle, trim_nsew, table_mm, zexag, interpolate, info_text):
     output_tmp1 = "output_scan_tmp1"
 
-    fd, temp_path = mkstemp()
-    os.close(fd)
-    os.remove(temp_path)
-    try:
-        read_from_ascii(input_file=input_file, output_file=temp_path, rotate_180=False)
-    except:
-        return
-
-    fh = open(temp_path, 'r')
+    fh = open(input_file, 'r')
     array = np.array([map(float, line.split()) for line in fh.readlines()])
     fh.close()
 
@@ -61,6 +52,9 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
         print e
         return
 
+    # trim edges
+    array = trim_edges_nsew(array, trim_nsew)
+
     # scale Z to original and apply exaggeration
     raster_info = grast.raster_info(real_elev)
     try:
@@ -68,10 +62,11 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
     except StandardError, e:
         print e
         return
-    # trim edges
-    array = trim_edges_nsew(array, trim_nsew)
 
     # save resulting array
+    fd, temp_path = mkstemp()
+    os.close(fd)
+    os.remove(temp_path)
     np.savetxt(temp_path, array, delimiter=" ")
 
     # import
@@ -97,8 +92,8 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
         return
 
     adjust_boundaries(real_elev=real_elev, scanned_elev=output_elev, env=env)
-    env = get_environment(tmp_regions, rast=output_elev)
     gcore.run_command('r.colors', map=output_elev, color='elevation', env=env)
+    env = get_environment(tmp_regions, rast=output_elev)
 
 ########### export point cloud for Rhino ##############
 #    output_xyz = os.path.join(os.path.realpath(gettempdir()), 'point_cloud.xyz') 
