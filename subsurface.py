@@ -8,7 +8,7 @@ import os
 import subprocess
 import tempfile
 import shutil
-from scan_processing import rotate_points, read_from_ascii, calibrate_points, remove_table, trim_edges_nsew, \
+from scan_processing import rotate_points, calibrate_points, remove_table, trim_edges_nsew, \
     scale_subsurface_flat, remove_fuzzy_edges, get_environment, adjust_boundaries, remove_temp_regions, \
     bin_surface
 
@@ -23,18 +23,10 @@ from grass.exceptions import CalledModuleError
 def compute_crosssection(real_elev, output_elev, voxel, input_file,
                          calib_matrix, zexag, trim_nsew, rotation_angle, table_mm, mm_resolution, info_text):
     output_tmp1 = "output_scan_tmp1"
-    fd, temp_path = tempfile.mkstemp()
-    os.close(fd)
-    os.remove(temp_path)
-    try:
-        read_from_ascii(input_file=scan_file_path, output_file=temp_path, rotate_180=False)
-    except:
-        gcore.warning("Failed to read from ascii")
-        return
-    fh = open(temp_path, 'r')
+
+    fh = open(input_file, 'r')
     array = np.array([map(float, line.split()) for line in fh.readlines()])
     fh.close()
-    os.remove(temp_path)
     
     # calibrate points by given matrix
     array = calibrate_points(array, calib_matrix).T
@@ -58,6 +50,9 @@ def compute_crosssection(real_elev, output_elev, voxel, input_file,
 
     array = scale_subsurface_flat(real_elev, array, zexag, base=table_height, height_mm=37, info_text=info_text)
     # save resulting array
+    fd, temp_path = tempfile.mkstemp()
+    os.close(fd)
+    os.remove(temp_path)
     np.savetxt(temp_path, array, delimiter=" ")
 
     # import
