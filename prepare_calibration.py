@@ -17,7 +17,7 @@ def write_matrix(matrix_path, min_z, max_z):
     os.remove(mesh_path)
     print "MEASURING AND CREATING MESH..."
     subprocess.call([os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kinect', 'scan_once', 'KinectFusionBasics-D2D.exe'),
-                     mesh_path, '20', str(min_z), str(max_z), '512', '384'])
+                     mesh_path, '20', str(min_z), str(max_z), '256 ', '256'])
     fd, temp_path = tempfile.mkstemp()
     os.close(fd)
     os.remove(temp_path)
