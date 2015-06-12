@@ -309,6 +309,28 @@ def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_e
         gcore.write_command('r.colors', map=output,  rules='-', stdin='0 {invis}\n1 {vis}'.format(vis=visible_color, invis=invisible_color), env=env)
 
 
+def polygons(points_map, raster_hull, env):
+    """Clusters markers together and creates polygons.
+    Requires GRASS 7.1."""
+    tmp_cluster = 'tmp_cluster'
+    tmp_hull = 'tmp_hull'
+    gcore.run_command('v.cluster', flags='t', input=points_map, min=3,  layer='3', output=tmp_cluster, method='optics', env=env)
+    cats = gcore.read_command('v.category', input=tmp_cluster, layer='3', option='print', env=env).strip().split()
+    cats_list = list(set(cats))
+    cats_dict = dict([(x, cats.count(x)) for x in cats_list])
+    for cat in cats_list:
+        if cats_dict[cat] > 2:
+            gcore.run_command('v.hull', input=tmp_cluster, output=tmp_hull + "_%s" % cat, cats=cat, layer='3', env=env)
+        elif cats_dict[cat] == 2:
+            points = gcore.read_command('v.out.ascii', input=tmp_cluster, format='point',
+                                        separator='space', layer='3', cats=cat, env=env).strip().splitlines()
+            ascii = 'L 2 1\n' + points[0] + '\n' + points[1] + '\n' + '1 1'
+            gcore.write_command('v.in.ascii', format='standard', input='-',
+                                flags='n', output=tmp_hull + '_%s' % cat, stdin=ascii, env=env)
+    gcore.run_command('v.patch', input=[tmp_hull + '_%s' % cat for cat in cats_list], output=tmp_hull, env=env)
+    gcore.run_command('v.to.rast', input=tmp_hull, output=raster_hull, type='area,line', use='val', value=1, env=env)
+
+
 def cross_section(scanned_elev, voxel, new, env):
     gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True, env=env)
     gcore.run_command('r.colors', map=new, volume=voxel, env=env)
