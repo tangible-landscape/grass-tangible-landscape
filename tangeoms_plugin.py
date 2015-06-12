@@ -45,6 +45,7 @@ class TangeomsPlugin(wx.Dialog):
         # widgets for model
         self.elevInput = Select(self, size=(-1, -1), type='raster')
         self.zexag = wx.TextCtrl(self)
+        self.removeTable = wx.CheckBox(self, label="Remove underlying table")
         self.height = wx.TextCtrl(self)
         self.rotate = wx.SpinCtrl(self, min=0, max=360, initial=180)
         self.trim = {}
@@ -79,7 +80,11 @@ class TangeomsPlugin(wx.Dialog):
         hSizer.Add(self.zexag, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         modelSizer.Add(hSizer, flag=wx.EXPAND)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Height above table [mm]:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.removeTable, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.AddSpacer(20)
+        hSizer.Add(wx.StaticText(self, label="Height above table [mm]:"), proportion=3, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         hSizer.Add(self.height, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         modelSizer.Add(hSizer, flag=wx.EXPAND)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -111,16 +116,6 @@ class TangeomsPlugin(wx.Dialog):
         self.btnPause.Bind(wx.EVT_BUTTON, lambda evt: self.Pause())
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(EVT_UPDATE_GUI, self.OnUpdate)
-        self.scan_name.Bind(wx.EVT_TEXT, self.OnScanName)
-        # model parameters
-        self.elevInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
-        self.zexag.Bind(wx.EVT_TEXT, self.OnModelProperties)
-        self.height.Bind(wx.EVT_TEXT, self.OnModelProperties)
-        self.rotate.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
-        self.rotate.Bind(wx.EVT_TEXT, self.OnModelProperties)
-        self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
-        for each in 'nsew':
-            self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -159,7 +154,8 @@ class TangeomsImportPlugin(TangeomsPlugin):
                      'zexag': 1., 'height': 5.,
                      'rotation_angle': 180,
                      'trim_nsew': [0, 0, 0, 0],
-                     'interpolate': True}
+                     'interpolate': True,
+                     'if_remove_table': True}
         self.elevInput.SetValue(self.data['elevation'])
         self.zexag.SetValue(str(self.data['zexag']))
         self.height.SetValue(str(self.data['height']))
@@ -168,6 +164,7 @@ class TangeomsImportPlugin(TangeomsPlugin):
         for i, each in enumerate('nsew'):
             self.trim[each].SetValue(str(self.data['trim_nsew'][i]))
         self.interpolate.SetValue(self.data['interpolate'])
+        self.removeTable.SetValue(self.data['if_remove_table'])
 
         calib = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy')
         if os.path.exists(calib):
@@ -177,6 +174,20 @@ class TangeomsImportPlugin(TangeomsPlugin):
             giface.WriteWarning("WARNING: No calibration file exists")
         self.threadI = None
         self.stopEvt = None
+        self.BindModelProperties()
+
+    def BindModelProperties(self):
+        self.scan_name.Bind(wx.EVT_TEXT, self.OnScanName)
+        # model parameters
+        self.elevInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.zexag.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.height.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.rotate.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
+        self.rotate.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
+        for each in 'nsew':
+            self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.removeTable.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
 
     def _isRunning(self):
         ps = subprocess.Popen(['tasklist', '/fi', 'imagename eq KinectFusionExplorer-D2D.exe', '/nh'], stdout=subprocess.PIPE)
@@ -197,7 +208,7 @@ class TangeomsImportPlugin(TangeomsPlugin):
         subprocess.call([kinect_app, self.tmp_file, '40', '0.4', '1.2', '512', '384']) # last 2 parameters must be 128/384/512 (larger for bigger models)
         self.status.SetLabel("Importing scan ...")
         import_scan(input_file=self.tmp_file,
-                    real_elev=self.data['elevation'], output_elev=self.data['scan_name'], info_text=self.data['info_text'],
+                    real_elev=self.data['elevation'], output_elev=self.data['scan_name'], info_text=self.data['info_text'], if_remove_table=self.data['if_remove_table'],
                     mm_resolution=0.002, calib_matrix=self.calib_matrix, rotation_angle=self.data['rotation_angle'], trim_nsew=self.data['trim_nsew'],
                     table_mm=self.data['height'], zexag=self.data['zexag'], interpolate=self.data['interpolate'])
         self.status.SetLabel("Done.")
@@ -211,6 +222,9 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.data['elevation'] = self.elevInput.GetValue()
         self.data['rotation_angle'] = self.rotate.GetValue()
         self.data['interpolate'] = self.interpolate.IsChecked()
+        self.data['if_remove_table'] = self.removeTable.IsChecked()
+        self.height.Enable(self.data['if_remove_table'])
+
         try:
             self.data['zexag'] = float(self.zexag.GetValue())
             self.data['height'] = float(self.height.GetValue())
@@ -271,7 +285,7 @@ def runImport(guiParent, fileName, data, calib_matrix, stopEvent):
                 continue
             lastTime = currTime
             import_scan(input_file=fileName, real_elev=data['elevation'], output_elev=data['scan_name'], info_text=data['info_text'],
-                        mm_resolution=0.002, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'],
+                        mm_resolution=0.002, calib_matrix=calib_matrix, trim_nsew=data['trim_nsew'], if_remove_table=data['if_remove_table'],
                         table_mm=data['height'], zexag=data['zexag'], rotation_angle=data['rotation_angle'], interpolate=data['interpolate'])
 #            compute_crosssection(real_elev=data['elevation'], output_elev=data['scan_name'], voxel='interp_2002_08_25',
 #                                 input_file=fileName, calib_matrix=calib_matrix, zexag=data['zexag'],
