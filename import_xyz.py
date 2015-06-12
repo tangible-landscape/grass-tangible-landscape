@@ -24,7 +24,7 @@ from scan_processing import  get_environment, remove_temp_regions, rotate_points
 import current_analyses
 
 
-def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, rotation_angle, trim_nsew, table_mm, zexag, interpolate, info_text):
+def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix, rotation_angle, trim_nsew, if_remove_table, table_mm, zexag, interpolate, info_text):
     output_tmp1 = "output_scan_tmp1"
 
     fh = open(input_file, 'r')
@@ -36,14 +36,16 @@ def import_scan(input_file, real_elev, output_elev, mm_resolution, calib_matrix,
         array = calibrate_points(array, calib_matrix).T
     
     # rotate points
-    array = rotate_points(array, rotation_angle)
+    if rotation_angle != 0:
+        array = rotate_points(array, rotation_angle)
 
     # remove underlying table
-    try:
-        array = remove_table(array, table_mm)
-    except StandardError, e:
-        print e
-        return
+    if if_remove_table:
+        try:
+            array = remove_table(array, table_mm)
+        except StandardError, e:
+            print e
+            return
 
     # remove fuzzy edges
     try:
@@ -137,6 +139,7 @@ def main():
                 output_elev='scan',
                 mm_resolution=0.001,
                 calib_matrix=calib_matrix,
+                if_remove_table=True,
                 table_mm=5, zexag=3,
                 interpolate=False,
                 trim_nsew=[0, 0, 0, 0],
