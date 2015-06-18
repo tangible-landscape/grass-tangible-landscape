@@ -9,6 +9,7 @@ This program is free software under the GNU General Public License
 """
 import os
 import shutil
+from math import sqrt
 
 from grass.script import core as gcore
 from grass.script import raster as grast
@@ -309,7 +310,7 @@ def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_e
         gcore.write_command('r.colors', map=output,  rules='-', stdin='0 {invis}\n1 {vis}'.format(vis=visible_color, invis=invisible_color), env=env)
 
 
-def polygons(points_map, raster_hull, env):
+def polygons(points_map, output, env):
     """Clusters markers together and creates polygons.
     Requires GRASS 7.1."""
     tmp_cluster = 'tmp_cluster'
@@ -327,8 +328,37 @@ def polygons(points_map, raster_hull, env):
             ascii = 'L 2 1\n' + points[0] + '\n' + points[1] + '\n' + '1 1'
             gcore.write_command('v.in.ascii', format='standard', input='-',
                                 flags='n', output=tmp_hull + '_%s' % cat, stdin=ascii, env=env)
-    gcore.run_command('v.patch', input=[tmp_hull + '_%s' % cat for cat in cats_list], output=tmp_hull, env=env)
-    gcore.run_command('v.to.rast', input=tmp_hull, output=raster_hull, type='area,line', use='val', value=1, env=env)
+    gcore.run_command('v.patch', input=[tmp_hull + '_%s' % cat for cat in cats_list], output=output, env=env)
+    gcore.run_command('v.to.rast', input=output, output=output, type='area,line', use='val', value=1, env=env)
+
+
+def polylines(points_map, output, env):
+    """Cluster points and connect points by line in each cluster"""
+    tmp_cluster = 'tmp_cluster'
+    gcore.run_command('v.cluster', flags='t', input=points_map, min=3,  layer='3', output=tmp_cluster, method='optics', env=env)
+    cats = gcore.read_command('v.category', input=tmp_cluster, layer=3, option='print', env=env).strip()
+    cats = list(set(cats.split()))
+    line = ''
+    for cat in cats:
+        point_list = []
+        distances = {}
+        points = gcore.read_command('v.out.ascii', input=tmp_cluster, layer=3,
+                                    type='point', cats=cat, format='point', env=env).strip().split()
+        for point in points:
+            point = point.split('|')[:2]
+            point_list.append((float(point[0]), float(point[1])))
+        for i, point1 in enumerate(point_list[:-1]):
+            for point2 in point_list[i + 1:]:
+                distances[(point1, point2)] = sqrt((point1[0] - point2[0]) * (point1[0] - point2[0]) +
+                                                   (point1[1] - point2[1]) * (point1[1] - point2[1]))
+        ordered = sorted(distances.items(), key=lambda x: x[1])[:len(points) - 1]
+        for key, value in ordered:
+            line += 'L 2 1\n'
+            line += '{x} {y}\n'.format(x=key[0][0], y=key[0][1])
+            line += '{x} {y}\n'.format(x=key[1][0], y=key[1][1])
+            line += '1 {cat}\n\n'.format(cat=cat)
+    gcore.write_command('v.in.ascii', input='-', stdin=line, output=output, format='standard', flags='n', env=env)
+    gcore.run_command('v.to.rast', input=output, output=output, type='line', use='cat', env=env)
 
 
 def cross_section(scanned_elev, voxel, new, env):
