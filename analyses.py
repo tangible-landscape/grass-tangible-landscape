@@ -25,6 +25,11 @@ def difference(real_elev, scanned_elev, new, env):
     gcore.run_command('r.mapcalc', expression=expression, overwrite=True, env=env)
     gcore.run_command('r.colors', map=new, color='differences', env=env)
 
+def match_scan(base, scan, matched, env):
+    """Vertically match scan to base using linear regression"""
+    coeff = gcore.parse_command('r.regression.line', mapx=scan, mapy=base, flags='g', env=env)
+    grast.mapcalc(exp="{matched} = {a} + {b} * {scan}".format(matched=matched, scan=scan, a=coeff['a'], b=coeff['b']), env=env)
+
 
 def flowacc(scanned_elev, new, env):
     gcore.run_command('r.flow', elevation=scanned_elev, flowaccumulation=new, overwrite=True, env=env)
