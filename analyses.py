@@ -20,10 +20,12 @@ from scan_processing import remove_vector, get_environment, remove_temp_regions
 def difference(real_elev, scanned_elev, new, env):
     """!Computes difference of original and scanned (scan - orig)."""
     info = grast.raster_info(real_elev)
-    expression = "{new} = {scanned_elev} - {real_elev}".format(new=new, real_elev=real_elev,
-                 scanned_elev=scanned_elev, max=info['max'], min=info['min'])
-    gcore.run_command('r.mapcalc', expression=expression, overwrite=True, env=env)
+    regression='regression'
+    regression_params = gcore.parse_command('r.regression.line', flags='g', mapx=real_elev, mapy=scanned_elev, overwrite=True, env=env)
+    gcore.run_command('r.mapcalc', expression='{regression} = {a} + {b} * {before}'.format(a=regression_params['a'], b=regression_params['b'],before=real_elev,regression=regression), overwrite=True, env=env)
+    gcore.run_command('r.mapcalc', expression='{difference} = {regression} - {after}'.format(regression=regression,after=scanned_elev,difference=new, max=info['max'], min=info['min']), overwrite=True, env=env)
     gcore.run_command('r.colors', map=new, color='differences', env=env)
+
 
 def match_scan(base, scan, matched, env):
     """Vertically match scan to base using linear regression"""
@@ -41,7 +43,8 @@ def slope(scanned_elev, new, env):
 
 def aspect(scanned_elev, new, env):
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=new, overwrite=True, env=env)
-    
+
+
 def slope_aspect(scanned_elev, slope, aspect, env):
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=aspect, slope=slope, overwrite=True, env=env)
     gcore.run_command('r.colors', map=aspect, color='aspectcolr', env=env)
@@ -230,7 +233,7 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
             gcore.warning("No change found!")
     else:
         gcore.warning("No change found!")
-    
+
     gcore.run_command('g.remove', flags='f', type='raster', name=[diff_thr, diff_thr_clump])
     remove_temp_regions(tmp_regions)
 
@@ -252,7 +255,7 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
     walk_tmp = 'walk_tmp'
     walk_dir_tmp = 'walk_dir_tmp'
     raster_route_tmp = 'raster_route_tmp'
-    
+
     if mask:
         gcore.message('Activating mask')
         gcore.run_command('r.mask', raster=mask, overwrite=True, env=env)
@@ -270,7 +273,7 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
 
         trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
               walk_tmp, walk_dir_tmp, point_from, points_to, raster_route_tmp, vector_routes_list_drain, env)
-    remove_vector(vector_routes)          
+    remove_vector(vector_routes)
     gcore.run_command('v.patch', input=vector_routes_list, output=vector_routes, overwrite=True, env=env)
 
     gcore.run_command('g.remove', flags='f', type='raster', name=[walk_tmp, walk_dir_tmp, raster_route_tmp], env=env)
@@ -285,7 +288,7 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
 def trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
           walk, walk_dir, point_from, points_to, raster_route, vector_routes, env):
     gcore.run_command('r.walk',overwrite=True, flags='k', elevation=scanned_elev,
-                      friction=friction, output=walk, start_coordinates=point_from, outdir=walk_dir, 
+                      friction=friction, output=walk, start_coordinates=point_from, outdir=walk_dir,
                       stop_coordinates=points_to, walk_coeff=walk_coeff, _lambda=_lambda, slope_factor=slope_factor, env=env)
     for i in range(len(points_to)):
         gcore.run_command('r.drain', overwrite=True, input=walk, indir=walk_dir, flags='d', vector_output=vector_routes[i],
@@ -303,7 +306,7 @@ def trail_salesman(trails, points, output, env):
     remove_vector(net_tmp)
 
 
-def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7, env=None):   
+def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7, env=None):
     coordinates = gcore.read_command('v.out.ascii', input=vector, separator=',', env=env).strip()
     coordinate = None
     for line in coordinates.split(os.linesep):
