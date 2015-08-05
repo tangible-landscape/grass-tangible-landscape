@@ -21,7 +21,7 @@ def write_matrix(matrix_path, min_z, max_z):
     fd, temp_path = tempfile.mkstemp()
     os.close(fd)
     os.remove(temp_path)
-    read_from_ascii(input_file=mesh_path, output_file=temp_path)
+    read_from_ascii(input_file=mesh_path, output_file=temp_path, rotate_180=False)
     os.remove(mesh_path)
 
     fh = open(temp_path, 'r')
