@@ -140,6 +140,8 @@ class TangeomsPlugin(wx.Dialog):
         print 'REMOVE EVERYTHING FROM TABLE'
         matrix_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.npy')
         write_matrix(matrix_path=matrix_file_path, min_z=0.5, max_z=1.2)
+        # update
+        self.calib_matrix = np.load(matrix_file_path)
 
 
 class TangeomsImportPlugin(TangeomsPlugin):
