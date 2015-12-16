@@ -341,22 +341,6 @@ def get_environment(tmp_regions, **kwargs):
     return env
 
 
-def remove_vector(name, deleteTable=False):
-    """Helper function to workaround problem with deleting vectors"""
-    gisenv = gcore.gisenv()
-    path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', name)
-    if deleteTable:
-        try:
-            gcore.run_command('db.droptable', table=name, flags='f')
-        except CalledModuleError:
-            pass
-    if os.path.exists(path_to_vector):
-        try:
-            shutil.rmtree(path_to_vector)
-        except WindowsError:
-            pass
-
-
 def remove_temp_regions(regions):
     """!Removes temporary regions."""
     gisenv = gcore.gisenv()
@@ -370,7 +354,6 @@ def adjust_boundaries(real_elev, scanned_elev, env):
 
 
 def interpolate_surface(input_file, output_raster, temporary_vector, env):
-    remove_vector(temporary_vector)
     gcore.run_command('v.in.ascii', flags='ztb', z=3, separator=" ", input=input_file, output=temporary_vector, overwrite=True, env=env)
     gcore.run_command('v.surf.rst', input=temporary_vector, tension=25, segmax=100, dmin=0.003, smooth=5, npmin=150,
                       elevation=output_raster, overwrite=True, env=env)
