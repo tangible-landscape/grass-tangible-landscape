@@ -14,7 +14,7 @@ from math import sqrt
 from grass.script import core as gcore
 from grass.script import raster as grast
 
-from scan_processing import remove_vector, get_environment, remove_temp_regions
+from scan_processing import get_environment, remove_temp_regions
 
 
 def difference(real_elev, scanned_elev, new, env):
@@ -121,8 +121,6 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
         info = grast.raster_info(scanned_elev)
         step = (info['max'] - info['min']) / 12.
     try:
-        if gcore.find_file(new, element='vector')['name']:
-            remove_vector(new)
         if maxlevel is None:
             gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, flags='t', env=env)
         else:
@@ -224,11 +222,8 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
                 expression += '{diff_thr_clump} == {val}'.format(diff_thr_clump=diff_thr_clump, val=cat)
             expression += '), 1, null())'
             gcore.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
-            remove_vector(change_vector)
             gcore.run_command('r.to.vect', flags='st', input=change, output=change_vector, type='area', env=env)
-            remove_vector(change)
             gcore.run_command('v.to.points', flags='t', input=change_vector, type='centroid', output=change, env=env)
-            remove_vector(change_vector)
         else:
             gcore.warning("No change found!")
     else:
@@ -266,22 +261,18 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
         vector_routes_list_drain = []
         for each in points_to:
             vector_route_tmp = 'route_path_' + str(k)
-            remove_vector(vector_route_tmp)
             vector_routes_list_drain.append(vector_route_tmp)
             k += 1
         vector_routes_list.extend(vector_routes_list_drain)
 
         trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
               walk_tmp, walk_dir_tmp, point_from, points_to, raster_route_tmp, vector_routes_list_drain, env)
-    remove_vector(vector_routes)
     gcore.run_command('v.patch', input=vector_routes_list, output=vector_routes, overwrite=True, env=env)
 
     gcore.run_command('g.remove', flags='f', type='raster', name=[walk_tmp, walk_dir_tmp, raster_route_tmp], env=env)
     gcore.message('Removing mask')
     if mask:
         gcore.run_command('r.mask', flags='r', env=env)
-    for vmap in vector_routes_list:
-        remove_vector(vmap)
 
 
 # procedure for finding a trail in real-time
@@ -300,10 +291,8 @@ def trail_salesman(trails, points, output, env):
                       operation='connect', threshold=10, overwrite=True, env=env)
     cats = gcore.read_command('v.category', input=net_tmp, layer=2,
                               option='print', env=env).strip().split(os.linesep)
-    remove_vector(output)
     gcore.run_command('v.net.salesman', input=net_tmp, output=output,
                       ccats=','.join(cats), alayer=1, nlayer=2, overwrite=True, env=env)
-    remove_vector(net_tmp)
 
 
 def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7, env=None):
@@ -391,9 +380,6 @@ def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env
             break
     if axes:
         gcore.run_command('db.droptable', flags='f', table=axes, env=env)
-        remove_vector(axes)
-    if slice_line:
-        remove_vector(slice_line)
     gcore.run_command('r3.slice', overwrite=True, input=voxel, output=slice_,
                       coordinates=','.join(coords_list), axes=axes, slice_line=slice_line, units=units, offset=offset, env=env)
 
@@ -404,7 +390,5 @@ def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env):
 
     for coords in coordinates.split(os.linesep):
         coords_list.extend(coords.split(',')[:2])
-    if axes:
-        remove_vector(axes)
     gcore.run_command('r3.borehole', overwrite=True, input=voxel, output=new,
                       coordinates=','.join(coords_list), size=size, offset_size=offset, axes=axes, unit=unit, env=env)
