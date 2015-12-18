@@ -56,3 +56,29 @@ import grass.script as gscript
 #
 #    analyses.cross_section(scanned_elev=scanned_elev, voxel=voxel, new='cross', env=env)
 #    analyses.contours(scanned_elev=scanned_elev, new='scanned_contours', step=5., maxlevel=0, env=env)
+
+def run_prepare_termites(scanned_elev, env, **kwargs):
+    analyses.change_detection_area(before='scan_saved', after=scanned_elev, change='change',
+                                   height_threshold=10, filter_slope_threshold=10, add=True, env=env)
+    habitat = 'habitat_block_clip'
+    habitat_changed = 'habitat_changed'
+    tmp_regions = []
+    env1 = get_environment(tmp_regions, raster=habitat, n='n-200', s='s+200', e='e-200', w='w+200')
+    gscript.mapcalc(exp="binary = if(not(isnull(change)), 1, 0)", env=env1)
+    gscript.mapcalc(exp="{habitat_changed} = if(binary, 1, {habitat})".format(habitat=habitat, habitat_changed=habitat_changed), env=env1)
+    gscript.run_command('r.colors', map=habitat_changed, raster=habitat, env=env1)
+    remove_temp_regions(tmp_regions)
+
+
+
+def model_termites(habitat_changed, init_colonies, output):
+    tmp_regions = []
+    env = get_environment(tmp_regions, raster=habitat_changed)
+    subprocess.call(['Rscript', '/home/gis/Development/termites/CA_iso.R',
+                     '--habitat=' + habitat_changed, '--sources=' + init_colonies, '--image=ortho.tiff', '--start=2003', '--end=2020',
+                     '--tab=NewCol_table.csv', '--maxd=7', '--kdist=1000', '--output=' + output], env=env)
+    gscript.run_command('t.create', output=output, title='title', description='descrition', env=env)
+    maps = gscript.list_grouped('raster', pattern=output + "_*")[gscript.gisenv()['MAPSET']]
+    gscript.run_command('t.register', input=output, maps=','.join(maps[1:]), env=env)
+    gscript.run_command('t.rast.colors', input=output, rules='/home/gis/Development/termites/infection_colors.txt', env=env)
+    remove_temp_regions(tmp_regions)

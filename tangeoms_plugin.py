@@ -41,6 +41,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.notebook = wx.Notebook(self)
         scanning_panel = wx.Panel(self.notebook)
         self.notebook.AddPage(scanning_panel, "Scanning")
+        from termites_gui import TermitesPanel
+        temites_panel = TermitesPanel(self.notebook, self.giface)
+        self.notebook.AddPage(temites_panel, "Termites")
         self.layout(scanning_panel)
         self.Layout()
         
