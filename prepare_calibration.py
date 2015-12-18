@@ -9,8 +9,8 @@ import grass.script as gscript
 
 
 def write_matrix(matrix_path):
-    res = gscript.parse_command('v.in.kinect', output='dummy', method='mean',
-                                    flags='c', quiet=True, overwrite=True)
+    res = gscript.parse_command('r.in.kinect', output='dummy', method='mean',
+                                flags='c', overwrite=True)
     if res['calib_matrix'] and len(res['calib_matrix'].split(',')) == 9:
         gscript.message(_("Rotation matrix successfully written to %s") % matrix_path)
     with open(matrix_path, 'w') as f:
