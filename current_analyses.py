@@ -4,8 +4,11 @@ This file serves as a control file with analyses
 which are running in real-time. The name of the analyses
 must start with 'run_'. The file has to be saved so that the change is applied.
 """
+import subprocess
 
 import analyses
+from utils import get_environment, remove_temp_regions
+import grass.script as gscript
 
 
 #def run_difference(real_elev, scanned_elev, env, **kwargs):

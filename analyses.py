@@ -14,7 +14,7 @@ from math import sqrt
 from grass.script import core as gcore
 from grass.script import raster as grast
 
-from scan_processing import get_environment, remove_temp_regions
+from utils import get_environment, remove_temp_regions
 
 
 def difference(real_elev, scanned_elev, new, env):

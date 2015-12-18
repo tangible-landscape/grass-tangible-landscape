@@ -1,6 +1,6 @@
 from grass.exceptions import CalledModuleError
 import current_analyses
-from scan_processing import get_environment, remove_temp_regions
+from utils import get_environment, remove_temp_regions
 
 def run_analyses(output_elev, real_elev, zexag):
     tmp_regions = []

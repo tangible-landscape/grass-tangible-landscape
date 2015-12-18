@@ -26,12 +26,12 @@ updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
 
 class TangeomsPlugin(wx.Dialog):
     def __init__(self, giface, parent):
-        wx.Dialog.__init__(self, parent, title="Tangeoms plugin", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        wx.Dialog.__init__(self, parent, title="Tangible Landscape", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.giface=giface
         self.parent=parent
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        modelBox = wx.StaticBox(self, label="Model parameters")
+        modelBox = wx.StaticBox(self, label="Scanning parameters")
         modelSizer = wx.StaticBoxSizer(modelBox, wx.VERTICAL)
 
         # create widgets
@@ -45,8 +45,10 @@ class TangeomsPlugin(wx.Dialog):
         self.textInfo = wx.TextCtrl(self, size=(-1, 100), style=wx.TE_MULTILINE | wx.TE_READONLY)
         # widgets for model
         self.elevInput = Select(self, size=(-1, -1), type='raster')
+        self.regionInput = Select(self, size=(-1, -1), type='region')
         self.zexag = wx.TextCtrl(self)
         self.rotate = wx.SpinCtrl(self, min=0, max=360, initial=180)
+        self.numscans = wx.SpinCtrl(self, min=1, max=5, initial=1)
         self.trim = {}
         for each in 'nsewtb':
             self.trim[each] = wx.TextCtrl(self, size=(35, -1))
@@ -75,9 +77,19 @@ class TangeomsPlugin(wx.Dialog):
         hSizer.Add(wx.StaticText(self, label="Reference DEM:"), flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         hSizer.Add(self.elevInput, proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         modelSizer.Add(hSizer, flag=wx.EXPAND)
+        # region
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(self, label="Reference region:"), flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.regionInput, proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         hSizer.Add(self.zexag, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        modelSizer.Add(hSizer, flag=wx.EXPAND)
+        # number of scans
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(self, label="Number of scans:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.numscans, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         modelSizer.Add(hSizer, flag=wx.EXPAND)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(wx.StaticText(self, label="Rotation angle:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
@@ -158,14 +170,15 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.minZ = minZ
         self.maxZ = maxZ
         self.data = {'scan_name': self.output, 'info_text': [],
-                     'elevation': elev_real,
-                     'zexag': 1., 'smooth': 7,
+                     'elevation': elev_real, 'region': '',
+                     'zexag': 1., 'smooth': 7, 'numscans': 1,
                      'rotation_angle': 180, 'resolution': 2,
                      'trim_nsewtb': [0, 0, 0, 0, 60, 100],
                      'interpolate': False}
         self.elevInput.SetValue(self.data['elevation'])
         self.zexag.SetValue(str(self.data['zexag']))
         self.rotate.SetValue(self.data['rotation_angle'])
+        self.numscans.SetValue(self.data['numscans'])
         self.interpolate.SetValue(self.data['interpolate'])
         for i, each in enumerate('nsewtb'):
             self.trim[each].SetValue(str(self.data['trim_nsewtb'][i]))
@@ -192,9 +205,12 @@ class TangeomsImportPlugin(TangeomsPlugin):
         self.scan_name.Bind(wx.EVT_TEXT, self.OnScanName)
         # model parameters
         self.elevInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.regionInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.zexag.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.rotate.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
         self.rotate.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.numscans.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
+        self.numscans.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
         self.smooth.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.resolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
@@ -211,12 +227,14 @@ class TangeomsImportPlugin(TangeomsPlugin):
             params['calib_matrix'] = self.calib_matrix
         if self.data['elevation']:
             params['raster'] = self.data['elevation']
+        elif self.data['region']:
+            params['region'] = self.data['region']
         trim_nsew = ','.join([str(i) for i in self.data['trim_nsewtb'][:4]])
         zrange = ','.join([str(i) for i in self.data['trim_nsewtb'][4:]])
-        self.process = gscript.start_command('v.in.kinect', output=self.data['scan_name'],             
+        self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],             
                               quiet=True, trim=trim_nsew, smooth_radius=float(self.data['smooth'])/1000,
                               zrange=zrange, rotate=self.data['rotation_angle'], resolution=float(self.data['resolution'])/1000,
-                              zexag=self.data['zexag'], overwrite=True, **params)
+                              zexag=self.data['zexag'], numscan=self.data['numscans'], overwrite=True, **params)
         self.status.SetLabel("Importing scan ...")
         self.process.wait()
         self.process = None
@@ -234,7 +252,9 @@ class TangeomsImportPlugin(TangeomsPlugin):
 
     def OnModelProperties(self, event):
         self.data['elevation'] = self.elevInput.GetValue()
+        self.data['region'] = self.elevInput.GetValue()
         self.data['rotation_angle'] = self.rotate.GetValue()
+        self.data['numscans'] = self.numscans.GetValue()
         self.data['interpolate'] = self.interpolate.IsChecked()
         self.data['smooth'] = self.smooth.GetValue()
         self.data['resolution'] = self.resolution.GetValue()
@@ -273,13 +293,15 @@ class TangeomsImportPlugin(TangeomsPlugin):
             params['calib_matrix'] = self.calib_matrix
         if self.data['elevation']:
             params['raster'] = self.data['elevation']
+        elif self.data['region']:
+            params['region'] = self.data['region']
         trim_nsew = ','.join([str(i) for i in self.data['trim_nsewtb'][:4]])
         zrange = ','.join([str(i) for i in self.data['trim_nsewtb'][4:]])
-        self.process = gscript.start_command('v.in.kinect', output=self.data['scan_name'],
+        self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],
                               quiet=True, trim=trim_nsew, smooth_radius=float(self.data['smooth'])/1000,
-                              zrange=zrange, rotate=self.data['rotation_angle'], method=method,
-                              zexag=self.data['zexag'], overwrite=True, flags='l', resolution=float(self.data['resolution'])/1000,
-                              **params)
+                              zrange=zrange, rotate=self.data['rotation_angle'], method=method, 
+                              zexag=self.data['zexag'], numscan=self.data['numscans'], overwrite=True,
+                              flags='l', resolution=float(self.data['resolution'])/1000, **params)
         self.status.SetLabel("Real-time scanning is running now.")
         gisenv = gscript.gisenv()
         path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'fcell')
