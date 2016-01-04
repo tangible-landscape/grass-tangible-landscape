@@ -64,8 +64,9 @@ def run_prepare_termites(scanned_elev, env, **kwargs):
     habitat_changed = 'habitat_changed'
     tmp_regions = []
     env1 = get_environment(tmp_regions, raster=habitat, n='n-200', s='s+200', e='e-200', w='w+200')
+    env2 = get_environment(tmp_regions, raster=habitat)
     gscript.mapcalc(exp="binary = if(not(isnull(change)), 1, 0)", env=env1)
-    gscript.mapcalc(exp="{habitat_changed} = if(binary, 1, {habitat})".format(habitat=habitat, habitat_changed=habitat_changed), env=env)
+    gscript.mapcalc(exp="{habitat_changed} = if(binary, 1, {habitat})".format(habitat=habitat, habitat_changed=habitat_changed), env=env2)
     gscript.run_command('r.colors', map=habitat_changed, raster=habitat, env=env1)
     remove_temp_regions(tmp_regions)
 
@@ -92,7 +93,7 @@ def model_termites(habitat_changed, init_colonies, output, round):
     gscript.run_command('v.db.update', map='score', layer=1, column='area', value=before + str(round) + ': ' + str(int(area)), env=env)
     
     # save results
-    gscript.run_command('g.rename', vector=[init_colonies.split('@')[0], init_colonies.split('@')[0] + name], env=env)
+    gscript.run_command('g.copy', vector=[init_colonies.split('@')[0], init_colonies.split('@')[0] + name], env=env)
     if round > 1:
         gscript.run_command('g.rename', raster=[habitat_changed.split('@')[0], habitat_changed.split('@')[0] + name], env=env)
     path = '/home/gis/Desktop/results.csv'
