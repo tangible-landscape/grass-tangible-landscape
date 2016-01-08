@@ -36,14 +36,14 @@ class TangibleLandscapePlugin(wx.Dialog):
                      'zexag': 1., 'smooth': 7, 'numscans': 1,
                      'rotation_angle': 180, 'resolution': 2,
                      'trim_nsewtb': [0, 0, 0, 0, 60, 100],
-                     'interpolate': False}
-                     
+                     'interpolate': False, 'trim_tolerance': 0.5}
+
         self.notebook = wx.Notebook(self)
         scanning_panel = wx.Panel(self.notebook)
         self.notebook.AddPage(scanning_panel, "Scanning")
         self.layout(scanning_panel)
         self.Layout()
-        
+
         self.elevInput.SetValue(self.data['elevation'])
         self.zexag.SetValue(str(self.data['zexag']))
         self.rotate.SetValue(self.data['rotation_angle'])
@@ -54,6 +54,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.interpolate.SetValue(self.data['interpolate'])
         self.smooth.SetValue(str(self.data['smooth']))
         self.resolution.SetValue(str(self.data['resolution']))
+        self.trim_tolerance.SetValue(str(self.data['trim_tolerance']))
 
         calib = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.txt')
         if os.path.exists(calib):
@@ -69,7 +70,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.changedInput = False
         self.Bind(wx.EVT_TIMER, self.RestartIfNotRunning, self.timer)
         self.BindModelProperties()
-        
+
     def layout(self, panel):
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -86,14 +87,15 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.elevInput = Select(panel, size=(-1, -1), type='raster')
         self.regionInput = Select(panel, size=(-1, -1), type='region')
         self.zexag = wx.TextCtrl(panel)
-        self.rotate = wx.SpinCtrl(panel, min=0, max=360, initial=180)
         self.numscans = wx.SpinCtrl(panel, min=1, max=5, initial=1)
+        self.rotate = wx.SpinCtrl(panel, min=0, max=360, initial=180)
+        self.smooth = wx.TextCtrl(panel)
+        self.resolution = wx.TextCtrl(panel)
         self.trim = {}
         for each in 'nsewtb':
             self.trim[each] = wx.TextCtrl(panel, size=(35, -1))
+        self.trim_tolerance = wx.TextCtrl(panel)
         self.interpolate = wx.CheckBox(panel, label="Use interpolation instead of binning")
-        self.smooth = wx.TextCtrl(panel)
-        self.resolution = wx.TextCtrl(panel)
 
         # layout
         hSizer.Add(btnStart, flag=wx.EXPAND | wx.ALL, border=5)
@@ -145,6 +147,10 @@ class TangibleLandscapePlugin(wx.Dialog):
         hSizer.Add(wx.StaticText(panel, label="Trim scan N, S, E, W [cm]:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         for each in 'nsew':
             hSizer.Add(self.trim[each], flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        mainSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(wx.StaticText(panel, label="Trim tolerance [0-1]:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(self.trim_tolerance, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
         mainSizer.Add(hSizer, flag=wx.EXPAND)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(wx.StaticText(panel, label="Limit scan vertically T, B [cm]:"), proportion=1, flag=wx.ALL|wx.ALIGN_CENTER_VERTICAL, border=3)
@@ -208,6 +214,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
         self.smooth.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.resolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
         for each in 'nsewtb':
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
 
@@ -217,6 +224,10 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Scanning...")
         wx.SafeYield()
         params = {}
+        if self.data['interpolate']:
+            method = 'interpolation'
+        else:
+            method =  'mean'
         if self.calib_matrix:
             params['calib_matrix'] = self.calib_matrix
         if self.data['elevation']:
@@ -225,8 +236,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['region'] = self.data['region']
         trim_nsew = ','.join([str(i) for i in self.data['trim_nsewtb'][:4]])
         zrange = ','.join([str(i) for i in self.data['trim_nsewtb'][4:]])
-        self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],             
-                              quiet=True, trim=trim_nsew, smooth_radius=float(self.data['smooth'])/1000,
+        self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],
+                              quiet=True, trim=trim_nsew, smooth_radius=float(self.data['smooth'])/1000, method=method,
                               zrange=zrange, rotate=self.data['rotation_angle'], resolution=float(self.data['resolution'])/1000,
                               zexag=self.data['zexag'], numscan=self.data['numscans'], overwrite=True, **params)
         self.status.SetLabel("Importing scan ...")
@@ -235,8 +246,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         run_analyses(self.data['scan_name'], real_elev=self.data['elevation'], zexag=self.data['zexag'])
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
-        
-    
+
+
     def OnScanName(self, event):
         name = self.scan_name.GetValue()
         self.data['scan_name'] = name
@@ -252,6 +263,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.data['interpolate'] = self.interpolate.IsChecked()
         self.data['smooth'] = self.smooth.GetValue()
         self.data['resolution'] = self.resolution.GetValue()
+        self.data['trim_tolerance'] = self.trim_tolerance.GetValue()
 
         try:
             self.data['zexag'] = float(self.zexag.GetValue())
@@ -270,7 +282,7 @@ class TangibleLandscapePlugin(wx.Dialog):
             self.changedInput = False
             self.Stop()
             self.Start()
-        
+
     def Start(self):
         if self.process and self.process.poll() is None:
             return
@@ -285,11 +297,13 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['raster'] = self.data['elevation']
         elif self.data['region']:
             params['region'] = self.data['region']
+        if self.data['trim_tolerance']:
+            params['trim_tolerance'] = self.data['trim_tolerance']
         trim_nsew = ','.join([str(i) for i in self.data['trim_nsewtb'][:4]])
         zrange = ','.join([str(i) for i in self.data['trim_nsewtb'][4:]])
         self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],
                               quiet=True, trim=trim_nsew, smooth_radius=float(self.data['smooth'])/1000,
-                              zrange=zrange, rotate=self.data['rotation_angle'], method=method, 
+                              zrange=zrange, rotate=self.data['rotation_angle'], method=method,
                               zexag=self.data['zexag'], numscan=self.data['numscans'], overwrite=True,
                               flags='l', resolution=float(self.data['resolution'])/1000, **params)
         self.status.SetLabel("Real-time scanning is running now.")
