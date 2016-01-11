@@ -36,7 +36,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                      'zexag': 1., 'smooth': 7, 'numscans': 1,
                      'rotation_angle': 180, 'resolution': 2,
                      'trim_nsewtb': [0, 0, 0, 0, 60, 100],
-                     'interpolate': False, 'trim_tolerance': 0.5}
+                     'interpolate': False, 'trim_tolerance': 0.7}
 
         self.notebook = wx.Notebook(self)
         scanning_panel = wx.Panel(self.notebook)
@@ -181,6 +181,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 5)
         self.SetSizer(sizer)
+        sizer.Fit(self)
         self.SetMinSize(self.GetBestSize())
         self.Layout()
 
@@ -321,6 +322,10 @@ class TangibleLandscapePlugin(wx.Dialog):
             self.process.wait()
             self.process = None
             if self.observer:
+                try:
+                    self.observer.stop()
+                except TypeError:  # throws error on mac
+                    pass
                 self.observer.stop()
                 self.observer.join()
         self.timer.Stop()
