@@ -1,4 +1,4 @@
-from grass.exceptions import CalledModuleError
+from grass.exceptions import CalledModuleError, ScriptError
 import current_analyses
 from utils import get_environment, remove_temp_regions
 
@@ -17,7 +17,7 @@ def run_analyses(output_elev, real_elev, zexag):
     for func in functions:
         try:
             exec('current_analyses.' + func + '(real_elev=real_elev, scanned_elev=output_elev, zexag=zexag, env=env)')
-        except CalledModuleError, e:
+        except (CalledModuleError, ScriptError) as e:
             print e
             
     remove_temp_regions(tmp_regions)
