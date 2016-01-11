@@ -5,10 +5,12 @@ which are running in real-time. The name of the analyses
 must start with 'run_'. The file has to be saved so that the change is applied.
 """
 import subprocess
+import uuid
 
 import analyses
 from utils import get_environment, remove_temp_regions
 import grass.script as gscript
+from grass.exceptions import CalledModuleError
 
 
 #def run_difference(real_elev, scanned_elev, env, **kwargs):
@@ -17,8 +19,16 @@ import grass.script as gscript
 #
 #def run_contours(scanned_elev, env, **kwargs):
 #    analyses.contours(scanned_elev=scanned_elev, new='contours_scanned', env=env, step=2)
+
+
+#def run_ponds(scanned_elev, env, **kwargs):
+#    analyses.depression(scanned_elev=scanned_elev, new="ponds", repeat=2, filter_depth=0.1, env=env)
 #
-#    
+#def run_rlake(real_elev, scanned_elev, env, **kwargs):
+#    seed = [703758.79476,11471.6200873]
+#    analyses.rlake(scanned_elev, new='lake', base=real_elev, env=env, seed=seed, level=3)
+
+
 #def run_simwe(scanned_elev, env, **kwargs):
 #    analyses.simwe(scanned_elev=scanned_elev, depth='depth', rain_value=300, niterations=4, env=env)
 #

@@ -9,10 +9,12 @@ This program is free software under the GNU General Public License
 """
 import os
 import shutil
+import uuid
 from math import sqrt
 
 from grass.script import core as gcore
 from grass.script import raster as grast
+from grass.exceptions import CalledModuleError
 
 from utils import get_environment, remove_temp_regions
 
@@ -33,6 +35,19 @@ def match_scan(base, scan, matched, env):
     grast.mapcalc(exp="{matched} = {a} + {b} * {scan}".format(matched=matched, scan=scan, a=coeff['a'], b=coeff['b']), env=env)
 
 
+def rlake(scanned_elev, new, base, env, seed, level, **kwargs):
+    suffix = str(uuid.uuid4()).replace('-', '')[:5]
+    match = 'tmp_match' + suffix
+    params = {}
+    if isinstance(seed, list):
+        params['coordinates'] = ','.join(str(each) for each in seed)
+    else:
+        params['seed'] = seed
+    match_scan(base=base, scan=scanned_elev, matched=match, env=env)
+    gcore.run_command('r.lake', elevation=match, water_level=level, lake=new, env=env, **params)
+    gcore.run_command('g.remove', flags='f', type='raster', name=[match])
+
+
 def flowacc(scanned_elev, new, env):
     gcore.run_command('r.flow', elevation=scanned_elev, flowaccumulation=new, overwrite=True, env=env)
 
@@ -46,7 +61,7 @@ def aspect(scanned_elev, new, env):
 
 
 def slope_aspect(scanned_elev, slope, aspect, env):
-    gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=aspect, slope=slope, overwrite=True, env=env)
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev, aspect=aspect, slope=slope, env=env)
     gcore.run_command('r.colors', map=aspect, color='aspectcolr', env=env)
 
 
@@ -116,19 +131,37 @@ def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
     gcore.run_command('g.remove', flags='f', type='raster', name=[sedflow, qsx, qsxdx, qsy, qsydy, slope_sm])
 
 
+def depression(scanned_elev, new, env, filter_depth=0, repeat=2):
+    """Run r.fill.dir to compute depressions"""
+    suffix = str(uuid.uuid4()).replace('-', '')[:5]
+    input_dem = scanned_elev
+    output = "tmp_filldir" + suffix
+    tmp_dir = "tmp_dir" + suffix
+    for i in range(repeat):
+        gcore.run_command('r.fill.dir', input=input_dem, output=output, direction=tmp_dir, env=env)
+        input_dem = output
+    grast.mapcalc('{new} = if({out} - {scan} > {depth}, {out} - {scan}, null())'.format(new=new, out=output, scan=scanned_elev, depth=filter_depth), env=env)
+    gcore.write_command('r.colors', map=new, rules='-', stdin='0% aqua\n100% blue', env=env)
+    gcore.run_command('g.remove', flags='f', type='raster', name=[output, tmp_dir], env=env)
+
+
 def contours(scanned_elev, new, env, maxlevel=None, step=None):
+    name = 'x' + str(uuid.uuid4()).replace('-', '')
     if not step:
         info = grast.raster_info(scanned_elev)
         step = (info['max'] - info['min']) / 12.
     try:
         if maxlevel is None:
-            gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, flags='t', env=env)
+            gcore.run_command('r.contour', input=scanned_elev, output=name, step=step, flags='t', env=env)
         else:
-            gcore.run_command('r.contour', input=scanned_elev, output=new, step=step, maxlevel=maxlevel, flags='t', env=env)
-    except StandardError, e:
+            gcore.run_command('r.contour', input=scanned_elev, output=name, step=step, maxlevel=maxlevel, flags='t', env=env)
+        gcore.run_command('g.rename', vector=[name, new], env=env)
+    except StandardError as e:
         # catching exception when a vector is added to GUI in the same time
-        print e
         pass
+    except CalledModuleError as e:
+        gcore.run_command('g.remove', flags='f', type='vector', name=[name], env=env)
+        print e
 
 def change_detection_area(before, after, change, height_threshold, filter_slope_threshold, add, env):
     """Detects change in area. Result are areas with value
