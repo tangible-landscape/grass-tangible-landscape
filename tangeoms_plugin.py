@@ -235,6 +235,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['raster'] = self.data['elevation']
         elif self.data['region']:
             params['region'] = self.data['region']
+        if self.data['trim_tolerance']:
+            params['trim_tolerance'] = self.data['trim_tolerance']
         trim_nsew = ','.join([str(i) for i in self.data['trim_nsewtb'][:4]])
         zrange = ','.join([str(i) for i in self.data['trim_nsewtb'][4:]])
         self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],
@@ -310,6 +312,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Real-time scanning is running now.")
         gisenv = gscript.gisenv()
         path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'fcell')
+        if not os.path.exists(path):  # this happens in new mapset
+            path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
         event_handler = RasterChangeHandler(self.runImport, self.data)
         self.observer = Observer()
         self.observer.schedule(event_handler, path)
@@ -326,7 +330,6 @@ class TangibleLandscapePlugin(wx.Dialog):
                     self.observer.stop()
                 except TypeError:  # throws error on mac
                     pass
-                self.observer.stop()
                 self.observer.join()
         self.timer.Stop()
         self.status.SetLabel("Real-time scanning stopped.")
