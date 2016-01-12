@@ -20,7 +20,7 @@ class TermitesPanel(wx.Panel):
         self.giface = giface
         
         self.colonies = 'init_colonies'
-        self.habitat_orig = 'habitat_block_clip'
+        self.habitat_orig = 'unsuitable_habitat'
         self.habitat = 'habitat_changed'
         self.round = 1
         mainSizer = wx.BoxSizer(wx.VERTICAL)

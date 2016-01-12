@@ -59,15 +59,15 @@ import grass.script as gscript
 
 def run_prepare_termites(scanned_elev, env, **kwargs):
     analyses.change_detection_area(before='scan_saved', after=scanned_elev, change='change',
-                                   height_threshold=10, filter_slope_threshold=30, add=True, env=env)
-    habitat = 'habitat_block_clip'
+                                   height_threshold=20, filter_slope_threshold=30, add=True, env=env)
+    habitat = 'unsuitable_habitat'
     habitat_changed = 'habitat_changed'
     tmp_regions = []
-    env1 = get_environment(tmp_regions, raster=habitat, n='n-200', s='s+200', e='e-200', w='w+200')
+    #env1 = get_environment(tmp_regions, raster=habitat, n='n-200', s='s+200', e='e-200', w='w+200')
     env2 = get_environment(tmp_regions, raster=habitat)
-    gscript.mapcalc(exp="binary = if(not(isnull(change)), 1, 0)", env=env1)
+    gscript.mapcalc(exp="binary = if(not(isnull(change)), 1, 0)", env=env2)
     gscript.mapcalc(exp="{habitat_changed} = if(binary, 1, {habitat})".format(habitat=habitat, habitat_changed=habitat_changed), env=env2)
-    gscript.run_command('r.colors', map=habitat_changed, raster=habitat, env=env1)
+    gscript.run_command('r.colors', map=habitat_changed, raster=habitat, env=env2)
     remove_temp_regions(tmp_regions)
 
 
@@ -77,25 +77,28 @@ def model_termites(habitat_changed, init_colonies, output, round):
     env = get_environment(tmp_regions, raster=habitat_changed)
     name = output.split('@')[0] + "_" + str(round)
     subprocess.call(['Rscript', '/home/gis/Development/termites/CA_iso.R',
-                     '--habitat=' + habitat_changed, '--sources=' + init_colonies, '--image=ortho.tiff', '--start=2003', '--end=2020',
-                     '--tab=NewCol_table.csv', '--ktype=gauss', '--surv=0.01', '--maxd=7', '--kdist=1000', '--output=' + name], env=env)
+                     '--habitat=' + habitat_changed, '--sources=' + init_colonies, '--image=ortho.tiff', '--start=2003', '--end=2040',
+                     '--tab=NewCol_table.csv', '--ktype=gauss', '--surv=0.01', '--maxd=10', '--kdist=100', '--output=' + name], env=env)
     gscript.run_command('t.create', output=name, title='title', description='descrition', env=env)
     maps = gscript.list_grouped('raster', pattern=name + "_*")[gscript.gisenv()['MAPSET']]
-    gscript.run_command('t.register', input=name, maps=','.join(maps[1:]), env=env)
-    gscript.run_command('t.rast.colors', input=name, rules='/home/gis/Development/termites/infection_colors.txt', env=env)
-    last = gscript.read_command('t.rast.list',  input=name, columns='name', method='comma', env=env).strip().split(',')[-1]
+    #gscript.run_command('t.register', input=name, maps=','.join(maps[1:]), env=env)
+    #gscript.run_command('t.rast.colors', input=name, rules='/home/gis/Development/termites/infection_colors.txt', env=env)
+    #last = gscript.read_command('t.rast.list',  input=name, columns='name', method='comma', env=env).strip().split(',')[-1]
+    last = maps[-1]
+    gscript.run_command('r.colors', map=','.join(maps[1:]), rules='/home/gis/Development/termites/infection_colors.txt', env=env)
     gscript.run_command('g.copy', raster=[last, 'result'], env=env)
     area = float(gscript.parse_command('r.univar', map=last, flags='g', env=env)['n'])
-    treatment_area = int(gscript.parse_command('r.univar', map=habitat_changed, flags='g', env=env)['n']) - 327
+    treatment_area = int(gscript.parse_command('r.univar', map=habitat_changed, flags='g', env=env)['n']) - 396
     before = ''
     if round > 1:
         before = gscript.read_command('v.db.select', flags='c', map='score', columns='area', env=env).strip() + "   "
     gscript.run_command('v.db.update', map='score', layer=1, column='area', value=before + str(round) + ': ' + str(int(area)), env=env)
     
     # save results
-    gscript.run_command('g.copy', vector=[init_colonies.split('@')[0], init_colonies.split('@')[0] + name], env=env)
+    if round == 1:
+        gscript.run_command('g.copy', vector=[init_colonies.split('@')[0], init_colonies.split('@')[0] + output.split('@')[0]], env=env)
     if round > 1:
-        gscript.run_command('g.rename', raster=[habitat_changed.split('@')[0], habitat_changed.split('@')[0] + name], env=env)
+        gscript.run_command('g.copy', raster=[habitat_changed.split('@')[0], habitat_changed.split('@')[0] + name], env=env)
     path = '/home/gis/Desktop/results.csv'
     if not os.path.exists(path):
         with open(path, 'w') as f:
