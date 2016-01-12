@@ -41,6 +41,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.notebook = wx.Notebook(self)
         scanning_panel = wx.Panel(self.notebook)
         self.notebook.AddPage(scanning_panel, "Scanning")
+        from flooding_gui import FloodingPanel
+        flooding_panel = FloodingPanel(self.notebook, self.giface, self.ScanOnce)
+        self.notebook.AddPage(flooding_panel, "Flooding")
         self.layout(scanning_panel)
         self.Layout()
 
