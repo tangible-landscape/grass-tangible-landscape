@@ -36,7 +36,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                      'elevation': '', 'region': '',
                      'zexag': 1., 'smooth': 7, 'numscans': 1,
                      'rotation_angle': 180, 'resolution': 2,
-                     'trim_nsewtb': [0, 0, 0, 0, 60, 100],
+                     'trim_nsewtb': [30, 30, 30, 30, 60, 100],
                      'interpolate': False, 'trim_tolerance': 0.7}
 
         self.notebook = wx.Notebook(self)
