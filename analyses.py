@@ -16,7 +16,7 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 from grass.exceptions import CalledModuleError
 
-from utils import get_environment, remove_temp_regions
+from utils import get_environment, remove_temp_regions, remove_vector
 
 
 def difference(real_elev, scanned_elev, new, env):
@@ -161,6 +161,7 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
         pass
     except CalledModuleError as e:
         gcore.run_command('g.remove', flags='f', type='vector', name=[name], env=env)
+        remove_vector(new, deleteTable=False)
         print e
 
 def change_detection_area(before, after, change, height_threshold, filter_slope_threshold, add, env):
@@ -393,7 +394,7 @@ def polylines(points_map, output, env):
 
 def cross_section(scanned_elev, voxel, new, env):
     gcore.run_command('r3.cross.rast', input=voxel, elevation=scanned_elev, output=new, overwrite=True, env=env)
-    gcore.run_command('r.colors', map=new, volume=voxel, env=env)
+    gcore.run_command('r.colors', map=new, raster_3d=voxel, env=env)
 
 
 def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env):
