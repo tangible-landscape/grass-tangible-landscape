@@ -63,6 +63,8 @@ from grass.exceptions import CalledModuleError
 
 #def run_subsurface(scanned_elev, env, **kwargs):
 #    voxel = 'interp_no_terrain_2002_08_25@soils_base_data'
-#
+#    tmp_regions = []
+#    env = get_environment(tmp_regions, rast3d=voxel, nsres=3, ewres=3)
 #    analyses.cross_section(scanned_elev=scanned_elev, voxel=voxel, new='cross', env=env)
-#    analyses.contours(scanned_elev=scanned_elev, new='scanned_contours', step=5., maxlevel=0, env=env)
+#    analyses.contours(scanned_elev=scanned_elev, new='contours_scanned', step=5., maxlevel=0, env=env)
+#    remove_temp_regions(tmp_regions)

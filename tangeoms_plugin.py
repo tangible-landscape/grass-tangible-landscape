@@ -31,6 +31,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.parent=parent
 
         self.output = 'scan'
+        self.delay = 1.
         self.data = {'scan_name': self.output, 'info_text': [],
                      'elevation': '', 'region': '',
                      'zexag': 1., 'smooth': 7, 'numscans': 1,
@@ -191,7 +192,7 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def OnUpdate(self, event):
         for each in self.giface.GetAllMapDisplays():
-            each.GetMapWindow().UpdateMap()
+            each.GetMapWindow().UpdateMap(delay=self.delay)
 
     def Calibrate(self, event):
         from prepare_calibration import write_matrix
