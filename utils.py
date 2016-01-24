@@ -63,7 +63,7 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
-def run_analyses(scan_params, analysesFile):
+def run_analyses(scan_params, analysesFile, **kwargs):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
     if not analysesFile or not os.path.exists(analysesFile):
@@ -87,7 +87,7 @@ def run_analyses(scan_params, analysesFile):
         try:
             exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
                                         " scanned_elev=scan_params['scan_name'],"
-                                        " zexag=scan_params['zexag'], env=env)")
+                                        " zexag=scan_params['zexag'], env=env, **kwargs)")
         except (CalledModuleError, ScriptError) as e:
             print e
 

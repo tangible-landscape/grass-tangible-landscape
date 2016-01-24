@@ -324,8 +324,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         # update
         self.calib_matrix = res
 
-    def ScanOnce(self, event):
-        if self.process:
+    def Scan(self, continuous):
+        if self.process and self.process.poll() is None:
             return
         self.status.SetLabel("Scanning...")
         wx.SafeYield()
@@ -344,10 +344,18 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['trim_tolerance'] = self.scan['trim_tolerance']
         trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
         zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
+        if continuous:
+            params['flags'] = 'l'
         self.process = gscript.start_command('r.in.kinect', output=self.scan['scan_name'],
-                              quiet=True, trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000, method=method,
-                              zrange=zrange, rotate=self.scan['rotation_angle'], resolution=float(self.scan['resolution'])/1000,
-                              zexag=self.scan['zexag'], numscan=self.scan['numscans'], overwrite=True, **params)
+                                             trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
+                                             method=method, zrange=zrange, rotate=self.scan['rotation_angle'],
+                                             resolution=float(self.scan['resolution'])/1000,
+                                             zexag=self.scan['zexag'], numscan=self.scan['numscans'],
+                                             overwrite=True, quiet=True, **params)
+        return self.process
+
+    def ScanOnce(self, event):
+        self.Scan(continuous=False)
         self.status.SetLabel("Importing scan...")
         self.process.wait()
         self.process = None
@@ -366,28 +374,7 @@ class TangibleLandscapePlugin(wx.Dialog):
             self.Start()
 
     def Start(self):
-        if self.process and self.process.poll() is None:
-            return
-        if self.scan['interpolate']:
-            method = 'interpolation'
-        else:
-            method = 'mean'
-        params = {}
-        if self.calib_matrix:
-            params['calib_matrix'] = self.calib_matrix
-        if self.scan['elevation']:
-            params['raster'] = self.scan['elevation']
-        elif self.scan['region']:
-            params['region'] = self.scan['region']
-        if self.scan['trim_tolerance']:
-            params['trim_tolerance'] = self.scan['trim_tolerance']
-        trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
-        zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
-        self.process = gscript.start_command('r.in.kinect', output=self.scan['scan_name'],
-                              quiet=True, trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
-                              zrange=zrange, rotate=self.scan['rotation_angle'], method=method,
-                              zexag=self.scan['zexag'], numscan=self.scan['numscans'], overwrite=True,
-                              flags='l', resolution=float(self.scan['resolution'])/1000, **params)
+        self.Scan(continuous=True)
         self.status.SetLabel("Real-time scanning is running now.")
         gisenv = gscript.gisenv()
         path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'fcell')
