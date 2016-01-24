@@ -2,17 +2,20 @@
 """
 Created on Fri Dec 18 16:00:49 2015
 
-@author: gis
+@author: Anna Petrasova
 """
 import os
 import sys
 import wx
 import random
+import subprocess
 
 sys.path.append(os.path.join(os.environ['GISBASE'], "etc", "gui", "wxpython"))
 from gui_core.gselect import Select
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
+
+from utils import get_environment, remove_temp_regions
 
 class TermitesPanel(wx.Panel):
     def __init__(self, parent, giface):
@@ -54,21 +57,48 @@ class TermitesPanel(wx.Panel):
         func = 'model_termites'
         if not output_name:
             return
-        import current_analyses
-        try:
-            reload(current_analyses)
-        except:
-            pass
+
         if baseline:
             self.round = 1
-        try:
-            exec('current_analyses.' + func + '(habitat, colonies, output_name, self.round)')
-        except CalledModuleError, e:
-            print e
-            return
+        model_termites(habitat, colonies, output_name, self.round)
         for each in self.giface.GetAllMapDisplays():
              each.GetMapWindow().UpdateMap()
         self.round += 1
+        
+    def model_termites(habitat_changed, init_colonies, output, round):
+        tmp_regions = []
+        env = get_environment(tmp_regions, raster=habitat_changed)
+        name = output.split('@')[0] + "_" + str(round)
+        subprocess.call(['Rscript', '/home/gis/Development/termites/CA_iso.R',
+                         '--habitat=' + habitat_changed, '--sources=' + init_colonies, '--image=ortho.tiff', '--start=2003', '--end=2040',
+                         '--tab=NewCol_table.csv', '--ktype=gauss', '--surv=0.01', '--maxd=10', '--kdist=100', '--output=' + name], env=env)
+        gscript.run_command('t.create', output=name, title='title', description='descrition', env=env)
+        maps = gscript.list_grouped('raster', pattern=name + "_*")[gscript.gisenv()['MAPSET']]
+        #gscript.run_command('t.register', input=name, maps=','.join(maps[1:]), env=env)
+        #gscript.run_command('t.rast.colors', input=name, rules='/home/gis/Development/termites/infection_colors.txt', env=env)
+        #last = gscript.read_command('t.rast.list',  input=name, columns='name', method='comma', env=env).strip().split(',')[-1]
+        last = maps[-1]
+        gscript.run_command('r.colors', map=','.join(maps[1:]), rules='/home/gis/Development/termites/infection_colors.txt', env=env)
+        gscript.run_command('g.copy', raster=[last, 'result'], env=env)
+        area = float(gscript.parse_command('r.univar', map=last, flags='g', env=env)['n'])
+        treatment_area = int(gscript.parse_command('r.univar', map=habitat_changed, flags='g', env=env)['n']) - 396
+        before = ''
+        if round > 1:
+            before = gscript.read_command('v.db.select', flags='c', map='score', columns='area', env=env).strip() + "   "
+        gscript.run_command('v.db.update', map='score', layer=1, column='area', value=before + str(round) + ': ' + str(int(area)), env=env)
+        
+        # save results
+        if round == 1:
+            gscript.run_command('g.copy', vector=[init_colonies.split('@')[0], init_colonies.split('@')[0] + output.split('@')[0]], env=env)
+        if round > 1:
+            gscript.run_command('g.copy', raster=[habitat_changed.split('@')[0], habitat_changed.split('@')[0] + name], env=env)
+        path = '/home/gis/Desktop/results.csv'
+        if not os.path.exists(path):
+            with open(path, 'w') as f:
+                pass
+        with open(path, 'a') as f:
+            f.write(name + ',' + str(area) + ',' + str(treatment_area) + '\n')
+        remove_temp_regions(tmp_regions)
 
     def Randomize(self):
         out = 'init_colonies'
