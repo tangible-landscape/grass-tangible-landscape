@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov 20 14:44:32 2013
@@ -5,23 +6,81 @@ Created on Wed Nov 20 14:44:32 2013
 @author: anna
 """
 
-import wx
 import os
-import sys
-
-from watchdog.observers import Observer
-from change_handler import RasterChangeHandler
-
+import wx
 import wx.lib.newevent
-sys.path.append(os.path.join(os.environ['GISBASE'], "etc", "gui", "wxpython"))
+import wx.lib.filebrowsebutton as filebrowse
+from shutil import copyfile
+from watchdog.observers import Observer
+
+from grass.pygrass.utils import set_path, get_lib_path
+set_path(modulename='g.gui.tangible')
+from grass.script.setup import set_gui_path
+set_gui_path()
+
 from gui_core.gselect import Select
+from core.settings import UserSettings
 import grass.script as gscript
 
-#from subsurface import compute_crosssection
-from run_analyses import run_analyses
+from change_handler import RasterChangeHandler
+from utils import run_analyses
 
 
 updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
+
+
+class AnalysesPanel(wx.Panel):
+    def __init__(self, parent, giface, settings):
+        wx.Panel.__init__(self, parent)
+        self.giface = giface
+        self.settings = settings
+
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        if self.settings['analyses']['file']:
+            path = self.settings['analyses']['file']
+            initDir = os.path.dirname(path)
+        else:
+            path = initDir = ""
+        self.selectAnalyses = filebrowse.FileBrowseButton(self, labelText="Analyses:",
+                                                     startDirectory=initDir, initialValue=path,
+                                                     changeCallback=lambda evt: self.SetAnalysesFile(evt.GetString()))
+        if self.settings['analyses']['file']:
+            self.selectAnalyses.SetValue(self.settings['analyses']['file'])
+        newAnalyses = wx.Button(self, label="Create new file")
+        newAnalyses.Bind(wx.EVT_BUTTON, lambda evt: self.CreateNewFile())
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.selectAnalyses, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.AddStretchSpacer()
+        sizer.Add(newAnalyses, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        mainSizer.Add(sizer, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=5)
+
+        self.SetSizer(mainSizer)
+        mainSizer.Fit(self)
+
+    def SetAnalysesFile(self, path):
+        self.settings['analyses']['file'] = path
+
+    def CreateNewFile(self):
+        get_lib_path('g.gui.tangible')
+        dlg = wx.FileDialog(self, message="Choose a file with analyses",
+                                         defaultDir="",
+                                         defaultFile="",
+                                         wildcard="Python source (*.py)|*.py",
+                                         style=wx.SAVE | wx.FD_OVERWRITE_PROMPT)
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            orig = os.path.join(get_lib_path('g.gui.tangible'), 'current_analyses.py')
+            if not os.path.exists(orig):
+                self.giface.WriteError("File with analyses not found: {}".format(orig))
+            else:
+                copyfile(orig, path)
+                self.selectAnalyses.SetValue(path)
+                self.settings['analyses']['file'] = path
+        dlg.Destroy()
 
 
 class TangibleLandscapePlugin(wx.Dialog):
@@ -30,40 +89,49 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.giface=giface
         self.parent=parent
 
-        self.output = 'scan'
+        if not gscript.find_program('r.in.kinect'):
+            self.giface.WriteError("ERROR: Module r.in.kinect not found.")
+
+        self.settings = {}
+        UserSettings.ReadSettingsFile(settings=self.settings)
+        # for the first time
+        if not 'tangible' in self.settings:
+            self.settings['tangible'] = {'calibration': {'matrix': None},
+                                         'analyses': {'file': None},
+                                         'scan': {'scan_name': 'scan',
+                                                  'elevation': '', 'region': '',
+                                                  'zexag': 1., 'smooth': 7, 'numscans': 1,
+                                                  'rotation_angle': 180, 'resolution': 2,
+                                                  'trim_nsewtb': '30,30,30,30,60,100',
+                                                  'interpolate': False, 'trim_tolerance': 0.7
+                                                  }
+                                        }
+        self.scan = self.settings['tangible']['scan']
+        self.calib_matrix = self.settings['tangible']['calibration']['matrix']
+        if not self.calib_matrix:
+            giface.WriteWarning("WARNING: No calibration file exists")
+
         self.delay = 1.
-        self.data = {'scan_name': self.output, 'info_text': [],
-                     'elevation': '', 'region': '',
-                     'zexag': 1., 'smooth': 7, 'numscans': 1,
-                     'rotation_angle': 180, 'resolution': 2,
-                     'trim_nsewtb': [30, 30, 30, 30, 60, 100],
-                     'interpolate': False, 'trim_tolerance': 0.7}
 
         self.notebook = wx.Notebook(self)
         scanning_panel = wx.Panel(self.notebook)
         self.notebook.AddPage(scanning_panel, "Scanning")
+        analyses_panel = AnalysesPanel(self.notebook, self.giface, self.settings['tangible'])
+        self.notebook.AddPage(analyses_panel, "Analyses")
         self.layout(scanning_panel)
         self.Layout()
 
-        self.elevInput.SetValue(self.data['elevation'])
-        self.zexag.SetValue(str(self.data['zexag']))
-        self.rotate.SetValue(self.data['rotation_angle'])
-        self.numscans.SetValue(self.data['numscans'])
-        self.interpolate.SetValue(self.data['interpolate'])
+        self.elevInput.SetValue(self.scan['elevation'])
+        self.zexag.SetValue(str(self.scan['zexag']))
+        self.rotate.SetValue(self.scan['rotation_angle'])
+        self.numscans.SetValue(self.scan['numscans'])
+        self.interpolate.SetValue(self.scan['interpolate'])
         for i, each in enumerate('nsewtb'):
-            self.trim[each].SetValue(str(self.data['trim_nsewtb'][i]))
-        self.interpolate.SetValue(self.data['interpolate'])
-        self.smooth.SetValue(str(self.data['smooth']))
-        self.resolution.SetValue(str(self.data['resolution']))
-        self.trim_tolerance.SetValue(str(self.data['trim_tolerance']))
-
-        calib = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.txt')
-        if os.path.exists(calib):
-            with open(calib, 'r') as f:
-                self.calib_matrix = f.read()
-        else:
-            self.calib_matrix = None
-            giface.WriteWarning("WARNING: No calibration file exists")
+            self.trim[each].SetValue(self.scan['trim_nsewtb'].split(',')[i])
+        self.interpolate.SetValue(self.scan['interpolate'])
+        self.smooth.SetValue(str(self.scan['smooth']))
+        self.resolution.SetValue(str(self.scan['resolution']))
+        self.trim_tolerance.SetValue(str(self.scan['trim_tolerance']))
 
         self.process = None
         self.observer = None
@@ -94,7 +162,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.resolution = wx.TextCtrl(panel)
         self.trim = {}
         for each in 'nsewtb':
-            self.trim[each] = wx.TextCtrl(panel, size=(35, -1))
+            self.trim[each] = wx.TextCtrl(panel, size=(40, -1))
         self.trim_tolerance = wx.TextCtrl(panel)
         self.interpolate = wx.CheckBox(panel, label="Use interpolation instead of binning")
 
@@ -108,6 +176,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         hSizer.Add(wx.StaticText(panel, label="Name of scanned raster:"), flag=wx.EXPAND | wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         hSizer.Add(self.scan_name, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(hSizer, flag=wx.EXPAND)
+        # status
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(self.status, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(hSizer)
@@ -188,6 +257,7 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def OnClose(self, event):
         self.Stop()
+        UserSettings.SaveToFile(self.settings)
         self.Destroy()
 
     def OnUpdate(self, event):
@@ -195,13 +265,16 @@ class TangibleLandscapePlugin(wx.Dialog):
             each.GetMapWindow().UpdateMap(delay=self.delay)
 
     def Calibrate(self, event):
-        from prepare_calibration import write_matrix
-        matrix_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'calib_matrix.txt')
-        write_matrix(matrix_path=matrix_file_path)
-        # update
-        with open(matrix_file_path, 'r') as f:
-            self.calib_matrix = f.read()
+        res = gscript.parse_command('r.in.kinect', output='dummy', method='mean',
+                                    flags='c', overwrite=True).strip()
+        if not (res['calib_matrix'] and len(res['calib_matrix'].split(',')) == 9):
+            gscript.message(_("Failed to calibrate"))
+            return
+        self.settings['tangible']['calibration']['matrix'] = res
+        UserSettings.SaveToFile(self.settings)
 
+        # update
+        self.calib_matrix = res
 
     def BindModelProperties(self):
         self.scan_name.Bind(wx.EVT_TEXT, self.OnScanName)
@@ -226,53 +299,54 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Scanning...")
         wx.SafeYield()
         params = {}
-        if self.data['interpolate']:
+        if self.scan['interpolate']:
             method = 'interpolation'
         else:
-            method =  'mean'
+            method = 'mean'
         if self.calib_matrix:
             params['calib_matrix'] = self.calib_matrix
-        if self.data['elevation']:
-            params['raster'] = self.data['elevation']
-        elif self.data['region']:
-            params['region'] = self.data['region']
-        if self.data['trim_tolerance']:
-            params['trim_tolerance'] = self.data['trim_tolerance']
-        trim_nsew = ','.join([str(i) for i in self.data['trim_nsewtb'][:4]])
-        zrange = ','.join([str(i) for i in self.data['trim_nsewtb'][4:]])
-        self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],
-                              quiet=True, trim=trim_nsew, smooth_radius=float(self.data['smooth'])/1000, method=method,
-                              zrange=zrange, rotate=self.data['rotation_angle'], resolution=float(self.data['resolution'])/1000,
-                              zexag=self.data['zexag'], numscan=self.data['numscans'], overwrite=True, **params)
-        self.status.SetLabel("Importing scan ...")
+        if self.scan['elevation']:
+            params['raster'] = self.scan['elevation']
+        elif self.scan['region']:
+            params['region'] = self.scan['region']
+        if self.scan['trim_tolerance']:
+            params['trim_tolerance'] = self.scan['trim_tolerance']
+        trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
+        zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
+        self.process = gscript.start_command('r.in.kinect', output=self.scan['scan_name'],
+                              quiet=True, trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000, method=method,
+                              zrange=zrange, rotate=self.scan['rotation_angle'], resolution=float(self.scan['resolution'])/1000,
+                              zexag=self.scan['zexag'], numscan=self.scan['numscans'], overwrite=True, **params)
+        self.status.SetLabel("Importing scan...")
         self.process.wait()
         self.process = None
-        run_analyses(self.data['scan_name'], real_elev=self.data['elevation'], zexag=self.data['zexag'])
+        run_analyses(scan_params=self.scan, analysesFile=self.settings['tangible']['analyses']['file'])
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
 
-
     def OnScanName(self, event):
         name = self.scan_name.GetValue()
-        self.data['scan_name'] = name
+        self.scan['scan_name'] = name
         if self.process and self.process.poll() is None:
             self.Stop()
             self.Start()
 
     def OnModelProperties(self, event):
-        self.data['elevation'] = self.elevInput.GetValue()
-        self.data['region'] = self.regionInput.GetValue()
-        self.data['rotation_angle'] = self.rotate.GetValue()
-        self.data['numscans'] = self.numscans.GetValue()
-        self.data['interpolate'] = self.interpolate.IsChecked()
-        self.data['smooth'] = self.smooth.GetValue()
-        self.data['resolution'] = self.resolution.GetValue()
-        self.data['trim_tolerance'] = self.trim_tolerance.GetValue()
+        self.scan['elevation'] = self.elevInput.GetValue()
+        self.scan['region'] = self.regionInput.GetValue()
+        self.scan['rotation_angle'] = self.rotate.GetValue()
+        self.scan['numscans'] = self.numscans.GetValue()
+        self.scan['interpolate'] = self.interpolate.IsChecked()
+        self.scan['smooth'] = self.smooth.GetValue()
+        self.scan['resolution'] = self.resolution.GetValue()
+        self.scan['trim_tolerance'] = self.trim_tolerance.GetValue()
 
         try:
-            self.data['zexag'] = float(self.zexag.GetValue())
-            for i, each in enumerate('nsewtb'):
-                self.data['trim_nsewtb'][i] = float(self.trim[each].GetValue())
+            self.scan['zexag'] = float(self.zexag.GetValue())
+            nsewtb_list = []
+            for each in 'nsewtb':
+                nsewtb_list.append(self.trim[each].GetValue())
+            self.scan['trim_nsewtb'] = ','.join(nsewtb_list)
         except ValueError:
             pass
         self.changedInput = True
@@ -290,32 +364,32 @@ class TangibleLandscapePlugin(wx.Dialog):
     def Start(self):
         if self.process and self.process.poll() is None:
             return
-        if self.data['interpolate']:
+        if self.scan['interpolate']:
             method = 'interpolation'
         else:
-            method =  'mean'
+            method = 'mean'
         params = {}
         if self.calib_matrix:
             params['calib_matrix'] = self.calib_matrix
-        if self.data['elevation']:
-            params['raster'] = self.data['elevation']
-        elif self.data['region']:
-            params['region'] = self.data['region']
-        if self.data['trim_tolerance']:
-            params['trim_tolerance'] = self.data['trim_tolerance']
-        trim_nsew = ','.join([str(i) for i in self.data['trim_nsewtb'][:4]])
-        zrange = ','.join([str(i) for i in self.data['trim_nsewtb'][4:]])
-        self.process = gscript.start_command('r.in.kinect', output=self.data['scan_name'],
-                              quiet=True, trim=trim_nsew, smooth_radius=float(self.data['smooth'])/1000,
-                              zrange=zrange, rotate=self.data['rotation_angle'], method=method,
-                              zexag=self.data['zexag'], numscan=self.data['numscans'], overwrite=True,
-                              flags='l', resolution=float(self.data['resolution'])/1000, **params)
+        if self.scan['elevation']:
+            params['raster'] = self.scan['elevation']
+        elif self.scan['region']:
+            params['region'] = self.scan['region']
+        if self.scan['trim_tolerance']:
+            params['trim_tolerance'] = self.scan['trim_tolerance']
+        trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
+        zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
+        self.process = gscript.start_command('r.in.kinect', output=self.scan['scan_name'],
+                              quiet=True, trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
+                              zrange=zrange, rotate=self.scan['rotation_angle'], method=method,
+                              zexag=self.scan['zexag'], numscan=self.scan['numscans'], overwrite=True,
+                              flags='l', resolution=float(self.scan['resolution'])/1000, **params)
         self.status.SetLabel("Real-time scanning is running now.")
         gisenv = gscript.gisenv()
         path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'fcell')
         if not os.path.exists(path):  # this happens in new mapset
             path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
-        event_handler = RasterChangeHandler(self.runImport, self.data)
+        event_handler = RasterChangeHandler(self.runImport, self.scan)
         self.observer = Observer()
         self.observer.schedule(event_handler, path)
         self.observer.start()
@@ -336,16 +410,16 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Real-time scanning stopped.")
 
     def runImport(self):
-        run_analyses(self.data['scan_name'], real_elev=self.data['elevation'], zexag=self.data['zexag'])
+        run_analyses(scan_params=self.scan, analysesFile=self.settings['tangible']['analyses']['file'])
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
 
-def run(giface, guiparent):
-    dlg = TangibleLandscapePlugin(giface, guiparent)
-    dlg.CenterOnParent()
+def main(giface=None):
+    dlg = TangibleLandscapePlugin(giface, parent=None)
     dlg.Show()
 
 
 if __name__ == '__main__':
-    run(None, None)
+    gscript.parser()
+    main()
