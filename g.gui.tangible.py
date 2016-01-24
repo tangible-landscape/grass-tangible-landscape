@@ -11,7 +11,6 @@ import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
 from shutil import copyfile
-from watchdog.observers import Observer
 
 from grass.pygrass.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
@@ -23,7 +22,7 @@ from core.settings import UserSettings
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
-from change_handler import RasterChangeHandler
+
 from utils import run_analyses
 
 
@@ -407,6 +406,8 @@ class TangibleLandscapePlugin(wx.Dialog):
 
 
 def main(giface=None):
+    from watchdog.observers import Observer
+    from change_handler import RasterChangeHandler
     dlg = TangibleLandscapePlugin(giface, parent=None)
     dlg.Show()
 
