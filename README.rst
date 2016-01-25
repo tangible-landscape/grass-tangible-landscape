@@ -5,6 +5,7 @@ Dependencies:
 -------------
 * GRASS GIS 7, latest trunk is needed (starting with `r67232 <https://trac.osgeo.org/grass/changeset/67232>`_ )
 * Python package `watchdog <https://pypi.python.org/pypi/watchdog>`_, install for example using pip
+* GRASS GIS addon r.in.kinect
 
 Installation:
 -------------
