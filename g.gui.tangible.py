@@ -266,6 +266,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnStop = wx.Button(self, label="Stop")
         btnScanOnce = wx.Button(self, label="Scan once")
         btnCalibrate = wx.Button(self, label="Calibrate")
+        btnHelp = wx.Button(self, label="Help") 
         btnClose = wx.Button(self, label="Close")
         self.status = wx.StaticText(self)
 
@@ -274,6 +275,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnStop.Bind(wx.EVT_BUTTON, lambda evt: self.Stop())
         btnCalibrate.Bind(wx.EVT_BUTTON, self.Calibrate)
         btnScanOnce.Bind(wx.EVT_BUTTON, self.ScanOnce)
+        btnHelp.Bind(wx.EVT_BUTTON, self.OnHelp)
         btnClose.Bind(wx.EVT_BUTTON, self.OnClose)
         self.Layout()
 
@@ -290,6 +292,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         sizer.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 5)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.AddStretchSpacer()
+        hSizer.Add(btnHelp, flag=wx.EXPAND | wx.ALL, border=5)
         hSizer.Add(btnClose, flag=wx.EXPAND | wx.ALL, border=5)
         sizer.Add(hSizer, flag=wx.EXPAND)
 
@@ -301,6 +304,10 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(wx.EVT_TIMER, self.RestartIfNotRunning, self.timer)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(EVT_UPDATE_GUI, self.OnUpdate)
+
+    def OnHelp(self, event):
+        """Show help"""
+        self.giface.Help(entry='g.gui.tangible', online=False)
 
     def OnClose(self, event):
         self.Stop()
