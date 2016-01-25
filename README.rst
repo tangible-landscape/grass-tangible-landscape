@@ -5,13 +5,13 @@ Dependencies:
 -------------
 * GRASS GIS 7, latest trunk is needed (starting with `r67232 <https://trac.osgeo.org/grass/changeset/67232>`_ )
 * Python package `watchdog <https://pypi.python.org/pypi/watchdog>`_, install for example using pip
-* GRASS GIS addon r.in.kinect
+* GRASS GIS addon `r.in.kinect <https://github.com/ncsu-osgeorel/r.in.kinect>`_
 
 Installation:
 -------------
 
 1. Install GRASS GIS 7.
-#. Install GRASS GIS addon r.in.kinect
+#. Install GRASS GIS addon `r.in.kinect <https://github.com/ncsu-osgeorel/r.in.kinect>`_
 #. Install Python package watchdog using pip
 #. Install Tangible Landscape plugin using g.extension:
 
