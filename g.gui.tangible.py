@@ -23,7 +23,7 @@ import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
 
-from utils import run_analyses
+from tangible_utils import run_analyses
 
 
 updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
