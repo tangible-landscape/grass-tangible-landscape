@@ -13,7 +13,7 @@ import wx.lib.filebrowsebutton as filebrowse
 from shutil import copyfile
 from watchdog.observers import Observer
 
-from grass.pygrass.utils import set_path, get_lib_path
+from grass.script.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
 from grass.script.setup import set_gui_path
 set_gui_path()
@@ -67,7 +67,7 @@ class AnalysesPanel(wx.Panel):
 
     def CreateNewFile(self):
         get_lib_path('g.gui.tangible')
-        dlg = wx.FileDialog(self, message="Choose a file with analyses",
+        dlg = wx.FileDialog(self, message="Create a new file with analyses",
                             wildcard="Python source (*.py)|*.py",
                             style=wx.SAVE | wx.FD_OVERWRITE_PROMPT)
         if dlg.ShowModal() == wx.ID_OK:
