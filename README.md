@@ -21,13 +21,12 @@ Installation:
 3.  Install Python package watchdog using pip
 4.  Open GRASS GIS and install Tangible Landscape plugin using g.extension:
 
-    > g.extension g.gui.tangible
-    > url=github.com/ncsu-osgeorel/grass-tangible-landscape
+        g.extension g.gui.tangible url=github.com/ncsu-osgeorel/grass-tangible-landscape
 
 5.  Type this into GRASS GUI command console. A dialog
     should now open.
 
-    > g.gui.tangible
+        g.gui.tangible
     
 ![Tangible Landscape plugin](https://github.com/ncsu-osgeorel/grass-tangible-landscape/blob/master/tangible_landscape_dialog.png "Tangible Landscape plugin")
 
