@@ -28,5 +28,7 @@ Installation:
     should now open.
 
     > g.gui.tangible
+    
+![Tangible Landscape plugin](https://github.com/ncsu-osgeorel/grass-tangible-landscape/blob/master/tangible_landscape_dialog.png "Tangible Landscape plugin")
 
 
