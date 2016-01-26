@@ -320,7 +320,7 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def Calibrate(self, event):
         res = gscript.parse_command('r.in.kinect', output='dummy', method='mean',
-                                    flags='c', overwrite=True).strip()
+                                    flags='c', overwrite=True)
         if not (res['calib_matrix'] and len(res['calib_matrix'].split(',')) == 9):
             gscript.message(_("Failed to calibrate"))
             return
