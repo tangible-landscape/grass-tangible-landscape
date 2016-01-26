@@ -372,7 +372,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def RestartIfNotRunning(self, event):
         """Mechanism to restart scanning if process ends or
         there was a change in input options"""
-        if self.process and self.process.poll is not None:
+        if self.process and self.process.poll() is not None:
             self.Start()
         if self.changedInput:
             self.changedInput = False
