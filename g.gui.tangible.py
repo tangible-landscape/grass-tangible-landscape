@@ -324,7 +324,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if not (res['calib_matrix'] and len(res['calib_matrix'].split(',')) == 9):
             gscript.message(_("Failed to calibrate"))
             return
-        self.settings['tangible']['calibration']['matrix'] = res
+        self.settings['tangible']['calibration']['matrix'] = res['calib_matrix']
         UserSettings.SaveToFile(self.settings)
 
         # update
