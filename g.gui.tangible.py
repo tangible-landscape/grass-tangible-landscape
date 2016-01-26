@@ -328,7 +328,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         UserSettings.SaveToFile(self.settings)
 
         # update
-        self.calib_matrix = res
+        self.calib_matrix = res['calib_matrix']
 
     def Scan(self, continuous):
         if self.process and self.process.poll() is None:
