@@ -413,12 +413,12 @@ class TangibleLandscapePlugin(wx.Dialog):
 
 
 def main(giface=None):
-    from watchdog.observers import Observer
-    from change_handler import RasterChangeHandler
     dlg = TangibleLandscapePlugin(giface, parent=None)
     dlg.Show()
 
 
 if __name__ == '__main__':
     gscript.parser()
+    from watchdog.observers import Observer
+    from change_handler import RasterChangeHandler
     main()
