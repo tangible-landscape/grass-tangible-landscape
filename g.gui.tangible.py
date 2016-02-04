@@ -11,9 +11,8 @@ import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
 from shutil import copyfile
-from watchdog.observers import Observer
 
-from grass.pygrass.utils import set_path, get_lib_path
+from grass.script.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
 from grass.script.setup import set_gui_path
 set_gui_path()
@@ -23,8 +22,8 @@ from core.settings import UserSettings
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
-from change_handler import RasterChangeHandler
-from utils import run_analyses
+
+from tangible_utils import run_analyses
 
 
 updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
@@ -67,7 +66,7 @@ class AnalysesPanel(wx.Panel):
 
     def CreateNewFile(self):
         get_lib_path('g.gui.tangible')
-        dlg = wx.FileDialog(self, message="Choose a file with analyses",
+        dlg = wx.FileDialog(self, message="Create a new file with analyses",
                             wildcard="Python source (*.py)|*.py",
                             style=wx.SAVE | wx.FD_OVERWRITE_PROMPT)
         if dlg.ShowModal() == wx.ID_OK:
@@ -270,6 +269,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnStop = wx.Button(self, label="Stop")
         btnScanOnce = wx.Button(self, label="Scan once")
         btnCalibrate = wx.Button(self, label="Calibrate")
+        btnHelp = wx.Button(self, label="Help") 
         btnClose = wx.Button(self, label="Close")
         self.status = wx.StaticText(self)
 
@@ -278,6 +278,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnStop.Bind(wx.EVT_BUTTON, lambda evt: self.Stop())
         btnCalibrate.Bind(wx.EVT_BUTTON, self.Calibrate)
         btnScanOnce.Bind(wx.EVT_BUTTON, self.ScanOnce)
+        btnHelp.Bind(wx.EVT_BUTTON, self.OnHelp)
         btnClose.Bind(wx.EVT_BUTTON, self.OnClose)
         self.Layout()
 
@@ -294,6 +295,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         sizer.Add(self.notebook, 1, wx.ALL | wx.EXPAND, 5)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.AddStretchSpacer()
+        hSizer.Add(btnHelp, flag=wx.EXPAND | wx.ALL, border=5)
         hSizer.Add(btnClose, flag=wx.EXPAND | wx.ALL, border=5)
         sizer.Add(hSizer, flag=wx.EXPAND)
 
@@ -306,6 +308,10 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(EVT_UPDATE_GUI, self.OnUpdate)
 
+    def OnHelp(self, event):
+        """Show help"""
+        self.giface.Help(entry='g.gui.tangible', online=False)
+
     def OnClose(self, event):
         self.Stop()
         UserSettings.SaveToFile(self.settings)
@@ -317,15 +323,15 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def Calibrate(self, event):
         res = gscript.parse_command('r.in.kinect', output='dummy', method='mean',
-                                    flags='c', overwrite=True).strip()
+                                    flags='c', overwrite=True)
         if not (res['calib_matrix'] and len(res['calib_matrix'].split(',')) == 9):
             gscript.message(_("Failed to calibrate"))
             return
-        self.settings['tangible']['calibration']['matrix'] = res
+        self.settings['tangible']['calibration']['matrix'] = res['calib_matrix']
         UserSettings.SaveToFile(self.settings)
 
         # update
-        self.calib_matrix = res
+        self.calib_matrix = res['calib_matrix']
 
     def Scan(self, continuous):
         if self.process and self.process.poll() is None:
@@ -369,7 +375,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def RestartIfNotRunning(self, event):
         """Mechanism to restart scanning if process ends or
         there was a change in input options"""
-        if self.process and self.process.poll is not None:
+        if self.process and self.process.poll() is not None:
             self.Start()
         if self.changedInput:
             self.changedInput = False
@@ -410,10 +416,15 @@ class TangibleLandscapePlugin(wx.Dialog):
 
 
 def main(giface=None):
+    global Observer, RasterChangeHandler
+    from watchdog.observers import Observer
+    from change_handler import RasterChangeHandler
     dlg = TangibleLandscapePlugin(giface, parent=None)
     dlg.Show()
 
 
 if __name__ == '__main__':
     gscript.parser()
+    from watchdog.observers import Observer
+    from change_handler import RasterChangeHandler
     main()

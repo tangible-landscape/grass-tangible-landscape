@@ -16,7 +16,7 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 from grass.exceptions import CalledModuleError
 
-from utils import get_environment, remove_temp_regions, remove_vector
+from tangible_utils import get_environment, remove_temp_regions, remove_vector
 
 
 def difference(real_elev, scanned_elev, new, env):
