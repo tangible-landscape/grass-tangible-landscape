@@ -7,7 +7,7 @@ Created on Fri Dec 18 16:00:49 2015
 import wx
 
 import grass.script as gscript
-from utils import run_analyses
+from tangible_utils import run_analyses
 
 
 class FloodingPanel(wx.Panel):
