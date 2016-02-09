@@ -94,7 +94,7 @@ class ScanningPanel(wx.Panel):
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # create widgets
-        self.scan_name = wx.TextCtrl(self, value='scan')
+        self.scan_name_ctrl = wx.TextCtrl(self, value='scan')
         # widgets for model
         self.elevInput = Select(self, size=(-1, -1), type='raster')
         self.regionInput = Select(self, size=(-1, -1), type='region')
@@ -125,7 +125,7 @@ class ScanningPanel(wx.Panel):
         mainSizer.Add(hSizer, flag=wx.EXPAND)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(wx.StaticText(self, label="Name of scanned raster:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
-        hSizer.Add(self.scan_name, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+        hSizer.Add(self.scan_name_ctrl, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(hSizer, flag=wx.EXPAND)
         # model parameters
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -184,7 +184,7 @@ class ScanningPanel(wx.Panel):
         self.BindModelProperties()
 
     def BindModelProperties(self):
-        self.scan_name.Bind(wx.EVT_TEXT, self.OnModelProperties)
+        self.scan_name_ctrl.Bind(wx.EVT_TEXT, self.OnModelProperties)
         # model parameters
         self.elevInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.regionInput.Bind(wx.EVT_TEXT, self.OnModelProperties)
@@ -201,6 +201,7 @@ class ScanningPanel(wx.Panel):
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
 
     def OnModelProperties(self, event):
+        self.scan['scan_name'] = self.scan_name_ctrl.GetValue()
         self.scan['elevation'] = self.elevInput.GetValue()
         self.scan['region'] = self.regionInput.GetValue()
         self.scan['rotation_angle'] = self.rotate.GetValue()
@@ -244,7 +245,6 @@ class TangibleLandscapePlugin(wx.Dialog):
                                                   'interpolate': False, 'trim_tolerance': 0.7
                                                   }
                                          }
-        self.scan = self.settings['tangible']['scan']
         self.calib_matrix = self.settings['tangible']['calibration']['matrix']
         if not self.calib_matrix:
             giface.WriteWarning("WARNING: No calibration file exists")
