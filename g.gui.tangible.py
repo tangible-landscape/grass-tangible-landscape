@@ -245,6 +245,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                                                   'interpolate': False, 'trim_tolerance': 0.7
                                                   }
                                          }
+        self.scan = self.settings['tangible']['scan']
         self.calib_matrix = self.settings['tangible']['calibration']['matrix']
         if not self.calib_matrix:
             giface.WriteWarning("WARNING: No calibration file exists")
