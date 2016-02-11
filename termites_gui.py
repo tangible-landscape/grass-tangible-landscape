@@ -15,7 +15,7 @@ from gui_core.gselect import Select
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
 
-from utils import get_environment, remove_temp_regions
+from tangible_utils import get_environment, remove_temp_regions
 
 class TermitesPanel(wx.Panel):
     def __init__(self, parent, giface):

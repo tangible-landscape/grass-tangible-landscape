@@ -2,7 +2,7 @@
 import os
 
 import analyses
-from utils import get_environment, remove_temp_regions
+from tangible_utils import get_environment, remove_temp_regions
 
 import grass.script as gscript
 

@@ -16,7 +16,7 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 from grass.exceptions import CalledModuleError
 
-from utils import get_environment, remove_temp_regions, remove_vector
+from tangible_utils import get_environment, remove_temp_regions, remove_vector
 
 
 def difference(real_elev, scanned_elev, new, env):
@@ -316,7 +316,7 @@ def trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
                       friction=friction, output=walk, start_coordinates=point_from, outdir=walk_dir,
                       stop_coordinates=points_to, walk_coeff=walk_coeff, _lambda=_lambda, slope_factor=slope_factor, env=env)
     for i in range(len(points_to)):
-        gcore.run_command('r.drain', overwrite=True, input=walk, indir=walk_dir, flags='d', vector_output=vector_routes[i],
+        gcore.run_command('r.drain', overwrite=True, input=walk, direction=walk_dir, flags='d', drain=vector_routes[i],
                           output=raster_route, start_coordinates=points_to[i], env=env)
 
 def trail_salesman(trails, points, output, env):
