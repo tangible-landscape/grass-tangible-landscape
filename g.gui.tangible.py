@@ -110,6 +110,7 @@ class ScanningPanel(wx.Panel):
         self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
 
         self.elevInput.SetValue(self.scan['elevation'])
+        self.regionInput.SetValue(self.scan['region'])
         self.zexag.SetValue(str(self.scan['zexag']))
         self.rotate.SetValue(self.scan['rotation_angle'])
         self.numscans.SetValue(self.scan['numscans'])
