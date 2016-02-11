@@ -60,12 +60,12 @@ class TermitesPanel(wx.Panel):
 
         if baseline:
             self.round = 1
-        model_termites(habitat, colonies, output_name, self.round)
+        self.model_termites(habitat, colonies, output_name, self.round)
         for each in self.giface.GetAllMapDisplays():
              each.GetMapWindow().UpdateMap()
         self.round += 1
         
-    def model_termites(habitat_changed, init_colonies, output, round):
+    def model_termites(self, habitat_changed, init_colonies, output, round):
         tmp_regions = []
         env = get_environment(tmp_regions, raster=habitat_changed)
         name = output.split('@')[0] + "_" + str(round)
