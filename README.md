@@ -3,7 +3,7 @@ Tangible Landscape - Termites
 This README describes the installation of new version of Tangible Landscape which runs on Linux (Ubuntu) and Mac (OS X Yosemite). This repository contains also older, unsupported, version running solely on MS Windows.
 
 Branch Termites_application is used for a serious game with termites spread using
-[R model] by f. Tonini (https://github.com/f-tonini/Termite-Dispersal-Simulation)
+[R model] (https://github.com/f-tonini/Termite-Dispersal-Simulation) by f. Tonini
 
 Dependencies:
 -------------
@@ -14,6 +14,7 @@ Dependencies:
     install for example using pip
 -   GRASS GIS addon
     [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
+-   [R model] (https://github.com/f-tonini/Termite-Dispersal-Simulation) (path to it needs to fixed in termites_gui.py)
 
 Installation:
 -------------
