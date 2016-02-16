@@ -220,8 +220,6 @@ def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
 
 
 def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
-    tmp_regions = []
-    env = get_environment(tmp_regions, rast=before, n='n-20', s='s+20', e='e-20', w='w+20')
     diff_thr = 'diff_thr_' + str(os.getpid())
     diff_thr_clump = 'diff_thr_clump_' + str(os.getpid())
     change_vector = 'change_vector_' + str(os.getpid())
@@ -264,7 +262,6 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
         gcore.warning("No change found!")
 
     gcore.run_command('g.remove', flags='f', type='raster', name=[diff_thr, diff_thr_clump])
-    remove_temp_regions(tmp_regions)
 
 
 def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
