@@ -263,6 +263,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         scanning_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
         analyses_panel = AnalysesPanel(self.notebook, self.giface, self.settings['tangible'])
         self.notebook.AddPage(analyses_panel, "Analyses")
+        from SOD_gui import SODPanel
+        SOD_panel = SODPanel(self.notebook, self.giface)
+        self.notebook.AddPage(SOD_panel, "SOD")
 
         btnStart = wx.Button(self, label="Start")
         btnStop = wx.Button(self, label="Stop")
@@ -340,7 +343,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if self.scan['interpolate']:
             method = 'interpolation'
         else:
-            method = 'mean'
+            method = 'max'
         if self.calib_matrix:
             params['calib_matrix'] = self.calib_matrix
         if self.scan['elevation']:

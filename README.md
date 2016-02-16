@@ -2,6 +2,8 @@ Tangible Landscape
 ==================
 This README describes the installation of new version of Tangible Landscape which runs on Linux (Ubuntu) and Mac (OS X Yosemite). This repository contains also older, unsupported, version running solely on MS Windows.
 
+Branch SOD is specifically for Sudden Oak Death application running disease spread model.
+
 Dependencies:
 -------------
 
