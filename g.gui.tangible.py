@@ -251,7 +251,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if not self.calib_matrix:
             giface.WriteWarning("WARNING: No calibration file exists")
 
-        self.delay = 1.
+        self.delay = 0.5
         self.process = None
         self.observer = None
         self.timer = wx.Timer(self)

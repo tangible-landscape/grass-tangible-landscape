@@ -16,7 +16,7 @@ from grass.script import core as gcore
 from grass.script import raster as grast
 from grass.exceptions import CalledModuleError
 
-from tangible_utils import get_environment, remove_temp_regions, remove_vector
+from tangible_utils import get_environment, remove_vector
 
 
 def difference(real_elev, scanned_elev, new, env):
@@ -70,32 +70,32 @@ def shaded_relief(scanned_elev, new, zscale=10, env=None):
 
 
 def simwe(scanned_elev, depth, rain_value, niterations, slope=None, aspect=None, env=None):
-    pid = str(os.getpid())
+    suffix = str(uuid.uuid4()).replace('-', '')[:5]
     options = {}
     if slope:
         options['slope'] = slope
     if aspect:
         options['aspect'] = aspect
-    gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, overwrite=True, env=env, **options)
-    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, overwrite=True, env=env)
-    gcore.run_command('g.remove', flags='f', type='raster', name=['dx_' + pid, 'dy' + pid])
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, env=env, **options)
+    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, env=env)
+    gcore.run_command('g.remove', flags='f', type='raster', name=['dx_' + suffix, 'dy' + suffix], env=env)
 
 
 def erosion(scanned_elev, rain_value, depth, detachment_coeff, transport_coeff, shear_stress, niterations, sediment_flux, erosion_deposition, slope=None, aspect=None, env=None):
-    pid = str(os.getpid())
+    suffix = str(uuid.uuid4()).replace('-', '')[:5]
     options = {}
     if slope:
         options['slope'] = slope
     if aspect:
         options['aspect'] = aspect
-    dc, tc, tau = 'dc' + pid, 'tc' + pid, 'tau' + pid
-    gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, overwrite=True, env=env, **options)
-    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, overwrite=True, env=env)
+    dc, tc, tau = 'dc' + suffix, 'tc' + suffix, 'tau' + suffix
+    gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, overwrite=True, env=env, **options)
+    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, overwrite=True, env=env)
     gcore.run_command('r.mapcalc', expression="{dc} = {detachment_coeff}".format(dc=dc, detachment_coeff=detachment_coeff), overwrite=True, env=env)
     gcore.run_command('r.mapcalc', expression="{tc} = {transport_coeff}".format(tc=tc, transport_coeff=transport_coeff), overwrite=True, env=env)
     gcore.run_command('r.mapcalc', expression="{tau} = {shear_stress}".format(tau=tau, shear_stress=shear_stress), overwrite=True, env=env)
-    gcore.run_command('r.sim.sediment', elevation=scanned_elev, dx='dx_' + pid, dy='dy' + pid, water_depth=depth, detachment_coeff=dc, transport_coeff=tc, shear_stress=tau, sediment_flux=sediment_flux, erosion_deposition=erosion_deposition, niterations=niterations, nwalkers=10000, overwrite=True, env=env)
-    gcore.run_command('g.remove', flags='f', type='raster', name=[dc, tc, tau, 'dx_' + pid, 'dy' + pid], env=env)
+    gcore.run_command('r.sim.sediment', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, water_depth=depth, detachment_coeff=dc, transport_coeff=tc, shear_stress=tau, sediment_flux=sediment_flux, erosion_deposition=erosion_deposition, niterations=niterations, nwalkers=10000, overwrite=True, env=env)
+    gcore.run_command('g.remove', flags='f', type='raster', name=[dc, tc, tau, 'dx_' + suffix, 'dy' + suffix], env=env)
 
 
 def max_curv(scanned_elev, new, size=15, zscale=5, env=None):
@@ -113,12 +113,13 @@ def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None):
 
 def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
     """!Computes net erosion and deposition (USPED model)"""
-    sedflow = 'sedflow_' + str(os.getpid())
-    qsx = 'qsx_' + str(os.getpid())
-    qsxdx = 'qsxdx_' + str(os.getpid())
-    qsy = 'qsy_' + str(os.getpid())
-    qsydy = 'qsydy_' + str(os.getpid())
-    slope_sm = 'slope_sm' + str(os.getpid())
+    suffix = str(uuid.uuid4()).replace('-', '')[:5]
+    sedflow = 'sedflow_' + suffix
+    qsx = 'qsx_' + suffix
+    qsxdx = 'qsxdx_' + suffix
+    qsy = 'qsy_' + suffix
+    qsydy = 'qsydy_' + suffix
+    slope_sm = 'slope_sm' + suffix
     gcore.run_command('r.neighbors', overwrite=True, input=slope, output=slope_sm, size=5, env=env)
     gcore.run_command('r.mapcalc', expression="{sedflow} = 270. * {k_factor} * {c_factor} * {flowacc} * sin({slope})".format(c_factor=c_factor, k_factor=k_factor, slope=slope_sm, flowacc=flowacc, sedflow=sedflow), overwrite=True, env=env)
     gcore.run_command('r.mapcalc', expression="{qsx} = {sedflow} * cos({aspect})".format(sedflow=sedflow, aspect=aspect, qsx=qsx), overwrite=True, env=env)
@@ -220,9 +221,9 @@ def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
 
 
 def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
-    diff_thr = 'diff_thr_' + str(os.getpid())
-    diff_thr_clump = 'diff_thr_clump_' + str(os.getpid())
-    change_vector = 'change_vector_' + str(os.getpid())
+    diff_thr = 'diff_thr_' + str(uuid.uuid4()).replace('-', '')
+    diff_thr_clump = 'diff_thr_clump_' + str(uuid.uuid4()).replace('-', '')
+    change_vector = 'change_vector_' + str(uuid.uuid4()).replace('-', '')
     if add:
         gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({after} - {before}) > {thr1} &&"
                                                   " ({after} - {before}) < {thr2}, 1, null())".format(diff_thr=diff_thr,  after=after,
@@ -258,10 +259,12 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
             gcore.run_command('v.to.points', flags='t', input=change_vector, type='centroid', output=change, env=env)
         else:
             gcore.warning("No change found!")
+            gcore.run_command('v.edit', map=change, tool='create', env=env)
     else:
         gcore.warning("No change found!")
+        gcore.run_command('v.edit', map=change, tool='create', env=env)
 
-    gcore.run_command('g.remove', flags='f', type='raster', name=[diff_thr, diff_thr_clump])
+    gcore.run_command('g.remove', flags='f', type='raster', name=[diff_thr, diff_thr_clump], env=env)
 
 
 def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
@@ -330,11 +333,14 @@ def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_e
     coordinates = gcore.read_command('v.out.ascii', input=vector, separator=',', env=env).strip()
     coordinate = None
     for line in coordinates.split(os.linesep):
-        coordinate = [float(c) for c in line.split(',')[0:2]]
+        try:
+            coordinate = [float(c) for c in line.split(',')[0:2]]
+        except ValueError:  # no points in map
+            pass
         break
     if coordinate:
-        gcore.run_command('r.viewshed', flags='b', input=scanned_elev, output=output, coordinates=coordinate, observer_elevation=obs_elev, env=env, overwrite=True)
-        gcore.run_command('r.null', map=output, null=0)
+        gcore.run_command('r.viewshed', flags='b', input=scanned_elev, output=output, coordinates=coordinate, observer_elevation=obs_elev, env=env)
+        gcore.run_command('r.null', map=output, null=0, env=env)
         gcore.write_command('r.colors', map=output,  rules='-', stdin='0 {invis}\n1 {vis}'.format(vis=visible_color, invis=invisible_color), env=env)
 
 
