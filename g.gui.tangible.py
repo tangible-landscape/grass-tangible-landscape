@@ -41,13 +41,30 @@ class AnalysesPanel(wx.Panel):
             initDir = os.path.dirname(path)
         else:
             path = initDir = ""
+        self.contoursSelect = Select(self, size=(-1, -1), type='vector')
+        self.contoursStepTextCtrl = wx.TextCtrl(self, size=(40, -1))
+        self.contoursStepTextCtrl.SetToolTipString("Contour step")
+
+        if 'contours' in self.settings['analyses'] and self.settings['analyses']['contours']:
+            self.contoursStepTextCtrl.SetValue(str(self.settings['analyses']['contours_step']))
+            self.contoursSelect.SetValue(self.settings['analyses']['contours'])
+        self.contoursSelect.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
+        self.contoursStepTextCtrl.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
+
         self.selectAnalyses = filebrowse.FileBrowseButton(self, labelText="Analyses:",
                                                           startDirectory=initDir, initialValue=path,
                                                           changeCallback=lambda evt: self.SetAnalysesFile(evt.GetString()))
         if self.settings['analyses']['file']:
             self.selectAnalyses.SetValue(self.settings['analyses']['file'])
+
         newAnalyses = wx.Button(self, label="Create new file")
         newAnalyses.Bind(wx.EVT_BUTTON, lambda evt: self.CreateNewFile())
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(wx.StaticText(self, label="Contours:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(self.contoursSelect, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(self.contoursStepTextCtrl, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.selectAnalyses, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
@@ -63,6 +80,10 @@ class AnalysesPanel(wx.Panel):
 
     def SetAnalysesFile(self, path):
         self.settings['analyses']['file'] = path
+
+    def OnAnalysesChange(self, event):
+        self.settings['analyses']['contours'] = self.contoursSelect.GetValue()
+        self.settings['analyses']['contours_step'] = self.contoursStepTextCtrl.GetValue()
 
     def CreateNewFile(self):
         get_lib_path('g.gui.tangible')
@@ -237,7 +258,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         # for the first time
         if not 'tangible' in self.settings:
             self.settings['tangible'] = {'calibration': {'matrix': None},
-                                         'analyses': {'file': None},
+                                         'analyses': {'file': None,
+                                                      'contours': None,
+                                                      'contours_step': 1},
                                          'scan': {'scan_name': 'scan',
                                                   'elevation': '', 'region': '',
                                                   'zexag': 1., 'smooth': 7, 'numscans': 1,
@@ -353,6 +376,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
         if continuous:
             params['flags'] = 'l'
+        if self.settings['tangible']['analyses']['contours']:
+            params['contours'] = self.settings['tangible']['analyses']['contours']
+            params['contours_step'] = self.settings['tangible']['analyses']['contours_step']
         self.process = gscript.start_command('r.in.kinect', output=self.scan['scan_name'],
                                              trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
                                              method=method, zrange=zrange, rotate=self.scan['rotation_angle'],
