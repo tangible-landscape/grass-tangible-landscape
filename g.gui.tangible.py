@@ -129,6 +129,7 @@ class ScanningPanel(wx.Panel):
             self.trim[each] = wx.TextCtrl(self, size=(40, -1))
         self.trim_tolerance = wx.TextCtrl(self)
         self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
+        self.equalize = wx.CheckBox(self, label="Use equalized color table for scan")
 
         self.elevInput.SetValue(self.scan['elevation'])
         self.regionInput.SetValue(self.scan['region'])
@@ -138,7 +139,7 @@ class ScanningPanel(wx.Panel):
         self.interpolate.SetValue(self.scan['interpolate'])
         for i, each in enumerate('nsewtb'):
             self.trim[each].SetValue(self.scan['trim_nsewtb'].split(',')[i])
-        self.interpolate.SetValue(self.scan['interpolate'])
+        self.equalize.SetValue(self.scan['equalize'])
         self.smooth.SetValue(str(self.scan['smooth']))
         self.resolution.SetValue(str(self.scan['resolution']))
         self.trim_tolerance.SetValue(str(self.scan['trim_tolerance']))
@@ -199,6 +200,9 @@ class ScanningPanel(wx.Panel):
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(self.interpolate, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
         mainSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(self.equalize, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
+        mainSizer.Add(hSizer, flag=wx.EXPAND)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -216,6 +220,7 @@ class ScanningPanel(wx.Panel):
         self.numscans.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
         self.numscans.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
+        self.equalize.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
         self.smooth.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.resolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
@@ -229,6 +234,7 @@ class ScanningPanel(wx.Panel):
         self.scan['rotation_angle'] = self.rotate.GetValue()
         self.scan['numscans'] = self.numscans.GetValue()
         self.scan['interpolate'] = self.interpolate.IsChecked()
+        self.scan['equalize'] = self.equalize.IsChecked()
         self.scan['smooth'] = self.smooth.GetValue()
         self.scan['resolution'] = self.resolution.GetValue()
         self.scan['trim_tolerance'] = self.trim_tolerance.GetValue()
@@ -266,7 +272,8 @@ class TangibleLandscapePlugin(wx.Dialog):
                                                   'zexag': 1., 'smooth': 7, 'numscans': 1,
                                                   'rotation_angle': 180, 'resolution': 2,
                                                   'trim_nsewtb': '30,30,30,30,60,100',
-                                                  'interpolate': False, 'trim_tolerance': 0.7
+                                                  'interpolate': False, 'trim_tolerance': 0.7,
+                                                  'equalize': False
                                                   }
                                          }
         self.scan = self.settings['tangible']['scan']
@@ -274,7 +281,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if not self.calib_matrix:
             giface.WriteWarning("WARNING: No calibration file exists")
 
-        self.delay = 0.5
+        self.delay = 0.3
         self.process = None
         self.observer = None
         self.timer = wx.Timer(self)
@@ -291,7 +298,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnStop = wx.Button(self, label="Stop")
         btnScanOnce = wx.Button(self, label="Scan once")
         btnCalibrate = wx.Button(self, label="Calibrate")
-        btnHelp = wx.Button(self, label="Help") 
+        btnHelp = wx.Button(self, label="Help")
         btnClose = wx.Button(self, label="Close")
         self.status = wx.StaticText(self)
 
@@ -376,6 +383,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
         if continuous:
             params['flags'] = 'l'
+        if self.scan['equalize']:
+            if 'flags' in params and params['flags']:
+                params['flags'] += 'e'
         if self.settings['tangible']['analyses']['contours']:
             params['contours'] = self.settings['tangible']['analyses']['contours']
             params['contours_step'] = self.settings['tangible']['analyses']['contours_step']
