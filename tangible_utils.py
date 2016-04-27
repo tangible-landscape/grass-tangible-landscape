@@ -60,14 +60,16 @@ def run_analyses(scan_params, analysesFile, **kwargs):
     # run analyses
     try:
         myanalyses = imp.load_source('myanalyses', analysesFile)
-    except:
+    except StandardError as e:
+        print e
         return
     functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
     for func in functions:
         exec('del myanalyses.' + func)
     try:
         myanalyses = imp.load_source('myanalyses', analysesFile)
-    except:
+    except StandardError as e:
+        print e
         return
     functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
     for func in functions:
@@ -75,5 +77,5 @@ def run_analyses(scan_params, analysesFile, **kwargs):
             exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
                                         " scanned_elev=scan_params['scan_name'],"
                                         " zexag=scan_params['zexag'], env=env, **kwargs)")
-        except (CalledModuleError, ScriptError) as e:
+        except StandardError as e:
             print e
