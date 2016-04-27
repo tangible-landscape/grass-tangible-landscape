@@ -21,11 +21,10 @@ from tangible_utils import get_environment, remove_vector
 
 def difference(real_elev, scanned_elev, new, env):
     """!Computes difference of original and scanned (scan - orig)."""
-    info = grast.raster_info(real_elev)
     regression='regression'
-    regression_params = gcore.parse_command('r.regression.line', flags='g', mapx=real_elev, mapy=scanned_elev, overwrite=True, env=env)
-    gcore.run_command('r.mapcalc', expression='{regression} = {a} + {b} * {before}'.format(a=regression_params['a'], b=regression_params['b'],before=real_elev,regression=regression), overwrite=True, env=env)
-    gcore.run_command('r.mapcalc', expression='{difference} = {regression} - {after}'.format(regression=regression,after=scanned_elev,difference=new, max=info['max'], min=info['min']), overwrite=True, env=env)
+    regression_params = gcore.parse_command('r.regression.line', flags='g', mapx=scanned_elev, mapy=real_elev, env=env)
+    gcore.run_command('r.mapcalc', expression='{regression} = {a} + {b} * {before}'.format(a=regression_params['a'], b=regression_params['b'], before=scanned_elev, regression=regression), env=env)
+    gcore.run_command('r.mapcalc', expression='{difference} = {regression} - {after}'.format(regression=regression, after=real_elev, difference=new), env=env)
     gcore.run_command('r.colors', map=new, color='differences', env=env)
 
 
