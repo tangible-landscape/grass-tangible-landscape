@@ -2,6 +2,8 @@ Tangible Landscape
 ==================
 This README describes the installation of new version of Tangible Landscape which runs on Linux (Ubuntu) and Mac (OS X Yosemite). This repository contains also older, unsupported, version running solely on MS Windows.
 
+Branch coastal is used for a serious game where participants test different storm surge protection scenarios.
+
 Dependencies:
 -------------
 
@@ -19,9 +21,9 @@ Installation:
 2.  Install GRASS GIS addon
     [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
 3.  Install Python package watchdog using pip
-4.  Open GRASS GIS and install Tangible Landscape plugin using g.extension:
+4.  Open GRASS GIS and install Tangible Landscape plugin (with costal branch) using g.extension:
 
-        g.extension g.gui.tangible url=github.com/ncsu-osgeorel/grass-tangible-landscape
+        g.extension g.gui.tangible url=https://github.com/ncsu-osgeorel/grass-tangible-landscape/archive/coastal.zip
 
 5.  Type this into GRASS GUI command console. A dialog
     should now open.
