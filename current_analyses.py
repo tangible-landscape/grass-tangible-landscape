@@ -8,7 +8,7 @@ import subprocess
 import uuid
 
 import analyses
-from tangible_utils import get_environment, remove_temp_regions
+from tangible_utils import get_environment
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
 
@@ -35,6 +35,7 @@ from grass.exceptions import CalledModuleError
 #
 #def run_erosion(scanned_elev, env, **kwargs):
 #    analyses.erosion(scanned_elev=scanned_elev, rain_value=200, depth='depth', detachment_coeff=0.001, transport_coeff=0.01, shear_stress=0, sediment_flux='flux', erosion_deposition='erdep', niterations=4, env=env)  
+
 #def run_geomorphon(scanned_elev, env, **kwargs):
 #    analyses.geomorphon(scanned_elev, new='geomorphon', search=22, skip=12, flat=1, dist=0, env=env)
 
@@ -47,9 +48,10 @@ from grass.exceptions import CalledModuleError
 #    analyses.usped(scanned_elev, k_factor='soils_Kfactor', c_factor='cfactorbare_1m', flowacc='flowacc', slope='slope', aspect='aspect', new='erdep', env=env)
 
 #def run_change_detection(scanned_elev, env, **kwargs):
-#    analyses.change_detection(before='scan', after=scanned_elev,
-#                              change='change', height_threshold=[10, 30], cells_threshold=[10, 200], add=True, max_detected=6, env=env)
-#
+#    trim to avoid detecting differences on the edge
+#    env = get_environment(rast=scanned_elev, n='n-20', s='s+20', e='e-20', w='w+20')
+#    analyses.change_detection(before='scan_saved', after=scanned_elev,
+#                              change='change', height_threshold=[10, 30], cells_threshold=[7, 100], add=True, max_detected=6, env=env)
 #                              
 #def run_trail(real_elev, scanned_elev, env, **kwargs):
 #    analyses.trails_combinations(real_elev,friction='friction', walk_coeff=[0.72, 6.0, 1.9998, -1.9998],
@@ -63,8 +65,6 @@ from grass.exceptions import CalledModuleError
 
 #def run_subsurface(scanned_elev, env, **kwargs):
 #    voxel = 'interp_no_terrain_2002_08_25@soils_base_data'
-#    tmp_regions = []
-#    env = get_environment(tmp_regions, rast3d=voxel, nsres=3, ewres=3)
+#    env = get_environment(rast3d=voxel, nsres=3, ewres=3)
 #    analyses.cross_section(scanned_elev=scanned_elev, voxel=voxel, new='cross', env=env)
 #    analyses.contours(scanned_elev=scanned_elev, new='contours_scanned', step=5., maxlevel=0, env=env)
-#    remove_temp_regions(tmp_regions)

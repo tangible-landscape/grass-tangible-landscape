@@ -41,13 +41,30 @@ class AnalysesPanel(wx.Panel):
             initDir = os.path.dirname(path)
         else:
             path = initDir = ""
+        self.contoursSelect = Select(self, size=(-1, -1), type='vector')
+        self.contoursStepTextCtrl = wx.TextCtrl(self, size=(40, -1))
+        self.contoursStepTextCtrl.SetToolTipString("Contour step")
+
+        if 'contours' in self.settings['analyses'] and self.settings['analyses']['contours']:
+            self.contoursStepTextCtrl.SetValue(str(self.settings['analyses']['contours_step']))
+            self.contoursSelect.SetValue(self.settings['analyses']['contours'])
+        self.contoursSelect.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
+        self.contoursStepTextCtrl.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
+
         self.selectAnalyses = filebrowse.FileBrowseButton(self, labelText="Analyses:",
                                                           startDirectory=initDir, initialValue=path,
                                                           changeCallback=lambda evt: self.SetAnalysesFile(evt.GetString()))
         if self.settings['analyses']['file']:
             self.selectAnalyses.SetValue(self.settings['analyses']['file'])
+
         newAnalyses = wx.Button(self, label="Create new file")
         newAnalyses.Bind(wx.EVT_BUTTON, lambda evt: self.CreateNewFile())
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(wx.StaticText(self, label="Contours:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(self.contoursSelect, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(self.contoursStepTextCtrl, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.selectAnalyses, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
@@ -63,6 +80,10 @@ class AnalysesPanel(wx.Panel):
 
     def SetAnalysesFile(self, path):
         self.settings['analyses']['file'] = path
+
+    def OnAnalysesChange(self, event):
+        self.settings['analyses']['contours'] = self.contoursSelect.GetValue()
+        self.settings['analyses']['contours_step'] = self.contoursStepTextCtrl.GetValue()
 
     def CreateNewFile(self):
         get_lib_path('g.gui.tangible')
@@ -108,15 +129,17 @@ class ScanningPanel(wx.Panel):
             self.trim[each] = wx.TextCtrl(self, size=(40, -1))
         self.trim_tolerance = wx.TextCtrl(self)
         self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
+        self.equalize = wx.CheckBox(self, label="Use equalized color table for scan")
 
         self.elevInput.SetValue(self.scan['elevation'])
+        self.regionInput.SetValue(self.scan['region'])
         self.zexag.SetValue(str(self.scan['zexag']))
         self.rotate.SetValue(self.scan['rotation_angle'])
         self.numscans.SetValue(self.scan['numscans'])
         self.interpolate.SetValue(self.scan['interpolate'])
         for i, each in enumerate('nsewtb'):
             self.trim[each].SetValue(self.scan['trim_nsewtb'].split(',')[i])
-        self.interpolate.SetValue(self.scan['interpolate'])
+        self.equalize.SetValue(self.scan['equalize'])
         self.smooth.SetValue(str(self.scan['smooth']))
         self.resolution.SetValue(str(self.scan['resolution']))
         self.trim_tolerance.SetValue(str(self.scan['trim_tolerance']))
@@ -177,6 +200,9 @@ class ScanningPanel(wx.Panel):
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(self.interpolate, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
         mainSizer.Add(hSizer, flag=wx.EXPAND)
+        hSizer = wx.BoxSizer(wx.HORIZONTAL)
+        hSizer.Add(self.equalize, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
+        mainSizer.Add(hSizer, flag=wx.EXPAND)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -194,6 +220,7 @@ class ScanningPanel(wx.Panel):
         self.numscans.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
         self.numscans.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
+        self.equalize.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
         self.smooth.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.resolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
@@ -207,6 +234,7 @@ class ScanningPanel(wx.Panel):
         self.scan['rotation_angle'] = self.rotate.GetValue()
         self.scan['numscans'] = self.numscans.GetValue()
         self.scan['interpolate'] = self.interpolate.IsChecked()
+        self.scan['equalize'] = self.equalize.IsChecked()
         self.scan['smooth'] = self.smooth.GetValue()
         self.scan['resolution'] = self.resolution.GetValue()
         self.scan['trim_tolerance'] = self.trim_tolerance.GetValue()
@@ -236,13 +264,16 @@ class TangibleLandscapePlugin(wx.Dialog):
         # for the first time
         if not 'tangible' in self.settings:
             self.settings['tangible'] = {'calibration': {'matrix': None},
-                                         'analyses': {'file': None},
+                                         'analyses': {'file': None,
+                                                      'contours': None,
+                                                      'contours_step': 1},
                                          'scan': {'scan_name': 'scan',
                                                   'elevation': '', 'region': '',
                                                   'zexag': 1., 'smooth': 7, 'numscans': 1,
                                                   'rotation_angle': 180, 'resolution': 2,
                                                   'trim_nsewtb': '30,30,30,30,60,100',
-                                                  'interpolate': False, 'trim_tolerance': 0.7
+                                                  'interpolate': False, 'trim_tolerance': 0.7,
+                                                  'equalize': False
                                                   }
                                          }
         self.scan = self.settings['tangible']['scan']
@@ -250,7 +281,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if not self.calib_matrix:
             giface.WriteWarning("WARNING: No calibration file exists")
 
-        self.delay = 1.
+        self.delay = 0.3
         self.process = None
         self.observer = None
         self.timer = wx.Timer(self)
@@ -270,7 +301,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnStop = wx.Button(self, label="Stop")
         btnScanOnce = wx.Button(self, label="Scan once")
         btnCalibrate = wx.Button(self, label="Calibrate")
-        btnHelp = wx.Button(self, label="Help") 
+        btnHelp = wx.Button(self, label="Help")
         btnClose = wx.Button(self, label="Close")
         self.status = wx.StaticText(self)
 
@@ -355,6 +386,12 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
         if continuous:
             params['flags'] = 'l'
+        if self.scan['equalize']:
+            if 'flags' in params and params['flags']:
+                params['flags'] += 'e'
+        if self.settings['tangible']['analyses']['contours']:
+            params['contours'] = self.settings['tangible']['analyses']['contours']
+            params['contours_step'] = self.settings['tangible']['analyses']['contours_step']
         self.process = gscript.start_command('r.in.kinect', output=self.scan['scan_name'],
                                              trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
                                              method=method, zrange=zrange, rotate=self.scan['rotation_angle'],
