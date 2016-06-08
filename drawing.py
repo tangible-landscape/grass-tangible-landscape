@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-@brief GUI panel fro drawing functionality
+@brief GUI panel for drawing functionality
 
 This program is free software under the GNU General Public License
 (>=v2). Read the file COPYING that comes with GRASS for details.
@@ -26,6 +26,7 @@ class DrawingPanel(wx.Panel):
             self.settings['drawing']['type'] = 'point'
             self.settings['drawing']['append'] = False
             self.settings['drawing']['appendName'] = ''
+            self.settings['drawing']['threshold'] = 760
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         self.draw_vector = Select(self, size=(-1, -1), type='vector')
@@ -35,6 +36,9 @@ class DrawingPanel(wx.Panel):
         {'point': 0, 'line': 1, 'area': 2}[self.settings['drawing']['type']]
         self.draw_type.SetSelection({'point': 0, 'line': 1, 'area': 2}[self.settings['drawing']['type']])
         self.draw_type.Bind(wx.EVT_RADIOBOX, self.OnDrawChange)
+        self.threshold = wx.SpinCtrl(parent=self, min=0, max=765, initial=int(self.settings['drawing']['threshold']))
+        self.threshold.SetValue(int(self.settings['drawing']['threshold']))
+        self.threshold.Bind(wx.EVT_SPINCTRL, self.OnDrawChange)
         self.append = wx.CheckBox(parent=self, label="Append vector")
         self.append.SetValue(self.settings['drawing']['append'])
         self.append.Bind(wx.EVT_CHECKBOX, self.OnDrawChange)
@@ -51,6 +55,10 @@ class DrawingPanel(wx.Panel):
         sizer.Add(self.draw_type, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(wx.StaticText(self, label='Brightness threshold:'), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.threshold, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.append, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.appendName, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.clearBtn, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -63,6 +71,7 @@ class DrawingPanel(wx.Panel):
         self.settings['drawing']['appendName'] = self.appendName.GetValue().split('@')[0]
         self.settings['drawing']['type'] = ['point', 'line', 'area'][self.draw_type.GetSelection()]
         self.settings['drawing']['append'] = self.append.IsChecked()
+        self.settings['drawing']['threshold'] = self.threshold.GetValue()
 
     def appendVector(self):
         if not self.settings['drawing']['append']:
