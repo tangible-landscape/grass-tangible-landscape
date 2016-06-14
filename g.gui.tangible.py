@@ -24,6 +24,7 @@ from grass.pydispatch.signal import Signal
 
 from tangible_utils import run_analyses, updateGUIEvt, EVT_UPDATE_GUI
 from drawing import DrawingPanel
+from export import ExportPanel
 
 
 class AnalysesPanel(wx.Panel):
@@ -107,12 +108,6 @@ class ScanningPanel(wx.Panel):
 
         self.settingsChanged = Signal('ScanningPanel.settingsChanged')
 
-        if 'export' in self.settings and self.settings['export']['file']:
-            path = self.settings['export']['file']
-            initDir = os.path.dirname(path)
-        else:
-            path = initDir = ""
-
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
 
@@ -132,10 +127,6 @@ class ScanningPanel(wx.Panel):
         self.trim_tolerance = wx.TextCtrl(self)
         self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
         self.equalize = wx.CheckBox(self, label="Use equalized color table for scan")
-        self.ifExport = wx.CheckBox(self, label="")
-        self.exportPLY = filebrowse.FileBrowseButton(self, labelText="Export PLY:", fileMode=wx.SAVE,
-                                                     startDirectory=initDir, initialValue=path,
-                                                     changeCallback=self.OnModelProperties)
 
         self.elevInput.SetValue(self.scan['elevation'])
         self.regionInput.SetValue(self.scan['region'])
@@ -149,7 +140,6 @@ class ScanningPanel(wx.Panel):
         self.smooth.SetValue(str(self.scan['smooth']))
         self.resolution.SetValue(str(self.scan['resolution']))
         self.trim_tolerance.SetValue(str(self.scan['trim_tolerance']))
-        self.ifExport.SetValue(True if 'export' in self.settings and self.settings['export']['active'] else False)
 
         # layout
         mainSizer.Add(hSizer, flag=wx.EXPAND)
@@ -210,10 +200,6 @@ class ScanningPanel(wx.Panel):
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(self.equalize, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
         mainSizer.Add(hSizer, flag=wx.EXPAND)
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(self.ifExport, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=3)
-        hSizer.Add(self.exportPLY, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, proportion=1, border=0)
-        mainSizer.Add(hSizer, flag=wx.EXPAND)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -237,7 +223,6 @@ class ScanningPanel(wx.Panel):
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
         for each in 'nsewtb':
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
-        self.ifExport.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
 
     def OnModelProperties(self, event):
         self.scan['scan_name'] = self.scan_name_ctrl.GetValue()
@@ -250,10 +235,6 @@ class ScanningPanel(wx.Panel):
         self.scan['smooth'] = self.smooth.GetValue()
         self.scan['resolution'] = self.resolution.GetValue()
         self.scan['trim_tolerance'] = self.trim_tolerance.GetValue()
-        if 'export' not in self.settings:
-            self.settings['export'] = {}
-        self.settings['export']['active'] = self.ifExport.IsChecked()
-        self.settings['export']['file'] = self.exportPLY.GetValue()
 
         try:
             self.scan['zexag'] = float(self.zexag.GetValue())
@@ -290,10 +271,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                                                   'trim_nsewtb': '30,30,30,30,60,100',
                                                   'interpolate': False, 'trim_tolerance': 0.7,
                                                   'equalize': False
-                                                  },
-                                         'export': {'active': True,
-                                                    'file': ''
-                                                   }
+                                                  }
                                          }
         self.scan = self.settings['tangible']['scan']
         self.calib_matrix = self.settings['tangible']['calibration']['matrix']
@@ -312,9 +290,13 @@ class TangibleLandscapePlugin(wx.Dialog):
         scanning_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
         analyses_panel = AnalysesPanel(self.notebook, self.giface, self.settings['tangible'])
         self.notebook.AddPage(analyses_panel, "Analyses")
+        self.exportPanel = ExportPanel(self.notebook, self.giface, self.settings['tangible'])
+        self.notebook.AddPage(self.exportPanel, "Export")
+        self.exportPanel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
         self.drawing_panel = DrawingPanel(self.notebook, self.giface, self.settings['tangible'])
         self.notebook.AddPage(self.drawing_panel, "Drawing")
         self.drawing_panel.Bind(EVT_UPDATE_GUI, self.OnUpdate)
+        self.drawing_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
 
         btnStart = wx.Button(self, label="Start")
         btnStop = wx.Button(self, label="Stop")
@@ -391,6 +373,12 @@ class TangibleLandscapePlugin(wx.Dialog):
         params = {}
         if self.scan['scan_name']:
             params['output'] = self.scan['scan_name']
+        if self.settings['tangible']['drawing']['active'] and self.settings['tangible']['drawing']['name']:
+            params['draw_output'] = self.settings['tangible']['drawing']['name']
+            params['draw'] = self.settings['tangible']['drawing']['type']
+            params['draw_threshold'] = self.settings['tangible']['drawing']['threshold']
+            # we don't want to scan when drawing
+            del params['output']
         if self.scan['interpolate']:
             method = 'interpolation'
         else:
@@ -407,20 +395,21 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
         if continuous:
             params['flags'] = 'l'
-        if self.scan['equalize']:
+        if self.scan['equalize'] and 'output' in params:
             if 'flags' in params and params['flags']:
                 params['flags'] += 'e'
-        if self.settings['tangible']['analyses']['contours']:
+        if self.settings['tangible']['analyses']['contours'] and 'output' in params:
             params['contours'] = self.settings['tangible']['analyses']['contours']
             params['contours_step'] = self.settings['tangible']['analyses']['contours_step']
-        if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['active'] and \
-           self.settings['tangible']['export']['file']:
-            params['ply'] = self.settings['tangible']['export']['file']
-        if self.settings['tangible']['drawing']['name']:
-            params['draw_output'] = self.settings['tangible']['drawing']['name']
-            params['draw'] = self.settings['tangible']['drawing']['type']
-            params['draw_threshold'] = self.settings['tangible']['drawing']['threshold']
-            del params['output']
+        # export PLY
+        if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['PLY'] and \
+           self.settings['tangible']['export']['PLY_file']:
+            params['ply'] = self.settings['tangible']['export']['PLY_file']
+        # export color
+        if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['color'] and \
+           self.settings['tangible']['export']['color_name']:
+            params['color_output'] = self.settings['tangible']['export']['color_name']
+
         self.process = gscript.start_command('r.in.kinect',
                                              trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
                                              method=method, zrange=zrange, rotate=self.scan['rotation_angle'],

@@ -2,7 +2,7 @@ MODULE_TOPDIR = ../..
 
 PGM= g.gui.tangible
 
-ETCFILES = tangible_utils change_handler analyses current_analyses drawing
+ETCFILES = tangible_utils change_handler analyses current_analyses drawing export
 
 include $(MODULE_TOPDIR)/include/Make/Script.make
 include $(MODULE_TOPDIR)/include/Make/Python.make

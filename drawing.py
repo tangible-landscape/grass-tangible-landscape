@@ -11,6 +11,7 @@ import wx
 
 from gui_core.gselect import Select
 import grass.script as gscript
+from grass.pydispatch.signal import Signal
 
 from tangible_utils import run_analyses, updateGUIEvt, EVT_UPDATE_GUI
 
@@ -20,8 +21,11 @@ class DrawingPanel(wx.Panel):
         wx.Panel.__init__(self, parent)
         self.giface = giface
         self.settings = settings
+        self.settingsChanged = Signal('ScanningPanel.settingsChanged')
+
         if 'drawing' not in self.settings:
             self.settings['drawing'] = {}
+            self.settings['drawing']['active'] = False
             self.settings['drawing']['name'] = ''
             self.settings['drawing']['type'] = 'point'
             self.settings['drawing']['append'] = False
@@ -29,6 +33,10 @@ class DrawingPanel(wx.Panel):
             self.settings['drawing']['threshold'] = 760
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
+        self.ifDraw = wx.CheckBox(self, label=_("Draw vector:"))
+        self.ifDraw.SetValue(self.settings['drawing']['active'])
+        self.ifDraw.Bind(wx.EVT_CHECKBOX, self.OnDrawChange)
+        self.ifDraw.Bind(wx.EVT_CHECKBOX, self.OnEnableDrawing)
         self.draw_vector = Select(self, size=(-1, -1), type='vector')
         self.draw_vector.SetValue(self.settings['drawing']['name'])
         self.draw_vector.Bind(wx.EVT_TEXT, self.OnDrawChange)
@@ -47,8 +55,9 @@ class DrawingPanel(wx.Panel):
         self.appendName.Bind(wx.EVT_TEXT, self.OnDrawChange)
         self.clearBtn = wx.Button(parent=self, label="Clear")
         self.clearBtn.Bind(wx.EVT_BUTTON, lambda evt: self._newAppendedVector(evt))
+
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Vector name:"), flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.ifDraw, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.draw_vector, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -65,13 +74,29 @@ class DrawingPanel(wx.Panel):
         mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
+        self.EnableDrawing(self.ifDraw.IsChecked())
 
     def OnDrawChange(self, event):
+        self.settings['drawing']['active'] = self.ifDraw.GetValue()
         self.settings['drawing']['name'] = self.draw_vector.GetValue().split('@')[0]
         self.settings['drawing']['appendName'] = self.appendName.GetValue().split('@')[0]
         self.settings['drawing']['type'] = ['point', 'line', 'area'][self.draw_type.GetSelection()]
         self.settings['drawing']['append'] = self.append.IsChecked()
         self.settings['drawing']['threshold'] = self.threshold.GetValue()
+        event.Skip()
+        self.settingsChanged.emit()
+
+    def OnEnableDrawing(self, event):
+        self.EnableDrawing(self.ifDraw.IsChecked())
+        event.Skip()
+
+    def EnableDrawing(self, enable):
+        self.draw_vector.Enable(enable)
+        self.appendName.Enable(enable)
+        self.draw_type.Enable(enable)
+        self.append.Enable(enable)
+        self.threshold.Enable(enable)
+        self.clearBtn.Enable(enable)
 
     def appendVector(self):
         if not self.settings['drawing']['append']:
