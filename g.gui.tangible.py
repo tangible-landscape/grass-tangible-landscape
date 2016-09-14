@@ -11,6 +11,7 @@ import wx
 import wx.lib.filebrowsebutton as filebrowse
 from shutil import copyfile
 from subprocess import PIPE
+import signal
 
 from grass.script.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
@@ -411,7 +412,7 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['contours'] = ""
         # export PLY
         if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['PLY'] and \
-           self.settings['tangible']['export']['PLY_file']:
+           self.settings['tangible']['export']['PLY_file'] and not self.settings['tangible']['drawing']['active']:
             params['ply'] = self.settings['tangible']['export']['PLY_file']
         elif editMode:
             params['ply'] = ""
@@ -472,8 +473,8 @@ class TangibleLandscapePlugin(wx.Dialog):
                 params = self.GatherParameters(editMode=True, continuous=True)
                 new_input = ["{}={}".format(key, params[key]) for key in params]
                 self.process.stdin.write('\n'.join(new_input) + '\n\n')
-                # 50 is a custom signal r.in.kinect looks for
-                self.process.send_signal(50)
+                # SIGUSR1 is the signal r.in.kinect looks for
+                self.process.send_signal(signal.SIGUSR1)
 
     def Start(self):
         self.Scan(continuous=True)
