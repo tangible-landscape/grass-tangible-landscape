@@ -107,7 +107,7 @@ def landform(scanned_elev, new, size=25, zscale=1, env=None):
 
 
 def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None):
-    gcore.run_command('r.geomorphon', overwrite=True, dem=scanned_elev, forms=new, search=search, skip=skip, flat=flat, dist=dist, env=env)
+    gcore.run_command('r.geomorphon', elevation=scanned_elev, forms=new, search=search, skip=skip, flat=flat, dist=dist, env=env)
 
 
 def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
@@ -263,7 +263,7 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
         gcore.warning("No change found!")
         gcore.run_command('v.edit', map=change, tool='create', env=env)
 
-    gcore.run_command('g.remove', flags='f', type='raster', name=[diff_thr, diff_thr_clump], env=env)
+    gcore.run_command('g.remove', flags='f', type=['raster', 'vector'], name=[change_vector, diff_thr, diff_thr_clump], env=env)
 
 
 def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
