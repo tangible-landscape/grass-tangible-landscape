@@ -10,6 +10,7 @@ import os
 import wx
 import wx.lib.filebrowsebutton as filebrowse
 from shutil import copyfile
+from subprocess import PIPE
 
 from grass.script.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
@@ -350,7 +351,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         UserSettings.SaveToFile(self.settings)
         self.Destroy()
 
-    def OnUpdate(self, event):
+    def OnUpdate(self, event=None):
         for each in self.giface.GetAllMapDisplays():
             each.GetMapWindow().UpdateMap(delay=self.delay)
 
@@ -365,24 +366,27 @@ class TangibleLandscapePlugin(wx.Dialog):
         # update
         self.calib_matrix = res['calib_matrix']
 
-    def Scan(self, continuous):
-        if self.process and self.process.poll() is None:
-            return
-        self.status.SetLabel("Scanning...")
-        wx.SafeYield()
+    def GatherParameters(self, editMode, continuous):
+        """Create dict of input parameteres for r.in.kinect.
+        Parameter editMode=True is needed when this dict is passed as stdin
+        into r.in.kinect during scanning. Parameter continuous is needed when
+        the scanning is supposed to run in loop and not just once"""
         params = {}
         if self.scan['scan_name']:
             params['output'] = self.scan['scan_name']
+        # drawing
         if self.settings['tangible']['drawing']['active'] and self.settings['tangible']['drawing']['name']:
             params['draw_output'] = self.settings['tangible']['drawing']['name']
             params['draw'] = self.settings['tangible']['drawing']['type']
             params['draw_threshold'] = self.settings['tangible']['drawing']['threshold']
             # we don't want to scan when drawing
-            del params['output']
-        if self.scan['interpolate']:
-            method = 'interpolation'
-        else:
-            method = 'mean'
+            if editMode:
+                params['output'] = ""
+            else:
+                del params['output']
+        elif editMode:
+            params['draw_output'] = ""
+
         if self.calib_matrix:
             params['calib_matrix'] = self.calib_matrix
         if self.scan['elevation']:
@@ -391,31 +395,59 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['region'] = self.scan['region']
         if self.scan['trim_tolerance']:
             params['trim_tolerance'] = self.scan['trim_tolerance']
-        trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
-        zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
+        # flags
+        params['flags'] = ''
         if continuous:
-            params['flags'] = 'l'
+            params['flags'] += 'l'
         if self.scan['equalize'] and 'output' in params:
-            if 'flags' in params and params['flags']:
-                params['flags'] += 'e'
+            params['flags'] += 'e'
+        if not editMode and not params['flags']:
+            del params['flags']
+
         if self.settings['tangible']['analyses']['contours'] and 'output' in params:
             params['contours'] = self.settings['tangible']['analyses']['contours']
             params['contours_step'] = self.settings['tangible']['analyses']['contours_step']
+        elif editMode:
+            params['contours'] = ""
         # export PLY
         if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['PLY'] and \
            self.settings['tangible']['export']['PLY_file']:
             params['ply'] = self.settings['tangible']['export']['PLY_file']
+        elif editMode:
+            params['ply'] = ""
         # export color
         if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['color'] and \
            self.settings['tangible']['export']['color_name']:
             params['color_output'] = self.settings['tangible']['export']['color_name']
+        elif editMode:
+            params['color_output'] = ""
 
-        self.process = gscript.start_command('r.in.kinect',
-                                             trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
-                                             method=method, zrange=zrange, rotate=self.scan['rotation_angle'],
-                                             resolution=float(self.scan['resolution'])/1000,
-                                             zexag=self.scan['zexag'], numscan=self.scan['numscans'],
-                                             overwrite=True, quiet=True, **params)
+        trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
+        params['trim'] = trim_nsew
+        params['smooth_radius'] = float(self.scan['smooth'])/1000
+        if self.scan['interpolate']:
+            method = 'interpolation'
+        else:
+            method = 'mean'
+        params['method'] = method
+        zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
+        params['zrange'] = zrange
+        params['rotate'] = self.scan['rotation_angle']
+        params['resolution'] = float(self.scan['resolution'])/1000
+        params['zexag'] = self.scan['zexag']
+        params['numscan'] = self.scan['numscans']
+
+        return params
+
+    def Scan(self, continuous):
+        if self.process and self.process.poll() is None:
+            return
+        self.status.SetLabel("Scanning...")
+        wx.SafeYield()
+        params = self.GatherParameters(editMode=False, continuous=continuous)
+
+        self.process = gscript.start_command('r.in.kinect', overwrite=True, quiet=True,
+                                             stdin=PIPE, **params)
         return self.process
 
     def ScanOnce(self, event):
@@ -423,19 +455,25 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Importing scan...")
         self.process.wait()
         self.process = None
-        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'])
+        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                     giface=self.giface, update=self.OnUpdate)
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
 
     def RestartIfNotRunning(self, event):
         """Mechanism to restart scanning if process ends or
-        there was a change in input options"""
+        to update scanning properties during running r.in.kinect
+        if scanning input changed"""
         if self.process and self.process.poll() is not None:
             self.Start()
         if self.changedInput:
             self.changedInput = False
-            self.Stop()
-            self.Start()
+            if self.process and self.process.poll() is None:
+                params = self.GatherParameters(editMode=True, continuous=True)
+                new_input = ["{}={}".format(key, params[key]) for key in params]
+                self.process.stdin.write('\n'.join(new_input) + '\n\n')
+                # 50 is a custom signal r.in.kinect looks for
+                self.process.send_signal(50)
 
     def Start(self):
         self.Scan(continuous=True)
@@ -472,13 +510,15 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Real-time scanning stopped.")
 
     def runImport(self):
-        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'])
+        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                     giface=self.giface, update=self.OnUpdate)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
     def runImportDrawing(self):
         self.drawing_panel.appendVector()
-        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'])
+        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                     giface=self.giface, update=self.OnUpdate)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
