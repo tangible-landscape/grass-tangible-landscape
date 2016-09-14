@@ -54,9 +54,10 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
-def run_analyses(settings, analysesFile, **kwargs):
+def run_analyses(settings, analysesFile, update, giface, **kwargs):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
+
     if not analysesFile or not os.path.exists(analysesFile):
         return
     scan_params = settings['tangible']['scan']
@@ -67,6 +68,7 @@ def run_analyses(settings, analysesFile, **kwargs):
     except StandardError as e:
         print e
         return
+
     functions = [func for func in dir(myanalyses) \
         if (func.startswith('run_') and func != 'run_command') or func.startswith('drawing_')]
     for func in functions:
@@ -79,7 +81,8 @@ def run_analyses(settings, analysesFile, **kwargs):
     # drawing needs different parameters
     # functions postprocessing drawing results start with 'drawing'
     # functions postprocessing scanning results start with 'run'
-    if settings['tangible']['drawing']['name']:
+
+    if settings['tangible']['drawing']['active']:
         functions = [func for func in dir(myanalyses) if func.startswith('drawing_')]
         for func in functions:
             try:
@@ -89,6 +92,7 @@ def run_analyses(settings, analysesFile, **kwargs):
                                             " draw_vector=settings['tangible']['drawing']['name'],"
                                             " draw_vector_append=settings['tangible']['drawing']['append'],"
                                             " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
+                                            " giface=giface, update=update,"
                                             " env=env, **kwargs)")
             except (CalledModuleError, StandardError) as e:
                 print e
@@ -99,6 +103,7 @@ def run_analyses(settings, analysesFile, **kwargs):
                 exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
                                             " scanned_elev=scan_params['scan_name'],"
                                             " zexag=scan_params['zexag'],"
+                                            " giface=giface, update=update,"
                                             " env=env, **kwargs)")
             except (CalledModuleError, StandardError) as e:
                 print e
