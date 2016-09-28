@@ -483,7 +483,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         mapsetPath = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
         path1 = os.path.join(mapsetPath, 'fcell')
         path2 = os.path.join(mapsetPath, 'vector')
-        if not os.path.exists(path1):  # this happens in new mapset
+        if not os.path.exists(path1) or not os.path.exists(path2):  # this happens in new mapset
             paths = [mapsetPath, mapsetPath]
         else:
             paths = [path1, path2]
