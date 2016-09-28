@@ -24,7 +24,7 @@ Installation:
     
 4.  Open GRASS GIS and install Tangible Landscape plugin using g.extension:
 
-        g.extension g.gui.tangible url=github.com/ncsu-osgeorel/grass-tangible-landscape
+        g.extension g.gui.tangible url=github.com/tangible-landscape/grass-tangible-landscape
 
 6. Close and restart GUI with `g.gui`.
 5.  Type this into GRASS GUI command console. A dialog
