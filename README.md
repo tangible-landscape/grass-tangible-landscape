@@ -18,6 +18,10 @@ Installation:
 2.  Install GRASS GIS addon
     [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
 3.  Install Python package watchdog using pip
+
+        sudo apt-get install python-pip
+        sudo pip install watchdog
+    
 4.  Open GRASS GIS and install Tangible Landscape plugin using g.extension:
 
         g.extension g.gui.tangible url=github.com/ncsu-osgeorel/grass-tangible-landscape
