@@ -11,12 +11,13 @@ from tangible_utils import run_analyses
 
 
 class FloodingPanel(wx.Panel):
-    def __init__(self, parent, giface, settings, runFunction):
+    def __init__(self, parent, giface, settings, runFunction, update):
         wx.Panel.__init__(self, parent)
         self.giface = giface
         self.settings = settings
         self.runFunction = runFunction
         self.round = 1
+        self.update = update
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         output_name = wx.TextCtrl(self, value="scen1")
         analysis = wx.Button(self, label="Run")
@@ -45,6 +46,7 @@ class FloodingPanel(wx.Panel):
 
     def Breach(self):
         gscript.run_command('v.extract', input="ridge_points", output="breach", layer=2, random=1, flags='t', overwrite=True)
+        self.update()
 
     def RunFlood(self, output_name):
         if not output_name:

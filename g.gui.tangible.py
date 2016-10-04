@@ -294,7 +294,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.notebook.AddPage(analyses_panel, "Analyses")
 
         from flooding_gui import FloodingPanel
-        flooding_panel = FloodingPanel(self.notebook, self.giface, self.settings, self.Scan)
+        flooding_panel = FloodingPanel(self.notebook, self.giface, self.settings, self.Scan, self.OnUpdate)
         self.notebook.AddPage(flooding_panel, "Flooding")
 
         self.exportPanel = ExportPanel(self.notebook, self.giface, self.settings['tangible'])
