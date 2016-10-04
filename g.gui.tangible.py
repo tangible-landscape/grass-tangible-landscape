@@ -8,9 +8,11 @@ Created on Wed Nov 20 14:44:32 2013
 
 import os
 import wx
-import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
 from shutil import copyfile
+
+from subprocess import PIPE
+import signal
 
 from grass.script.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
@@ -22,11 +24,9 @@ from core.settings import UserSettings
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
-
-from tangible_utils import run_analyses
-
-
-updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
+from tangible_utils import run_analyses, updateGUIEvt, EVT_UPDATE_GUI
+from drawing import DrawingPanel
+from export import ExportPanel
 
 
 class AnalysesPanel(wx.Panel):
@@ -100,7 +100,6 @@ class AnalysesPanel(wx.Panel):
                 self.selectAnalyses.SetValue(path)
                 self.settings['analyses']['file'] = path
         dlg.Destroy()
-
 
 class ScanningPanel(wx.Panel):
     def __init__(self, parent, giface, settings):
@@ -293,9 +292,18 @@ class TangibleLandscapePlugin(wx.Dialog):
         scanning_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
         analyses_panel = AnalysesPanel(self.notebook, self.giface, self.settings['tangible'])
         self.notebook.AddPage(analyses_panel, "Analyses")
+
         from flooding_gui import FloodingPanel
-        flooding_panel = FloodingPanel(self.notebook, self.giface, self.settings['tangible'], self.Scan)
+        flooding_panel = FloodingPanel(self.notebook, self.giface, self.settings, self.Scan)
         self.notebook.AddPage(flooding_panel, "Flooding")
+
+        self.exportPanel = ExportPanel(self.notebook, self.giface, self.settings['tangible'])
+        self.notebook.AddPage(self.exportPanel, "Export")
+        self.exportPanel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
+        self.drawing_panel = DrawingPanel(self.notebook, self.giface, self.settings['tangible'])
+        self.notebook.AddPage(self.drawing_panel, "Drawing")
+        self.drawing_panel.Bind(EVT_UPDATE_GUI, self.OnUpdate)
+        self.drawing_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
 
         btnStart = wx.Button(self, label="Start")
         btnStop = wx.Button(self, label="Stop")
@@ -349,7 +357,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         UserSettings.SaveToFile(self.settings)
         self.Destroy()
 
-    def OnUpdate(self, event):
+    def OnUpdate(self, event=None):
         for each in self.giface.GetAllMapDisplays():
             each.GetMapWindow().UpdateMap(delay=self.delay)
 
@@ -364,16 +372,27 @@ class TangibleLandscapePlugin(wx.Dialog):
         # update
         self.calib_matrix = res['calib_matrix']
 
-    def Scan(self, continuous):
-        if self.process and self.process.poll() is None:
-            return
-        self.status.SetLabel("Scanning...")
-        wx.SafeYield()
+    def GatherParameters(self, editMode, continuous):
+        """Create dict of input parameteres for r.in.kinect.
+        Parameter editMode=True is needed when this dict is passed as stdin
+        into r.in.kinect during scanning. Parameter continuous is needed when
+        the scanning is supposed to run in loop and not just once"""
         params = {}
-        if self.scan['interpolate']:
-            method = 'interpolation'
-        else:
-            method = 'mean'
+        if self.scan['scan_name']:
+            params['output'] = self.scan['scan_name']
+        # drawing
+        if self.settings['tangible']['drawing']['active'] and self.settings['tangible']['drawing']['name']:
+            params['draw_output'] = self.settings['tangible']['drawing']['name']
+            params['draw'] = self.settings['tangible']['drawing']['type']
+            params['draw_threshold'] = self.settings['tangible']['drawing']['threshold']
+            # we don't want to scan when drawing
+            if editMode:
+                params['output'] = ""
+            else:
+                del params['output']
+        elif editMode:
+            params['draw_output'] = ""
+
         if self.calib_matrix:
             params['calib_matrix'] = self.calib_matrix
         if self.scan['elevation']:
@@ -382,22 +401,59 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['region'] = self.scan['region']
         if self.scan['trim_tolerance']:
             params['trim_tolerance'] = self.scan['trim_tolerance']
-        trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
-        zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
+        # flags
+        params['flags'] = ''
         if continuous:
-            params['flags'] = 'l'
-        if self.scan['equalize']:
-            if 'flags' in params and params['flags']:
-                params['flags'] += 'e'
-        if self.settings['tangible']['analyses']['contours']:
+            params['flags'] += 'l'
+        if self.scan['equalize'] and 'output' in params:
+            params['flags'] += 'e'
+        if not editMode and not params['flags']:
+            del params['flags']
+
+        if self.settings['tangible']['analyses']['contours'] and 'output' in params:
             params['contours'] = self.settings['tangible']['analyses']['contours']
             params['contours_step'] = self.settings['tangible']['analyses']['contours_step']
-        self.process = gscript.start_command('r.in.kinect', output=self.scan['scan_name'],
-                                             trim=trim_nsew, smooth_radius=float(self.scan['smooth'])/1000,
-                                             method=method, zrange=zrange, rotate=self.scan['rotation_angle'],
-                                             resolution=float(self.scan['resolution'])/1000,
-                                             zexag=self.scan['zexag'], numscan=self.scan['numscans'],
-                                             overwrite=True, quiet=True, **params)
+        elif editMode:
+            params['contours'] = ""
+        # export PLY
+        if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['PLY'] and \
+           self.settings['tangible']['export']['PLY_file'] and not self.settings['tangible']['drawing']['active']:
+            params['ply'] = self.settings['tangible']['export']['PLY_file']
+        elif editMode:
+            params['ply'] = ""
+        # export color
+        if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['color'] and \
+           self.settings['tangible']['export']['color_name']:
+            params['color_output'] = self.settings['tangible']['export']['color_name']
+        elif editMode:
+            params['color_output'] = ""
+
+        trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
+        params['trim'] = trim_nsew
+        params['smooth_radius'] = float(self.scan['smooth'])/1000
+        if self.scan['interpolate']:
+            method = 'interpolation'
+        else:
+            method = 'mean'
+        params['method'] = method
+        zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
+        params['zrange'] = zrange
+        params['rotate'] = self.scan['rotation_angle']
+        params['resolution'] = float(self.scan['resolution'])/1000
+        params['zexag'] = self.scan['zexag']
+        params['numscan'] = self.scan['numscans']
+
+        return params
+
+    def Scan(self, continuous):
+        if self.process and self.process.poll() is None:
+            return
+        self.status.SetLabel("Scanning...")
+        wx.SafeYield()
+        params = self.GatherParameters(editMode=False, continuous=continuous)
+
+        self.process = gscript.start_command('r.in.kinect', overwrite=True, quiet=True,
+                                             stdin=PIPE, **params)
         return self.process
 
     def ScanOnce(self, event):
@@ -405,30 +461,43 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Importing scan...")
         self.process.wait()
         self.process = None
-        run_analyses(scan_params=self.scan, analysesFile=self.settings['tangible']['analyses']['file'])
+        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                     giface=self.giface, update=self.OnUpdate)
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
 
     def RestartIfNotRunning(self, event):
         """Mechanism to restart scanning if process ends or
-        there was a change in input options"""
+        to update scanning properties during running r.in.kinect
+        if scanning input changed"""
         if self.process and self.process.poll() is not None:
             self.Start()
         if self.changedInput:
             self.changedInput = False
-            self.Stop()
-            self.Start()
+            if self.process and self.process.poll() is None:
+                params = self.GatherParameters(editMode=True, continuous=True)
+                new_input = ["{}={}".format(key, params[key]) for key in params]
+                self.process.stdin.write('\n'.join(new_input) + '\n\n')
+                # SIGUSR1 is the signal r.in.kinect looks for
+                self.process.send_signal(signal.SIGUSR1)
 
     def Start(self):
         self.Scan(continuous=True)
         self.status.SetLabel("Real-time scanning is running now.")
         gisenv = gscript.gisenv()
-        path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'fcell')
-        if not os.path.exists(path):  # this happens in new mapset
-            path = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
-        event_handler = RasterChangeHandler(self.runImport, self.scan)
+        mapsetPath = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
+        path1 = os.path.join(mapsetPath, 'fcell')
+        path2 = os.path.join(mapsetPath, 'vector')
+        if not os.path.exists(path1) or not os.path.exists(path2):  # this happens in new mapset
+            paths = [mapsetPath, mapsetPath]
+        else:
+            paths = [path1, path2]
+        handlers = [RasterChangeHandler(self.runImport, self.scan),
+                    DrawingChangeHandler(self.runImportDrawing, self.settings['tangible']['drawing']['name'])]
         self.observer = Observer()
-        self.observer.schedule(event_handler, path)
+        for path, handler in zip(paths, handlers):
+            self.observer.schedule(handler, path)
+
         self.observer.start()
         self.timer.Start(1000)
 
@@ -447,15 +516,24 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Real-time scanning stopped.")
 
     def runImport(self):
-        run_analyses(scan_params=self.scan, analysesFile=self.settings['tangible']['analyses']['file'])
+        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                     giface=self.giface, update=self.OnUpdate)
+        evt = updateGUIEvt(self.GetId())
+        wx.PostEvent(self, evt)
+
+    def runImportDrawing(self):
+        self.drawing_panel.appendVector()
+        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                     giface=self.giface, update=self.OnUpdate)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
 
+
 def main(giface=None):
-    global Observer, RasterChangeHandler
+    global Observer, RasterChangeHandler, DrawingChangeHandler
     from watchdog.observers import Observer
-    from change_handler import RasterChangeHandler
+    from change_handler import RasterChangeHandler, DrawingChangeHandler
     dlg = TangibleLandscapePlugin(giface, parent=None)
     dlg.Show()
 
@@ -463,5 +541,6 @@ def main(giface=None):
 if __name__ == '__main__':
     gscript.parser()
     from watchdog.observers import Observer
-    from change_handler import RasterChangeHandler
+    from change_handler import RasterChangeHandler, DrawingChangeHandler
     main()
+

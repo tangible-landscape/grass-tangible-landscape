@@ -52,8 +52,8 @@ class FloodingPanel(wx.Panel):
 
         process = self.runFunction(continuous=False)
         process.wait()
-
-        run_analyses(scan_params=self.settings['scan'], analysesFile=self.settings['analyses']['file'],
+        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                     giface=self.giface, update=None,
                      new=output_name, round=self.round)
         for each in self.giface.GetAllMapDisplays():
             each.GetMapWindow().UpdateMap()

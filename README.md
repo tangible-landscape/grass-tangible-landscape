@@ -7,29 +7,34 @@ Branch coastal is used for a serious game where participants test different stor
 Dependencies:
 -------------
 
--   GRASS GIS 7, latest trunk is needed (starting with
-    [r67232](https://trac.osgeo.org/grass/changeset/67232))
+-   GRASS GIS 7.2
 -   Python package [watchdog](https://pypi.python.org/pypi/watchdog),
     install for example using pip
 -   GRASS GIS addon
-    [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
+    [r.in.kinect](https://github.com/tangible-landscape/r.in.kinect)
 
 Installation:
 -------------
 
-1.  Install GRASS GIS 7.
+1.  Install GRASS GIS 7.2. You need to compile it yourself, because 7.2 is not released yet. For GRASS GIS compilation, see instructions for [r.in.kinect](https://github.com/tangible-landscape/r.in.kinect).
 2.  Install GRASS GIS addon
-    [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
+    [r.in.kinect](https://github.com/tangible-landscape/r.in.kinect)
 3.  Install Python package watchdog using pip
+
+        sudo apt-get install python-pip
+        sudo pip install watchdog
+
 4.  Open GRASS GIS and install Tangible Landscape plugin (with costal branch) using g.extension:
 
-        g.extension g.gui.tangible url=https://github.com/ncsu-osgeorel/grass-tangible-landscape/archive/coastal.zip
+        g.extension g.gui.tangible url=https://github.com/tangible-landscape/grass-tangible-landscape/archive/coastal.zip
 
-5.  Type this into GRASS GUI command console. A dialog
+5. Close and restart GUI with `g.gui`.
+
+6.  Type this into GRASS GUI command console. A dialog
     should now open.
 
         g.gui.tangible
     
-![Tangible Landscape plugin](https://github.com/ncsu-osgeorel/grass-tangible-landscape/blob/master/tangible_landscape_dialog.png "Tangible Landscape plugin")
+![Tangible Landscape plugin](https://github.com/tangible-landscape/grass-tangible-landscape/blob/master/tangible_landscape_dialog.png "Tangible Landscape plugin")
 
 

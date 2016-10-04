@@ -15,6 +15,10 @@ import imp
 from grass.script import core as gcore
 from grass.exceptions import CalledModuleError, ScriptError
 
+import wx
+import wx.lib.newevent
+updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
+
 
 def get_environment(**kwargs):
     """!Returns environment for running modules.
@@ -50,12 +54,13 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
-def run_analyses(scan_params, analysesFile, **kwargs):
+def run_analyses(settings, analysesFile, update, giface, **kwargs):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
+
     if not analysesFile or not os.path.exists(analysesFile):
         return
-
+    scan_params = settings['tangible']['scan']
     env = get_environment(rast=scan_params['scan_name'])
     # run analyses
     try:
@@ -63,7 +68,9 @@ def run_analyses(scan_params, analysesFile, **kwargs):
     except StandardError as e:
         print e
         return
-    functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
+
+    functions = [func for func in dir(myanalyses) \
+        if (func.startswith('run_') and func != 'run_command') or func.startswith('drawing_')]
     for func in functions:
         exec('del myanalyses.' + func)
     try:
@@ -71,11 +78,33 @@ def run_analyses(scan_params, analysesFile, **kwargs):
     except StandardError as e:
         print e
         return
-    functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
-    for func in functions:
-        try:
-            exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
-                                        " scanned_elev=scan_params['scan_name'],"
-                                        " zexag=scan_params['zexag'], env=env, **kwargs)")
-        except StandardError as e:
-            print e
+    # drawing needs different parameters
+    # functions postprocessing drawing results start with 'drawing'
+    # functions postprocessing scanning results start with 'run'
+
+    if settings['tangible']['drawing']['active']:
+        functions = [func for func in dir(myanalyses) if func.startswith('drawing_')]
+        for func in functions:
+            try:
+                exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
+                                            " scanned_elev=scan_params['scan_name'],"
+                                            " zexag=scan_params['zexag'],"
+                                            " draw_vector=settings['tangible']['drawing']['name'],"
+                                            " draw_vector_append=settings['tangible']['drawing']['append'],"
+                                            " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
+                                            " giface=giface, update=update,"
+                                            " env=env, **kwargs)")
+            except (CalledModuleError, StandardError) as e:
+                print e
+    else:
+        functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
+        for func in functions:
+            try:
+                exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
+                                            " scanned_elev=scan_params['scan_name'],"
+                                            " zexag=scan_params['zexag'],"
+                                            " giface=giface, update=update,"
+                                            " env=env, **kwargs)")
+            except (CalledModuleError, StandardError) as e:
+                print e
+
