@@ -374,7 +374,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         the scanning is supposed to run in loop and not just once"""
         params = {}
         if self.scan['scan_name']:
-            params['output'] = self.scan['scan_name']
+            params['output'] = self.scan['scan_name'] + 'tmp'
         # drawing
         if self.settings['tangible']['drawing']['active'] and self.settings['tangible']['drawing']['name']:
             params['draw_output'] = self.settings['tangible']['drawing']['name']

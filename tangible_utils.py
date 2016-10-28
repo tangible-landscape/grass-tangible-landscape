@@ -58,10 +58,11 @@ def run_analyses(settings, analysesFile, update, giface, **kwargs):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
+    scan_params = settings['tangible']['scan']
+    gcore.run_command('g.copy', raster=[scan_params['scan_name'] + 'tmp', scan_params['scan_name']], overwrite=True, quiet=True)
+    env = get_environment(rast=scan_params['scan_name'])
     if not analysesFile or not os.path.exists(analysesFile):
         return
-    scan_params = settings['tangible']['scan']
-    env = get_environment(rast=scan_params['scan_name'])
     # run analyses
     try:
         myanalyses = imp.load_source('myanalyses', analysesFile)
