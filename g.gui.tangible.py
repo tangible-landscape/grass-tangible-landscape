@@ -302,6 +302,8 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         btnStart = wx.Button(self, label="Start")
         btnStop = wx.Button(self, label="Stop")
+        btnPause = wx.Button(self, label="Pause")
+        self.btnPause = btnPause
         btnScanOnce = wx.Button(self, label="Scan once")
         btnCalibrate = wx.Button(self, label="Calibrate")
         btnHelp = wx.Button(self, label="Help")
@@ -311,6 +313,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         # bind events
         btnStart.Bind(wx.EVT_BUTTON, lambda evt: self.Start())
         btnStop.Bind(wx.EVT_BUTTON, lambda evt: self.Stop())
+        btnPause.Bind(wx.EVT_BUTTON, lambda evt: self.Pause())
         btnCalibrate.Bind(wx.EVT_BUTTON, self.Calibrate)
         btnScanOnce.Bind(wx.EVT_BUTTON, self.ScanOnce)
         btnHelp.Bind(wx.EVT_BUTTON, self.OnHelp)
@@ -321,6 +324,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(btnStart, flag=wx.EXPAND | wx.ALL, border=5)
         hSizer.Add(btnStop, flag=wx.EXPAND | wx.ALL, border=5)
+        hSizer.Add(btnPause, flag=wx.EXPAND | wx.ALL, border=5)
         hSizer.Add(btnCalibrate, flag=wx.EXPAND | wx.ALL, border=5)
         hSizer.Add(btnScanOnce, flag=wx.EXPAND | wx.ALL, border=5)
         sizer.Add(hSizer, 0, wx.ALL | wx.EXPAND, 5)
@@ -342,6 +346,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(wx.EVT_TIMER, self.RestartIfNotRunning, self.timer)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(EVT_UPDATE_GUI, self.OnUpdate)
+
+        self.pause = None
 
     def OnHelp(self, event):
         """Show help"""
@@ -437,6 +443,11 @@ class TangibleLandscapePlugin(wx.Dialog):
         params['resolution'] = float(self.scan['resolution'])/1000
         params['zexag'] = self.scan['zexag']
         params['numscan'] = self.scan['numscans']
+        if self.process and self.process.poll() is None:  # still running
+            if self.pause is True:
+                params['pause'] = ''
+            elif self.pause is False:
+                params['resume'] = ''
 
         return params
 
@@ -515,6 +526,18 @@ class TangibleLandscapePlugin(wx.Dialog):
                 self.observer.join()
         self.timer.Stop()
         self.status.SetLabel("Real-time scanning stopped.")
+        self.pause = False
+        self.btnPause.SetLabel("Pause")
+
+    def Pause(self):
+        if self.process and self.process.poll() is None:  # still running
+            if not self.pause:
+                self.pause = True
+                self.btnPause.SetLabel("Resume")
+            else:
+                self.pause = False
+                self.btnPause.SetLabel("Pause")
+            self.changedInput = True
 
     def runImport(self):
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
