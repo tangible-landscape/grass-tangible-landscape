@@ -18,6 +18,9 @@ from grass.exceptions import CalledModuleError, ScriptError
 import wx
 import wx.lib.newevent
 updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
+addLayers, EVT_ADD_LAYERS = wx.lib.newevent.NewEvent()
+removeLayers, EVT_REMOVE_LAYERS = wx.lib.newevent.NewEvent()
+checkLayers, EVT_CHECK_LAYERS = wx.lib.newevent.NewEvent()
 
 
 def get_environment(**kwargs):
@@ -54,7 +57,7 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
-def run_analyses(settings, analysesFile, update, giface, **kwargs):
+def run_analyses(settings, analysesFile, update, giface, eventHandler, **kwargs):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
@@ -94,7 +97,7 @@ def run_analyses(settings, analysesFile, update, giface, **kwargs):
                                             " draw_vector_append=settings['tangible']['drawing']['append'],"
                                             " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
                                             " giface=giface, update=update,"
-                                            " env=env, **kwargs)")
+                                            " eventHandler=eventHandler, env=env, **kwargs)")
             except (CalledModuleError, StandardError) as e:
                 print e
     else:
@@ -105,6 +108,6 @@ def run_analyses(settings, analysesFile, update, giface, **kwargs):
                                             " scanned_elev=scan_params['scan_name'],"
                                             " zexag=scan_params['zexag'],"
                                             " giface=giface, update=update,"
-                                            " env=env, **kwargs)")
+                                            " eventHandler=eventHandler, env=env, **kwargs)")
             except (CalledModuleError, StandardError) as e:
                 print e

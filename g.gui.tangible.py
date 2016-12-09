@@ -25,6 +25,7 @@ from grass.pydispatch.signal import Signal
 
 
 from tangible_utils import run_analyses, updateGUIEvt, EVT_UPDATE_GUI
+from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS
 from drawing import DrawingPanel
 from export import ExportPanel
 
@@ -346,6 +347,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(wx.EVT_TIMER, self.RestartIfNotRunning, self.timer)
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Bind(EVT_UPDATE_GUI, self.OnUpdate)
+        self.Bind(EVT_ADD_LAYERS, self.OnAddLayers)
+        self.Bind(EVT_REMOVE_LAYERS, self.OnRemoveLayers)
+        self.Bind(EVT_CHECK_LAYERS, self.OnCheckLayers)
 
         self.pause = None
 
@@ -541,17 +545,40 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def runImport(self):
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
     def runImportDrawing(self):
         self.drawing_panel.appendVector()
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
+    def postEvent(self, event):
+        wx.PostEvent(self, event)
+
+    def OnAddLayers(self, event):
+        ll = self.giface.GetLayerList()
+        for each in event.layerSpecs:
+            ll.AddLayer(**each)
+
+    def OnRemoveLayers(self, event):
+        ll = self.giface.GetLayerList()
+        if not hasattr(ll, 'DeleteLayer'):
+            print "Removing layers from layer Manager requires GRASS GIS version > 7.2"
+            return
+        for each in event.layers:
+            ll.DeleteLayer(each)
+
+    def OnCheckLayers(self, event):
+        ll = self.giface.GetLayerList()
+        if not hasattr(ll, 'CheckLayer'):
+            print "Checking and unchecking layers in layer Manager requires GRASS GIS version > 7.2"
+            return
+        for each in event.layers:
+            ll.CheckLayer(each, checked=event.checked)
 
 
 def main(giface=None):
