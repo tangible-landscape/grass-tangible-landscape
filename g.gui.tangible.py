@@ -301,7 +301,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.notebook.AddPage(self.drawing_panel, "Drawing")
         self.drawing_panel.Bind(EVT_UPDATE_GUI, self.OnUpdate)
         self.drawing_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
-        self.color_panel = ColorInteractionPanel(self.notebook, self.giface, self.settings['tangible'])
+        self.color_panel = ColorInteractionPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
         self.notebook.AddPage(self.color_panel, "Color")
         
 
@@ -431,9 +431,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         elif editMode:
             params['ply'] = ""
         # export color
-        if 'export' in self.settings['tangible'] and self.settings['tangible']['export']['color'] and \
-           self.settings['tangible']['export']['color_name']:
-            params['color_output'] = self.settings['tangible']['export']['color_name']
+        if 'color' in self.settings['tangible'] and self.settings['tangible']['color']['active'] and \
+           self.settings['tangible']['color']['name']:
+            params['color_output'] = self.settings['tangible']['color']['name']
         elif editMode:
             params['color_output'] = ""
 
@@ -458,6 +458,11 @@ class TangibleLandscapePlugin(wx.Dialog):
                 params['resume'] = ''
 
         return params
+
+    def IsScanning(self):
+        if self.process and self.process.poll() is None:
+            return True
+        return False
 
     def Scan(self, continuous):
         if self.process and self.process.poll() is None:

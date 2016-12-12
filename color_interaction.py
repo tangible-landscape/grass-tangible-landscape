@@ -13,13 +13,13 @@ from gui_core.gselect import Select
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
-from tangible_utils import get_environment, run_analyses, updateGUIEvt, EVT_UPDATE_GUI
+from tangible_utils import get_environment
 
 
 class ColorInteractionPanel(wx.Panel):
-    def __init__(self, parent, giface, settings):
+    def __init__(self, parent, giface, settings, scaniface):
         wx.Panel.__init__(self, parent)
-        self.group = 'color'
+        self.group = None
         self.segment = 'segment'
         self.segment_clump = 'segment_clump'
         self.signature = 'signature'
@@ -30,81 +30,125 @@ class ColorInteractionPanel(wx.Panel):
 
         self.env = None
         self.giface = giface
+        self.parent = parent
         self.settings = settings
+        self.scaniface = scaniface
         self.settingsChanged = Signal('ColorInteractionPanel.settingsChanged')
 
-#        if 'drawing' not in self.settings:
-#            self.settings['drawing'] = {}
-#            self.settings['drawing']['active'] = False
-#            self.settings['drawing']['name'] = ''
-#            self.settings['drawing']['type'] = 'point'
-#            self.settings['drawing']['append'] = False
-#            self.settings['drawing']['appendName'] = ''
-#            self.settings['drawing']['threshold'] = 760
+        if 'color' not in self.settings:
+            self.settings['color'] = {}
+            self.settings['color']['active'] = False
+            self.settings['color']['name'] = ''
+            self.settings['color']['training'] = ''
 
-        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        self.hide = []
+        self.ifColor = wx.CheckBox(self, label=_("Save color rasters:"))
+        self.ifColor.SetValue(self.settings['color']['active'])
+        self.ifColor.Bind(wx.EVT_CHECKBOX, self.OnChange)
+        self.exportColor = Select(self, size=(-1, -1), type='raster')
+        self.exportColor.SetValue(self.settings['color']['name'])
+        self.exportColor.Bind(wx.EVT_TEXT, self.OnChange)
+        self.hide.append(self.exportColor)
+        if self.settings['color']['name']:
+            self.group = self.settings['color']['name']
+
         self.trainingAreas = Select(self, size=(-1, -1), type='raster')
-        self.calibrateBtn = wx.Button(self, label=_("Calibrate"))
-        self.calibrateBtn.Bind(wx.EVT_BUTTON, lambda evt: self.Calibration(self.trainingAreas.GetValue()))
-        
-        self.analyzeBtn = wx.Button(self, label=_("Scan and process"))
-        self.analyzeBtn.Bind(wx.EVT_BUTTON, self.OnRun)
+        self.trainingAreas.SetValue(self.settings['color']['training'])
+        self.trainingAreas.Bind(wx.EVT_TEXT, self.OnChange)
+        labelTraining = wx.StaticText(self, label=_("Training areas:"))
+        self.hide.append(self.trainingAreas)
+        self.hide.append(labelTraining)
+        calibrateBtn = wx.Button(self, label=_("Calibrate"))
+        calibrateBtn.Bind(wx.EVT_BUTTON, self.OnCalibration)
+        self.hide.append(calibrateBtn)
 
-#        self.ifDraw = wx.CheckBox(self, label=_("Draw vector:"))
-#        self.ifDraw.SetValue(self.settings['drawing']['active'])
-#        self.ifDraw.Bind(wx.EVT_CHECKBOX, self.OnDrawChange)
-#        self.ifDraw.Bind(wx.EVT_CHECKBOX, self.OnEnableDrawing)
-#        self.draw_vector = Select(self, size=(-1, -1), type='vector')
-#        self.draw_vector.SetValue(self.settings['drawing']['name'])
-#        self.draw_vector.Bind(wx.EVT_TEXT, self.OnDrawChange)
-#        self.draw_type = wx.RadioBox(parent=self, label="Vector type", choices=['point', 'line', 'area'])
-#        {'point': 0, 'line': 1, 'area': 2}[self.settings['drawing']['type']]
-#        self.draw_type.SetSelection({'point': 0, 'line': 1, 'area': 2}[self.settings['drawing']['type']])
-#        self.draw_type.Bind(wx.EVT_RADIOBOX, self.OnDrawChange)
-#        self.threshold = wx.SpinCtrl(parent=self, min=0, max=765, initial=int(self.settings['drawing']['threshold']))
-#        self.threshold.SetValue(int(self.settings['drawing']['threshold']))
-#        self.threshold.Bind(wx.EVT_SPINCTRL, self.OnDrawChange)
-#        self.append = wx.CheckBox(parent=self, label="Append vector")
-#        self.append.SetValue(self.settings['drawing']['append'])
-#        self.append.Bind(wx.EVT_CHECKBOX, self.OnDrawChange)
-#        self.appendName = Select(self, size=(-1, -1), type='vector')
-#        self.appendName.SetValue(self.settings['drawing']['appendName'])
-#        self.appendName.Bind(wx.EVT_TEXT, self.OnDrawChange)
+        analyzeBtn = wx.Button(self, label=_("Scan and process"))
+        analyzeBtn.Bind(wx.EVT_BUTTON, self.OnAnalysis)
+        self.hide.append(analyzeBtn)
 
-
+        self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label=_("Training areas:")), flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.ifColor, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.exportColor, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(labelTraining, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.calibrateBtn, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer.Add(calibrateBtn, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.AddStretchSpacer()
-        sizer.Add(self.analyzeBtn, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-        self.SetSizer(mainSizer)
-        mainSizer.Fit(self)
-        
+        sizer.Add(analyzeBtn, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        self.SetSizer(self.mainSizer)
+        self.mainSizer.Fit(self)
+
+        self._enable()
+
+    def OnChange(self, event):
+        self.settings['color']['training'] = self.trainingAreas.GetValue()
+        self.settings['color']['active'] = self.ifColor.IsChecked()
+        self.settings['color']['name'] = self.exportColor.GetValue()
+        self.group = self.settings['color']['name']
+        self._enable()
+
+    def _enable(self):
+        for each in self.hide:
+            each.Enable(self.ifColor.IsChecked())
+
     def _defineEnvironment(self):
         maps = gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group).strip()
         if maps:
-            print 'set'
             self.env = get_environment(raster=maps.splitlines()[0])
-        
-    def OnRun(self, event):
+
+    def OnAnalysis(self, event):
         self._defineEnvironment()
-        self.Analyze(self.env)
-        
-    def Calibration(self, training):
+        self.Run(self.Analyze)
+
+    def OnCalibration(self, event):
         self._defineEnvironment()
-        gscript.run_command('i.gensigset', trainingmap=training, group=self.group, subgroup=self.group, signaturefile=self.signature, env=self.env)
-    
-    def Analyze(self, env):
-        gscript.run_command('i.segment', group=self.group, output=self.segment, threshold=0.6, minsize=100, env=env)
-        gscript.run_command('r.clump', input=self.segment, output=self.segment_clump, env=env)
+        training = self.trainingAreas.GetValue()
+        if not training:
+            return
+        self.Run(self.Calibrate)
+
+    def Run(self, func):
+        ll = self.giface.GetLayerList()
+        checked = []
+        for l in ll:
+            if ll.IsLayerChecked(l):
+                checked.append(l.cmd)
+                ll.CheckLayer(l, False)
+        wx.Yield()
+
+        if not self.scaniface.IsScanning():
+            self.scaniface.Scan(continuous=False)
+            self.scaniface.process.wait()
+            self.scaniface.process = None
+            self.scaniface.status.SetLabel("Done.")
+            self.Done(func, checked)
+        elif self.scaniface.pause:
+            pass
+        else:
+            wx.CallLater(2000, self.Done, func, checked)
+
+    def Done(self, func, checked):
+        func()
+        ll = self.giface.GetLayerList()
+        for l in ll:
+            if l.cmd in checked:
+                ll.CheckLayer(l, True)
+
+    def Calibrate(self):
+        gscript.run_command('i.gensigset', trainingmap=self.settings['color']['training'], group=self.group,
+                            subgroup=self.group, signaturefile=self.signature, env=self.env, overwrite=True)  # we need here overwrite=True
+
+    def Analyze(self):
+        gscript.run_command('i.segment', group=self.group, output=self.segment, threshold=0.3, minsize=50, env=self.env)
+        gscript.run_command('r.clump', input=self.segment, output=self.segment_clump, env=self.env)
         gscript.run_command('i.smap', group=self.group, subgroup=self.group, signaturefile=self.signature,
-                            output=self.classification, goodness=self.reject, env=env)
-        percentile = float(gscript.parse_command('r.univar', flags='ge', map=self.reject, env=env)['percentile_90'])
+                            output=self.classification, goodness=self.reject, env=self.env)
+        percentile = float(gscript.parse_command('r.univar', flags='ge', map=self.reject, env=self.env)['percentile_90'])
         gscript.mapcalc('{new} = if({classif} < {thres}, {classif}, null())'.format(new=self.filtered_classification,
-                                                                                    classif=self.classification, thres=percentile), env=env)
-        gscript.run_command('r.stats.quantile', base=self.segment_clump, cover=self.filtered_classification, output=self.output, env=env)
-        
+                                                                                    classif=self.classification, thres=percentile), env=self.env)
+        gscript.run_command('r.stats.quantile', base=self.segment_clump, cover=self.filtered_classification, output=self.output, env=self.env)
