@@ -481,7 +481,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.process.wait()
         self.process = None
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
 
