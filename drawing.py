@@ -54,7 +54,10 @@ class DrawingPanel(wx.Panel):
         self.appendName.SetValue(self.settings['drawing']['appendName'])
         self.appendName.Bind(wx.EVT_TEXT, self.OnDrawChange)
         self.clearBtn = wx.Button(parent=self, label="Clear")
-        self.clearBtn.Bind(wx.EVT_BUTTON, lambda evt: self._newAppendedVector(evt))
+        #self.clearBtn.Bind(wx.EVT_BUTTON, lambda evt: self._newAppendedVector(evt))
+        #######################################################
+        self.clearBtn.Bind(wx.EVT_BUTTON, self._writeEmptyFile)
+        #######################################################
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.ifDraw, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -110,8 +113,19 @@ class DrawingPanel(wx.Panel):
                             flags='a', overwrite=True, quiet=True)
 
     def _newAppendedVector(self, event=None):
-        gscript.run_command('v.edit', tool='create', map=self.settings['drawing']['appendName'],
-                            overwrite=True, quiet=True)
+        if self.settings['drawing']['appendName']:
+            gscript.run_command('v.edit', tool='create', map=self.settings['drawing']['appendName'],
+                                overwrite=True, quiet=True)
+        if event:
+            event.Skip()
+        evt = updateGUIEvt(self.GetId())
+        wx.PostEvent(self, evt)
+        
+    def _writeEmptyFile(self, event):
+        path = '/run/user/1000/gvfs/smb-share:server=192.168.0.2,share=eetlm/TA_IVE_app/Watch/empty.txt'
+        open(path, 'a').close()
+        event.Skip()
+        gscript.run_command('v.edit', tool='create', map='trees', overwrite=True, quiet=True)
         if event:
             event.Skip()
         evt = updateGUIEvt(self.GetId())

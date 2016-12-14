@@ -11,7 +11,6 @@ import os
 import wx
 import wx.lib.filebrowsebutton as filebrowse
 
-from gui_core.gselect import Select
 from grass.pydispatch.signal import Signal
 
 
@@ -24,9 +23,7 @@ class ExportPanel(wx.Panel):
 
         if 'export' not in self.settings:
             self.settings['export'] = {}
-            self.settings['export']['color'] = False
             self.settings['export']['PLY'] = False
-            self.settings['export']['color_name'] = ''
             self.settings['export']['PLY_file'] = ''
 
         if self.settings['export']['PLY_file']:
@@ -40,19 +37,7 @@ class ExportPanel(wx.Panel):
                                                      startDirectory=initDir, initialValue=self.settings['export']['PLY_file'],
                                                      changeCallback=self.OnChange)
 
-
-        self.ifColor = wx.CheckBox(self, label="Save color rasters:")
-        self.ifColor.SetValue(self.settings['export']['color'])
-        self.ifColor.Bind(wx.EVT_CHECKBOX, self.OnChange)
-        self.exportColor = Select(self, size=(-1, -1), type='raster')
-        self.exportColor.SetValue(self.settings['export']['color_name'])
-        self.exportColor.Bind(wx.EVT_TEXT, self.OnChange)
-
         mainSizer = wx.BoxSizer(wx.VERTICAL)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.ifColor, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.exportColor, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.ifPLY, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=3)
         sizer.Add(self.exportPLY, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, proportion=1, border=0)
@@ -61,8 +46,6 @@ class ExportPanel(wx.Panel):
         mainSizer.Fit(self)
 
     def OnChange(self, event):
-        self.settings['export']['color'] = self.ifColor.IsChecked()
         self.settings['export']['PLY'] = self.ifPLY.IsChecked()
-        self.settings['export']['color_name'] = self.exportColor.GetValue()
         self.settings['export']['PLY_file'] = self.exportPLY.GetValue()
         self.settingsChanged.emit()

@@ -130,7 +130,7 @@ class ColorInteractionPanel(wx.Panel):
         elif self.scaniface.pause:
             pass
         else:
-            wx.CallLater(2000, self.Done, func, checked)
+            wx.CallLater(3000, self.Done, func, checked)
 
     def Done(self, func, checked):
         func()
