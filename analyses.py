@@ -222,48 +222,66 @@ def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
 def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
     diff_thr = 'diff_thr_' + str(uuid.uuid4()).replace('-', '')
     diff_thr_clump = 'diff_thr_clump_' + str(uuid.uuid4()).replace('-', '')
-    change_vector = 'change_vector_' + str(uuid.uuid4()).replace('-', '')
-    if add:
-        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({after} - {before}) > {thr1} &&"
-                                                  " ({after} - {before}) < {thr2}, 1, null())".format(diff_thr=diff_thr,  after=after,
-                                                                                                      before=before, thr1=height_threshold[0],
-                                                                                                      thr2=height_threshold[1]), env=env)
-    else:
-        gcore.run_command('r.mapcalc', expression="{diff_thr} = if(({before} - {after}) > {thr}, 1, null())".format(diff_thr=diff_thr,
-                          after=after, before=before, thr=height_threshold), env=env)
+    regressed = 'regressed_' + str(uuid.uuid4()).replace('-', '')
+    match_scan(base=before, scan=after, matched=regressed, env=env)
+    coeff = gcore.parse_command('r.regression.line', mapx=after, mapy=before, flags='g', env=env)
+    try:
+        if add:
+            grast.mapcalc("{diff_thr} = if(({a} + {b} * {after} - {before}) > {thr1} &&"
+                          " ({a} + {b} * {after} - {before}) < {thr2}, 1, null())".format(a=coeff['a'], b=coeff['b'],
+                                                                                          diff_thr=diff_thr, after=after,
+                                                                                          before=before, thr1=height_threshold[0],
+                                                                                          thr2=height_threshold[1]), env=env)
+        else:
+            grast.mapcalc("{diff_thr} = if(({before} - {a} + {b} * {after}) > {thr}, 1, null())".format(diff_thr=diff_thr,
+                                                                                                        a=coeff['a'], b=coeff['b'],
+                                                                                                        after=after, before=before,
+                                                                                                        thr=height_threshold), env=env)
 
-    gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
-
-    stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split(os.linesep)
-    if len(stats) > 0 and stats[0]:
-        print stats
-        cats = []
-        found = 0
-        for stat in stats:
-            if found >= max_detected:
-                break
-            if float(stat.split()[1]) < cells_threshold[1] and float(stat.split()[1]) > cells_threshold[0]: # larger than specified number of cells
-                found += 1
-                cat, value = stat.split()
-                cats.append(cat)
-        if cats:
-            expression = '{change} = if(('.format(change=change)
-            for i, cat in enumerate(cats):
-                if i != 0:
-                    expression += ' || '
-                expression += '{diff_thr_clump} == {val}'.format(diff_thr_clump=diff_thr_clump, val=cat)
-            expression += '), 1, null())'
-            gcore.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
-            gcore.run_command('r.to.vect', flags='st', input=change, output=change_vector, type='area', env=env)
-            gcore.run_command('v.to.points', flags='t', input=change_vector, type='centroid', output=change, env=env)
+        gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
+        stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split(os.linesep)
+        if len(stats) > 0 and stats[0]:
+            cats = []
+            found = 0
+            for stat in stats:
+                if found >= max_detected:
+                    break
+                if float(stat.split()[1]) < cells_threshold[1] and float(stat.split()[1]) > cells_threshold[0]: # larger than specified number of cells
+                    found += 1
+                    cat, value = stat.split()
+                    cats.append(cat)
+            if cats:
+                expression = '{change} = if(('.format(change=change)
+                for i, cat in enumerate(cats):
+                    if i != 0:
+                        expression += ' || '
+                    expression += '{diff_thr_clump} == {val}'.format(diff_thr_clump=diff_thr_clump, val=cat)
+                expression += '), 1, null())'
+                gcore.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
+                gcore.run_command('r.volume', flags='f', input=change, clump=change, centroids=change, env=env)
+            else:
+                gcore.warning("No change found!")
+                gcore.run_command('v.edit', map=change, tool='create', env=env)
         else:
             gcore.warning("No change found!")
             gcore.run_command('v.edit', map=change, tool='create', env=env)
-    else:
-        gcore.warning("No change found!")
-        gcore.run_command('v.edit', map=change, tool='create', env=env)
 
-    gcore.run_command('g.remove', flags='f', type=['raster', 'vector'], name=[change_vector, diff_thr, diff_thr_clump], env=env)
+        gcore.run_command('g.remove', flags='f', type=['raster'], name=[diff_thr, diff_thr_clump, regressed], env=env)
+    except:
+        gcore.run_command('g.remove', flags='f', type=['raster'], name=[diff_thr, diff_thr_clump, regressed], env=env)
+
+
+def drain(elevation, point, drain, conditioned, env):
+    data = gcore.read_command('v.out.ascii', input=point, format='point', env=env).strip()
+    if data:
+        x, y, cat = data.split('|')
+        if conditioned:
+            gcore.run_command('r.hydrodem', input=elevation, output=conditioned, mod=50, size=50, flags='a', env=env)
+            gcore.run_command('r.drain', input=conditioned, output=drain, drain=drain, start_coordinates='{},{}'.format(x, y), env=env)
+        else:
+            gcore.run_command('r.drain', input=elevation, output=drain, drain=drain, start_coordinates='{},{}'.format(x, y), env=env)
+    else:
+        gcore.run_command('v.edit', map=drain, tool='create', env=env)
 
 
 def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
