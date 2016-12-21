@@ -258,7 +258,7 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
                     expression += '{diff_thr_clump} == {val}'.format(diff_thr_clump=diff_thr_clump, val=cat)
                 expression += '), 1, null())'
                 gcore.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
-                gcore.run_command('r.volume', flags='f', input=change, clump=change, centroids=change, env=env)
+                gcore.run_command('r.volume', flags='f', input=change, clump=diff_thr_clump, centroids=change, env=env)
             else:
                 gcore.warning("No change found!")
                 gcore.run_command('v.edit', map=change, tool='create', env=env)
