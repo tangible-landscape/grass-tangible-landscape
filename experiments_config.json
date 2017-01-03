@@ -1,0 +1,69 @@
+{
+  "tasks": [
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=elevation"
+        ], 
+        [
+          "d.vect", 
+          "map=roadsmajor"
+        ]
+      ], 
+      "base": "elevation",
+      "time_limit": 600, 
+      "analyses": "", 
+      "title": "Task 1a: Drain"
+    }, 
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=aspect"
+        ], 
+        [
+          "d.vect", 
+          "map=roadsmajor",
+          "color=red"
+        ]
+      ], 
+      "base": "elev_lid792_1m@PERMANENT",
+      "time_limit": 600, 
+      "analyses": "", 
+      "title": "Task 2b: Channel"
+    }, 
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=slope"
+        ], 
+        [
+          "d.vect", 
+          "map=roadsmajor"
+        ]
+      ], 
+      "base": "elevation",
+      "time_limit": 600, 
+      "analyses": "", 
+      "title": "Task 3a: Cut and Fill"
+    }, 
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=elevation"
+        ], 
+        [
+          "d.vect", 
+          "map=roadsmajor"
+        ]
+      ], 
+      "base": "elevation",
+      "time_limit": 600, 
+      "analyses": "", 
+      "title": "Task 3b: Cut and Fill"
+    }
+  ]
+}
