@@ -148,7 +148,7 @@ class ExperimentPanel(wx.Panel):
     def OnStart(self, event):
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
-        self.settings['analyses']['file'] = self.tasks[self.current]['analyses']
+        self.settings['analyses']['file'] = os.path.join(self.configDir, self.tasks[self.current]['analyses'])
         # resume scanning
         self.scaniface.pause = False
         self.scaniface.changedInput = True
@@ -186,7 +186,7 @@ class ExperimentPanel(wx.Panel):
                                 opacity=1.0, cmd=cmd)
                 zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
-                ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=1.0, cmd=cmd)
         self.giface.GetMapWindow().ZoomToMap(layers=zoom)
 
