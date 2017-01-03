@@ -98,7 +98,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, **kwargs)
                                             " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
-            except (CalledModuleError, StandardError) as e:
+            except (CalledModuleError, StandardError, ScriptError) as e:
                 print e
     else:
         functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
@@ -109,5 +109,5 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, **kwargs)
                                             " zexag=scan_params['zexag'],"
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
-            except (CalledModuleError, StandardError) as e:
+            except (CalledModuleError, StandardError, ScriptError) as e:
                 print e
