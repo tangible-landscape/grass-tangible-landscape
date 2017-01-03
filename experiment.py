@@ -147,6 +147,7 @@ class ExperimentPanel(wx.Panel):
 
     def OnStart(self, event):
         self.LoadLayers()
+        self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = self.tasks[self.current]['analyses']
         # resume scanning
         self.scaniface.pause = False
@@ -178,13 +179,16 @@ class ExperimentPanel(wx.Panel):
 
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
+        zoom = []
         for cmd in self.tasks[self.current]['layers']:
             if cmd[0] == 'd.rast':
-                ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
-                            opacity=1.0, cmd=cmd)
+                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                                opacity=1.0, cmd=cmd)
+                zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
                             opacity=1.0, cmd=cmd)
+        self.giface.GetMapWindow().ZoomToMap(layers=zoom)
 
     def PostProcessing(self):
         env = get_environment(rast=self.settings['scan']['scan_name'])
