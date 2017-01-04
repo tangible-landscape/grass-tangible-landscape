@@ -229,9 +229,11 @@ class ExperimentPanel(wx.Panel):
         functions = [func for func in dir(postprocess) if func.startswith('post_')]
         for func in functions:
             try:
-                exec('postprocess.' + func + "(real_elev=scan_params['elevation'],"
-                                             " scanned_elev=scan_params['scan_name'],"
+                exec('postprocess.' + func + "(real_elev=self.settings['scan']['elevation'],"
+                                             " scanned_elev=self.settings['scan']['scan_name'],"
                                              " filterResults=self.scaniface.filter['counter'],"
+                                             " logFile=self.tasks[self.current]['logFile'],"
+                                             " scoreFile=self.tasks[self.current]['scoreFile'],"
                                              " env=env)")
             except (CalledModuleError, StandardError, ScriptError) as e:
                 print e

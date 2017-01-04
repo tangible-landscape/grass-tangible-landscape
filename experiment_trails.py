@@ -7,7 +7,7 @@ This program is free software under the GNU General Public License
 
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
-
+from datetime import datetime
 from math import sqrt
 import analyses
 from tangible_utils import get_environment
@@ -107,22 +107,44 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
         line += '1 1\n\n'
         profile_points.append(points[l[0]])
     gscript.write_command('v.in.ascii', input='-', stdin=line, output='line', format='standard', flags='n', overwrite=True, env=env)
-
+    env2 = get_environment(raster=real_elev)
     # slope along line
-    gscript.run_command('v.to.rast', input='line', type='line', output='line_dir', use='dir', env=env)
+    gscript.run_command('v.to.rast', input='line', type='line', output='line_dir', use='dir', env=env2)
     gscript.mapcalc("slope_dir = abs(atan(tan({slope}) * cos({aspect} - {line_dir})))".format(slope='slope', aspect='aspect',
-                    line_dir='line_dir'), env=env)
+                    line_dir='line_dir'), env=env2)
     # reclassify using rules passed as a string to standard input
     # 0:2:1 means reclassify interval 0 to 2 percent of slope to category 1 
     rules = ['0:5:1', '5:8:2', '8:10:3', '10:15:4', '15:30:5', '30:*:6']
     gscript.write_command('r.recode', input='slope_dir', output='slope_class',
-                          rules='-', stdin='\n'.join(rules), env=env)
+                          rules='-', stdin='\n'.join(rules), env=env2)
     # set new color table
     colors = ['1 255:255:204', '2 199:233:180', '3 127:205:187', '4 65:182:196', '5 044:127:184', '6 037:052:148']
-    gscript.write_command('r.colors', map='slope_class', rules='-', stdin='\n'.join(colors), env=env)
-    env2 = get_environment(raster=real_elev)
+    gscript.write_command('r.colors', map='slope_class', rules='-', stdin='\n'.join(colors), env=env2)
     # increase thickness
     gscript.run_command('r.grow', input='slope_class', radius=1.1, output='slope_class_buffer', env=env2)
 
+    # update profile
     event = updateProfile(points=profile_points)
     eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
+    # copy results
+    postfix = datetime.now().strftime('%H_%M_%S')
+    prefix = 'trails'
+    gscript.run_command('g.copy', raster=['slope_dir', '{}_slope_dir_{}'.format(prefix, postfix)],
+                        vector=['line', '{}_line_{}'.format(prefix, postfix)], env=env)
+
+
+def post_trails(real_elev, scanned_elev, filterResults, logFile, scoreFile, env):
+    env2 = get_environment(raster=real_elev)
+    mapset = gscript.gisenv()['MAPSET']
+    slopes = gscript.list_grouped(type='raster', pattern="*slope_dir_*_*_*")[mapset]
+    lines = gscript.list_grouped(type='vector', pattern="*line_*_*_*")[mapset]
+    times = [each.split('_')[-3:] for each in slopes]
+    with open(logFile, 'w') as f:
+        for i in range(len(slopes)):
+            data_slopes = gscript.parse_command('r.univar', map=slopes[i], flags='g', env=env2)
+            time = times[i]
+            f.write('{time},{sl_min},{sl_max},{sl_mean},{sl_sum}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]), sl_min=data_slopes['min'],
+                                                                        sl_max=data_slopes['max'],
+                                                                        sl_mean=data_slopes['mean'],
+                                                                        sl_sum=data_slopes['sum']))
+    

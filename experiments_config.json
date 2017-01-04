@@ -14,6 +14,8 @@
       "base": "elevation",
       "time_limit": 600, 
       "analyses": "", 
+      "logFile": "/home/anna/log_task1a.csv",
+      "scoreFile": "/home/anna/score_task1a.csv",
       "filter" : {"threshold": 30, "debug": true},
       "title": "Task 1a: Drain"
     }, 
@@ -32,8 +34,10 @@
       "base": "elev_lid792_1m@PERMANENT",
       "time_limit": 600, 
       "analyses": "", 
+      "logFile": "/home/anna/log_task1b.csv",
+      "scoreFile": "/home/anna/score_task1b.csv",
       "filter" : {"threshold": 30, "debug": true},
-      "title": "Task 2b: Channel"
+      "title": "Task 1b: Channel"
     }, 
     {
       "layers": [
@@ -49,8 +53,10 @@
       "base": "elevation",
       "time_limit": 600, 
       "analyses": "", 
+      "logFile": "/home/anna/log_task2a.csv",
+      "scoreFile": "/home/anna/score_task2a.csv",
       "filter" : {"threshold": 30, "debug": true},
-      "title": "Task 3a: Cut and Fill"
+      "title": "Task 2a: Cut and Fill"
     }, 
     {
       "layers": [
@@ -66,8 +72,10 @@
       "base": "elevation",
       "time_limit": 600, 
       "analyses": "", 
+      "logFile": "/home/anna/log_task2b.csv",
+      "scoreFile": "/home/anna/score_task2b.csv",
       "filter" : {"threshold": 30, "debug": true},
-      "title": "Task 3b: Cut and Fill"
+      "title": "Task 2b: Cut and Fill"
     },
     {
       "layers": [
@@ -82,10 +90,12 @@
       ], 
       "base": "interp_before@task_diff2",
       "time_limit": 600, 
+      "logFile": "/tmp/log_task3a.csv",
+      "scoreFile": "/home/anna/score_task3a.csv",
       "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
       "analyses": "experiment_trails.py", 
       "filter" : {"threshold": 30, "debug": false},
-      "title": "Task 4: Trails"
+      "title": "Task 3a: Trails"
     }
   ]
 }
