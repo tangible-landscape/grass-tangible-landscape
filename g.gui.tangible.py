@@ -288,6 +288,10 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.observer = None
         self.timer = wx.Timer(self)
         self.changedInput = False
+        self.filter = {'filter': False,
+                       'counter': 0,
+                       'threshold': 0.1,
+                       'debug': False}
 
         self.notebook = wx.Notebook(self)
         scanning_panel = ScanningPanel(self.notebook, self.giface, self.settings['tangible'])
@@ -484,7 +488,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.process.wait()
         self.process = None
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
 
@@ -557,14 +561,14 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def runImport(self):
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
     def runImportDrawing(self):
         self.drawing_panel.appendVector()
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 

@@ -44,7 +44,7 @@ class ExperimentPanel(wx.Panel):
             self.configDir = self.settings['experiment']['config']
 
         self.configPath = filebrowse.DirBrowseButton(self, labelText='Configuration:',
-                                                     changeCallback=self.confPathCallback,
+                                                     changeCallback=self._loadConfPath,
                                                      startDirectory=self.configDir)
         self.configPath.SetValue(self.configDir, 0)
 
@@ -79,11 +79,7 @@ class ExperimentPanel(wx.Panel):
         sizer.Add(self.buttonStart, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 #        sizer.Add(self.buttonPause, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.buttonStop, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.AddStretchSpacer()
-        sizer.Add(self.timeText, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER, border=5)
-        sizer.AddStretchSpacer()
+        sizer.Add(self.timeText, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER | wx.LEFT, border=10)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         self.SetSizer(self.mainSizer)
         self.mainSizer.Fit(self)
@@ -113,7 +109,7 @@ class ExperimentPanel(wx.Panel):
             return False
         return True
 
-    def confPathCallback(self, event):
+    def _loadConfPath(self, event):
         self.configDir = self.configPath.GetValue()
         if self.configDir:
             self.settings['experiment']['config'] = self.configDir
@@ -146,10 +142,15 @@ class ExperimentPanel(wx.Panel):
         self.Layout()
 
     def OnStart(self, event):
+        self._loadConfPath(None)
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = os.path.join(self.configDir, self.tasks[self.current]['analyses'])
         # resume scanning
+        self.scaniface.filter['filter'] = True
+        self.scaniface.filter['counter'] = 0
+        self.scaniface.filter['threshold'] = self.tasks[self.current]['filter']['threshold']
+        self.scaniface.filter['debug'] = self.tasks[self.current]['filter']['debug']
         self.scaniface.pause = False
         self.scaniface.changedInput = True
 
@@ -176,6 +177,9 @@ class ExperimentPanel(wx.Panel):
         minutes = diff.seconds // 60
         seconds = diff.seconds - (minutes * 60)
         self.timeText.SetLabel('{:02d} : {:02d}'.format(minutes, seconds))
+        if seconds > self.tasks[self.current]['time_limit']:
+            # sleep for several seconds now?
+            self.OnStop(event=None)
 
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
@@ -193,7 +197,7 @@ class ExperimentPanel(wx.Panel):
     def PostProcessing(self):
         env = get_environment(rast=self.settings['scan']['scan_name'])
         try:
-            postprocess = imp.load_source('postprocess', self.tasks[self.current]['analyses'])
+            postprocess = imp.load_source('postprocess', os.path.join(self.configDir, self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -202,7 +206,7 @@ class ExperimentPanel(wx.Panel):
         for func in functions:
             exec('del postprocess.' + func)
         try:
-            postprocess = imp.load_source('postprocess', self.tasks[self.current]['analyses'])
+            postprocess = imp.load_source('postprocess', os.path.join(self.configDir, self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -211,6 +215,7 @@ class ExperimentPanel(wx.Panel):
             try:
                 exec('postprocess.' + func + "(real_elev=scan_params['elevation'],"
                                              " scanned_elev=scan_params['scan_name'],"
+                                             " filterResults=self.scaniface.filter['counter'],"
                                              " env=env)")
             except (CalledModuleError, StandardError, ScriptError) as e:
                 print e
