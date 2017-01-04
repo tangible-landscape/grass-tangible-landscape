@@ -8,9 +8,9 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import os
-import uuid
 import shutil
 import imp
+import traceback
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError, ScriptError
@@ -108,7 +108,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
             except (CalledModuleError, StandardError, ScriptError) as e:
-                print e
+                print traceback.print_exc()
     else:
         functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
         for func in functions:
@@ -119,4 +119,4 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
             except (CalledModuleError, StandardError, ScriptError) as e:
-                print e
+                print traceback.print_exc()

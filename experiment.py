@@ -12,12 +12,16 @@ import imp
 import datetime
 import json
 import wx
+import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
 
 from grass.exceptions import CalledModuleError, ScriptError
 from grass.pydispatch.signal import Signal
 
 from tangible_utils import get_environment
+from experiment_profile import ProfileFrame
+
+updateProfile, EVT_UPDATE_PROFILE = wx.lib.newevent.NewEvent()
 
 
 class ExperimentPanel(wx.Panel):
@@ -34,6 +38,7 @@ class ExperimentPanel(wx.Panel):
         self.settingsChanged = Signal('ExperimentPanel.settingsChanged')
         self.configDir = ''
         self.tasks = []
+        self.profileFrame = None
 
         # we want to start in pause mode to not capture any data
         self.scaniface.pause = True
@@ -84,6 +89,8 @@ class ExperimentPanel(wx.Panel):
         self.SetSizer(self.mainSizer)
         self.mainSizer.Fit(self)
 
+        self.Bind(EVT_UPDATE_PROFILE, self.OnProfileUpdate)
+
         self._init()
 
     def _init(self):
@@ -92,6 +99,7 @@ class ExperimentPanel(wx.Panel):
                 self.tasks = json.load(f)['tasks']
 
         self.current = 0
+        self.settings['analyses']['file'] = ''
         if self.tasks:
             self.title.SetLabel(self.tasks[self.current]['title'])
         self.buttonBack.Enable(False)
@@ -154,6 +162,10 @@ class ExperimentPanel(wx.Panel):
         self.scaniface.pause = False
         self.scaniface.changedInput = True
 
+        # profile
+        if 'profile' in self.tasks[self.current]:
+            self.StartProfile()
+
         self.startTime = datetime.datetime.now()
         self.timer.Start(100)
 
@@ -168,6 +180,10 @@ class ExperimentPanel(wx.Panel):
         ll = self.giface.GetLayerList()
         for l in reversed(ll):
             ll.DeleteLayer(l)
+        if self.profileFrame:
+            self.profileFrame.Destroy()
+            self.profileFrame = None
+        self.settings['analyses']['file'] = ''
         self.PostProcessing()
 
     def OnTimer(self, event):
@@ -219,3 +235,22 @@ class ExperimentPanel(wx.Panel):
                                              " env=env)")
             except (CalledModuleError, StandardError, ScriptError) as e:
                 print e
+
+    def StartProfile(self):
+        self.profileFrame = ProfileFrame(self)
+        pos = self.tasks[self.current]['profile']['position']
+        size = self.tasks[self.current]['profile']['size']
+        self.profileFrame.SetPosition(pos)
+        self.profileFrame.SetSize(size)
+        self.profileFrame.set_ticks(self.tasks[self.current]['profile']['ticks'])
+        self.profileFrame.set_xlim(self.tasks[self.current]['profile']['limitx'])
+        self.profileFrame.set_ylim(self.tasks[self.current]['profile']['limity'])
+        self.profileFrame.Show()
+
+    def OnProfileUpdate(self, event):
+        # event can be received after frame is destroyed
+        if not self.profileFrame:
+            return
+        env = get_environment(raster=self.tasks[self.current]['base'])
+        self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['base'], env=env)
+        self.profileFrame.draw()

@@ -572,8 +572,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
-    def postEvent(self, event):
-        wx.PostEvent(self, event)
+    def postEvent(self, receiver, event):
+        wx.PostEvent(receiver, event)
 
     def OnAddLayers(self, event):
         ll = self.giface.GetLayerList()
