@@ -13,6 +13,7 @@ import analyses
 from tangible_utils import get_environment
 from experiment import updateProfile
 import grass.script as gscript
+from grass.pygrass.vector import VectorTopo
 
 
 # needed layers PERMANENT:
@@ -140,11 +141,22 @@ def post_trails(real_elev, scanned_elev, filterResults, logFile, scoreFile, env)
     lines = gscript.list_grouped(type='vector', pattern="*line_*_*_*")[mapset]
     times = [each.split('_')[-3:] for each in slopes]
     with open(logFile, 'w') as f:
+        f.write('time,slope_min,slope_max,slope_mean,slope_sum,length,point_count\n')
         for i in range(len(slopes)):
             data_slopes = gscript.parse_command('r.univar', map=slopes[i], flags='g', env=env2)
+            v = VectorTopo(lines[i])
+            v.open(mode='r')
+            try:
+                line = v.read(1)
+                point_count = len(line)
+                length = line.length()
+            except IndexError:
+                length = 0
+                point_count = 0
             time = times[i]
-            f.write('{time},{sl_min},{sl_max},{sl_mean},{sl_sum}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]), sl_min=data_slopes['min'],
-                                                                        sl_max=data_slopes['max'],
-                                                                        sl_mean=data_slopes['mean'],
-                                                                        sl_sum=data_slopes['sum']))
-    
+            f.write('{time},{sl_min},{sl_max},{sl_mean},{sl_sum},{length},{cnt}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]),
+                    sl_min=data_slopes['min'],
+                    sl_max=data_slopes['max'],
+                    sl_mean=data_slopes['mean'],
+                    sl_sum=data_slopes['sum'],
+                    length=length, cnt=point_count))
