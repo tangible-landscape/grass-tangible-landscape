@@ -35,10 +35,13 @@ class ExperimentPanel(wx.Panel):
         self.scaniface = scaniface
         self.current = 0
         self.startTime = 0
+        self.endTime = 0
         self.settingsChanged = Signal('ExperimentPanel.settingsChanged')
-        self.configDir = ''
+        self.configFile = ''
         self.tasks = []
+        self.configuration = {}
         self.profileFrame = None
+        self.handsoff = None
 
         # we want to start in pause mode to not capture any data
         self.scaniface.pause = True
@@ -46,12 +49,11 @@ class ExperimentPanel(wx.Panel):
             self.settings['experiment'] = {}
             self.settings['experiment']['config'] = ''
         else:
-            self.configDir = self.settings['experiment']['config']
+            self.configFile = self.settings['experiment']['config']
 
-        self.configPath = filebrowse.DirBrowseButton(self, labelText='Configuration:',
-                                                     changeCallback=self._loadConfPath,
-                                                     startDirectory=self.configDir)
-        self.configPath.SetValue(self.configDir, 0)
+        self.configPath = filebrowse.FileBrowseButton(self, labelText='Configuration:',
+                                                     changeCallback=self._loadConfiguration)
+        self.configPath.SetValue(self.configFile, 0)
 
         self.title = wx.StaticText(self, label='')
         self.title.SetFont(wx.Font(18, wx.DEFAULT, wx.NORMAL, wx.BOLD))
@@ -94,9 +96,10 @@ class ExperimentPanel(wx.Panel):
         self._init()
 
     def _init(self):
-        if self.configDir:
-            with open(os.path.join(self.configDir, 'experiments_config.json'), 'r') as f:
-                self.tasks = json.load(f)['tasks']
+        if self.configFile:
+            with open(self.configFile, 'r') as f:
+                self.configuration = json.load(f)
+                self.tasks = self.configuration['tasks']
 
         self.current = 0
         self.settings['analyses']['file'] = ''
@@ -117,12 +120,13 @@ class ExperimentPanel(wx.Panel):
             return False
         return True
 
-    def _loadConfPath(self, event):
-        self.configDir = self.configPath.GetValue()
-        if self.configDir:
-            self.settings['experiment']['config'] = self.configDir
-            with open(os.path.join(self.configDir, 'experiments_config.json'), 'r') as f:
-                self.tasks = json.load(f)['tasks']
+    def _loadConfiguration(self, event):
+        self.configFile = self.configPath.GetValue()
+        if self.configFile:
+            self.settings['experiment']['config'] = self.configFile
+            with open(self.configFile, 'r') as f:
+                self.configuration = json.load(f)
+                self.tasks = self.configuration['tasks']
                 self.title.SetLabel(self.tasks[self.current]['title'])
 
     def OnBack(self, event):
@@ -150,10 +154,10 @@ class ExperimentPanel(wx.Panel):
         self.Layout()
 
     def OnStart(self, event):
-        self._loadConfPath(None)
+        self._loadConfiguration(None)
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
-        self.settings['analyses']['file'] = os.path.join(self.configDir, self.tasks[self.current]['analyses'])
+        self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
         # resume scanning
         self.scaniface.filter['filter'] = True
         self.scaniface.filter['counter'] = 0
@@ -167,6 +171,7 @@ class ExperimentPanel(wx.Panel):
             self.StartProfile()
 
         self.startTime = datetime.datetime.now()
+        self.endTime = 0
         self.timer.Start(100)
 
 #    def OnPause(self, event):
@@ -184,16 +189,17 @@ class ExperimentPanel(wx.Panel):
             self.profileFrame.Destroy()
             self.profileFrame = None
         self.settings['analyses']['file'] = ''
-        self.PostProcessing()
+        self.LoadHandsOff()
+        wx.CallLater(5000, self.PostProcessing)
 
     def OnTimer(self, event):
         diff = datetime.datetime.now() - self.startTime
-        if diff > datetime.timedelta(seconds=self.tasks[self.current]['time_limit']):
-            self.timer.Stop()
         minutes = diff.seconds // 60
         seconds = diff.seconds - (minutes * 60)
         self.timeText.SetLabel('{:02d} : {:02d}'.format(minutes, seconds))
-        if seconds > self.tasks[self.current]['time_limit']:
+        self.endTime = diff.seconds
+        if diff > datetime.timedelta(seconds=self.tasks[self.current]['time_limit']):
+            self.timer.Stop()
             # sleep for several seconds now?
             self.OnStop(event=None)
 
@@ -208,12 +214,23 @@ class ExperimentPanel(wx.Panel):
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=1.0, cmd=cmd)
+            else:
+                ll.AddLayer('command', name=' '.join(cmd), checked=True,
+                            opacity=1.0, cmd=[])
         self.giface.GetMapWindow().ZoomToMap(layers=zoom)
 
+    def LoadHandsOff(self):
+        ll = self.giface.GetLayerList()
+        cmd = self.configuration['handsoff']
+        self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
+                                    opacity=1.0, cmd=[])
+
     def PostProcessing(self):
+        wx.BeginBusyCursor()
+        wx.SafeYield()
         env = get_environment(rast=self.settings['scan']['scan_name'])
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configDir, self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -222,7 +239,7 @@ class ExperimentPanel(wx.Panel):
         for func in functions:
             exec('del postprocess.' + func)
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configDir, self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -232,11 +249,16 @@ class ExperimentPanel(wx.Panel):
                 exec('postprocess.' + func + "(real_elev=self.settings['scan']['elevation'],"
                                              " scanned_elev=self.settings['scan']['scan_name'],"
                                              " filterResults=self.scaniface.filter['counter'],"
-                                             " logFile=self.tasks[self.current]['logFile'],"
-                                             " scoreFile=self.tasks[self.current]['scoreFile'],"
+                                             " timeToFinish=self.endTime,"
+                                             " logDir=self.configuration['logDir'],"
                                              " env=env)")
             except (CalledModuleError, StandardError, ScriptError) as e:
                 print e
+        wx.EndBusyCursor()
+        if self.handsoff:
+            ll = self.giface.GetLayerList()
+            ll.DeleteLayer(self.handsoff)
+            self.handsoff = None
 
     def StartProfile(self):
         self.profileFrame = ProfileFrame(self)

@@ -7,6 +7,7 @@ This program is free software under the GNU General Public License
 
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
+import os
 from datetime import datetime
 from math import sqrt
 import analyses
@@ -37,7 +38,6 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     distances = {}
     point_cat = {}
     line = ''
-
     points[0] = (640151, 224631)
     points[1] = (640394, 224920)
     point_conn[0] = 1
@@ -101,12 +101,14 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
                 break
 
     profile_points = []
+    line += 'L {} 1\n'.format(len(ordered_connections) + 1)
     for l in ordered_connections:
-        line += 'L 2 1\n'
         line += '{x} {y}\n'.format(x=points[l[0]][0], y=points[l[0]][1])
-        line += '{x} {y}\n'.format(x=points[l[1]][0], y=points[l[1]][1])
-        line += '1 1\n\n'
         profile_points.append(points[l[0]])
+    line += '{x} {y}\n'.format(x=points[l[1]][0], y=points[l[1]][1])
+    profile_points.append(points[l[1]])
+    line += '1 1\n\n'
+
     gscript.write_command('v.in.ascii', input='-', stdin=line, output='line', format='standard', flags='n', overwrite=True, env=env)
     env2 = get_environment(raster=real_elev)
     # slope along line
@@ -134,25 +136,28 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
                         vector=['line', '{}_line_{}'.format(prefix, postfix)], env=env)
 
 
-def post_trails(real_elev, scanned_elev, filterResults, logFile, scoreFile, env):
+def post_trails(real_elev, scanned_elev, filterResults, timeToFinish, logDir, env):
     env2 = get_environment(raster=real_elev)
-    mapset = gscript.gisenv()['MAPSET']
-    slopes = gscript.list_grouped(type='raster', pattern="*slope_dir_*_*_*")[mapset]
-    lines = gscript.list_grouped(type='vector', pattern="*line_*_*_*")[mapset]
+    gisenv = gscript.gisenv()
+    logFile = os.path.join(logDir, 'log_{}_trails1a.csv'.format(gisenv['LOCATION_NAME']))
+    scoreFile = os.path.join(logDir, 'score_{}.csv'.format(gisenv['LOCATION_NAME']))
+    slopes = gscript.list_grouped(type='raster', pattern="*slope_dir_*_*_*")[gisenv['MAPSET']]
+    lines = gscript.list_grouped(type='vector', pattern="*line_*_*_*")[gisenv['MAPSET']]
     times = [each.split('_')[-3:] for each in slopes]
+    score_slopes = []
     with open(logFile, 'w') as f:
         f.write('time,slope_min,slope_max,slope_mean,slope_sum,length,point_count\n')
         for i in range(len(slopes)):
             data_slopes = gscript.parse_command('r.univar', map=slopes[i], flags='g', env=env2)
-            v = VectorTopo(lines[i])
-            v.open(mode='r')
-            try:
-                line = v.read(1)
-                point_count = len(line)
-                length = line.length()
-            except IndexError:
-                length = 0
-                point_count = 0
+            score_slopes.append(float(data_slopes['mean']))
+            with VectorTopo(lines[i], mode='r') as v:
+                try:
+                    line = v.read(1)
+                    point_count = len(line)
+                    length = line.length()
+                except IndexError:
+                    length = 0
+                    point_count = 0
             time = times[i]
             f.write('{time},{sl_min},{sl_max},{sl_mean},{sl_sum},{length},{cnt}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]),
                     sl_min=data_slopes['min'],
@@ -160,3 +165,10 @@ def post_trails(real_elev, scanned_elev, filterResults, logFile, scoreFile, env)
                     sl_mean=data_slopes['mean'],
                     sl_sum=data_slopes['sum'],
                     length=length, cnt=point_count))
+    with open(scoreFile, 'a') as f:
+        # mean from last 3 slopes
+        slope_score = sum(score_slopes[-3:]) / 3.
+        # here convert to some scale?
+        f.write("mean slope: {}\n".format(slope_score))
+        f.write("filtered scans: {}\n".format(filterResults))
+        f.write("time: {}\n".format(timeToFinish))
