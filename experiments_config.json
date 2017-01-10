@@ -19,6 +19,11 @@
           "d.vect", 
           "map=roadsmajor"
         ]
+      ],
+      "sublayers": [
+        ["d.vect", "map=busroute1"],
+        ["d.vect", "map=bridges"],
+        ["d.vect", "map=geology"]
       ], 
       "base": "elevation",
       "time_limit": 600, 

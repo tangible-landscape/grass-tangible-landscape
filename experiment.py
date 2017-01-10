@@ -11,6 +11,7 @@ import os
 import imp
 import datetime
 import json
+import time
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
@@ -34,6 +35,7 @@ class ExperimentPanel(wx.Panel):
         self.settings = settings
         self.scaniface = scaniface
         self.current = 0
+        self.currentSubtask = 0
         self.startTime = 0
         self.endTime = 0
         self.settingsChanged = Signal('ExperimentPanel.settingsChanged')
@@ -70,6 +72,9 @@ class ExperimentPanel(wx.Panel):
         self.timeText = wx.StaticText(self, label='00 : 00', style=wx.ALIGN_CENTRE)
         self.timeText.SetFont(wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
 
+        self.buttonNext = wx.Button(self, label='Next')
+        self.buttonNext.Bind(wx.EVT_BUTTON, self.OnSubtask)
+
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnTimer)
 
@@ -88,8 +93,13 @@ class ExperimentPanel(wx.Panel):
         sizer.Add(self.buttonStop, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.timeText, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER | wx.LEFT, border=10)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.buttonNext, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         self.SetSizer(self.mainSizer)
         self.mainSizer.Fit(self)
+        self.buttonNext.Hide()
+        self.Layout()
 
         self.Bind(EVT_UPDATE_PROFILE, self.OnProfileUpdate)
 
@@ -108,6 +118,7 @@ class ExperimentPanel(wx.Panel):
         self.buttonBack.Enable(False)
         self.buttonForward.Enable(True)
         self.timeText.SetLabel('00 : 00')
+        self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.Layout()
 
     def _checkChangeTask(self):
@@ -139,6 +150,7 @@ class ExperimentPanel(wx.Panel):
         if self.tasks:
             self.title.SetLabel(self.tasks[self.current]['title'])
         self.timeText.SetLabel('00 : 00')
+        self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.Layout()
 
     def OnForward(self, event):
@@ -151,10 +163,12 @@ class ExperimentPanel(wx.Panel):
         if self.tasks:
             self.title.SetLabel(self.tasks[self.current]['title'])
         self.timeText.SetLabel('00 : 00')
+        self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.Layout()
 
     def OnStart(self, event):
         self._loadConfiguration(None)
+        self.currentSubtask = 0
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
@@ -189,6 +203,7 @@ class ExperimentPanel(wx.Panel):
             self.profileFrame.Destroy()
             self.profileFrame = None
         self.settings['analyses']['file'] = ''
+        self.currentSubtask = 0
         self.LoadHandsOff()
         wx.CallLater(5000, self.PostProcessing)
 
@@ -217,6 +232,13 @@ class ExperimentPanel(wx.Panel):
             else:
                 ll.AddLayer('command', name=' '.join(cmd), checked=True,
                             opacity=1.0, cmd=[])
+        cmd = self.tasks[self.current]["sublayers"][0]
+        if cmd[0] == 'd.rast':
+            ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                        opacity=1.0, cmd=cmd)
+        elif cmd[0] == 'd.vect':
+            ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
+                        opacity=1.0, cmd=cmd)
         self.giface.GetMapWindow().ZoomToMap(layers=zoom)
 
     def LoadHandsOff(self):
@@ -225,7 +247,7 @@ class ExperimentPanel(wx.Panel):
         self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
                                     opacity=1.0, cmd=[])
 
-    def PostProcessing(self):
+    def PostProcessing(self, onDone=None):
         wx.BeginBusyCursor()
         wx.SafeYield()
         env = get_environment(rast=self.settings['scan']['scan_name'])
@@ -260,6 +282,9 @@ class ExperimentPanel(wx.Panel):
             ll.DeleteLayer(self.handsoff)
             self.handsoff = None
 
+        if onDone:
+            onDone()
+
     def StartProfile(self):
         self.profileFrame = ProfileFrame(self)
         pos = self.tasks[self.current]['profile']['position']
@@ -278,3 +303,34 @@ class ExperimentPanel(wx.Panel):
         env = get_environment(raster=self.tasks[self.current]['base'])
         self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['base'], env=env)
         self.profileFrame.draw()
+
+    def OnSubtask(self, event):
+        # pause scanning
+        self.scaniface.pause = True
+        self.scaniface.changedInput = True          
+
+        self.LoadHandsOff()
+        wx.CallLater(5000, self.PostProcessing, onDone=self._subtaskDone)
+        
+    def _subtaskDone(self):
+        ll = self.giface.GetLayerList()
+        for l in ll:
+            if l.cmd == self.tasks[self.current]["sublayers"][self.currentSubtask]:
+                ll.DeleteLayer(l)
+                cmd = self.tasks[self.current]["sublayers"][self.currentSubtask + 1]
+                if cmd[0] == 'd.rast':
+                    ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                                opacity=1.0, cmd=cmd)
+                elif cmd[0] == 'd.vect':
+                    ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
+                                opacity=1.0, cmd=cmd)
+                break
+        self.currentSubtask += 1
+        # update
+        self.scaniface.filter['counter'] = 0
+        for each in self.giface.GetAllMapDisplays():
+            each.GetMapWindow().UpdateMap()
+        self.scaniface.pause = False
+        self.scaniface.changedInput = True
+        if len(self.tasks[self.current]['sublayers']) <= self.currentSubtask + 1:
+            self.buttonNext.Disable()
