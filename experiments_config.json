@@ -13,7 +13,7 @@
       "layers": [
         [
           "d.rast", 
-          "map=elevation"
+          "map=interp_before@task_diff2"
         ], 
         [
           "d.vect", 
@@ -25,9 +25,9 @@
         ["d.vect", "map=bridges"],
         ["d.vect", "map=geology"]
       ], 
-      "base": "elevation",
+      "base": "interp_before@task_diff2",
       "time_limit": 600, 
-      "analyses": "", 
+      "analyses": "experiment_drain.py", 
       "filter" : {"threshold": 30, "debug": true},
       "title": "Task 1a: Drain"
     }, 
