@@ -13,19 +13,40 @@
       "layers": [
         [
           "d.rast", 
-          "map=elevation"
+          "map=drain_dem"
         ], 
         [
           "d.vect", 
-          "map=roadsmajor"
+          "map=drain_contours_10"
+        ],
+        [
+          "d.vect", 
+          "map=drain_contours_100",
+          "width=3"
+      ],
+        [
+          "d.vect", 
+          "map=drain_line",
+          "width=3", "color=15:125:255"
         ]
       ],
       "sublayers": [
-        ["d.vect", "map=busroute1"],
-        ["d.vect", "map=bridges"],
-        ["d.vect", "map=geology"]
+        ["d.vect", "map=drain_targets", "cats=1",
+         "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"],
+        ["d.vect", "map=drain_targets", "cats=2",
+         "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"],
+        ["d.vect", "map=drain_targets", "cats=3",
+         "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"],
+        ["d.vect", "map=drain_targets", "cats=4",
+         "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"],
+        ["d.vect", "map=drain_targets", "cats=5",
+         "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"],
+        ["d.vect", "map=drain_targets", "cats=6",
+         "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"],
+        ["d.vect", "map=drain_targets", "cats=7",
+         "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"]
       ], 
-      "base": "elevation",
+      "base": "drain_dem",
       "time_limit": 600, 
       "analyses": "", 
       "filter" : {"threshold": 30, "debug": true},
@@ -85,25 +106,67 @@
     },
     {
       "layers": [
-        [
-          "d.rast", 
-          "map=interp_before@task_diff2"
-        ], 
-        [
-          "d.rast", 
-          "map=slope_class_buffer@scanning"
-        ],
-        [
-          "d.legend", 
-          "raster=slope_class_buffer@scanning"
-        ]
+          [
+            "d.rast", 
+            "map=trails1_dem"
+          ], 
+          [
+            "d.vect", 
+            "map=trails1_contours_10"
+          ],
+          [
+            "d.vect", 
+            "map=trails1_contours_50",
+            "width=3"
+          ],
+          [
+            "d.vect",
+            "map=trails1_points", "width=4", "size=20",
+            "attribute_column=label", "label_size=25", "xref=right", "yref=top"
+          ],
+          [
+            "d.legend", 
+            "raster=trails1_dem"
+          ]
       ], 
-      "base": "interp_before@task_diff2",
+      "base": "trails1_dem",
       "time_limit": 600, 
       "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
       "analyses": "experiment_trails.py", 
       "filter" : {"threshold": 30, "debug": false},
       "title": "Task 3a: Trails"
+    }
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=trails2_dem"
+        ], 
+        [
+          "d.vect", 
+          "map=trails2_contours_10"
+        ],
+        [
+          "d.vect", 
+          "map=trails2_contours_100",
+          "width=3"
+        ],
+        [
+          "d.vect",
+          "map=trails2_points", "width=4", "size=20",
+          "attribute_column=label", "label_size=25", "xref=right", "yref=top"
+        ],
+        [
+          "d.legend", 
+          "raster=trails2_dem"
+        ]
+      ], 
+      "base": "trails2_dem",
+      "time_limit": 600, 
+      "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
+      "analyses": "experiment_trails.py", 
+      "filter" : {"threshold": 30, "debug": false},
+      "title": "Task 3b: Trails"
     }
   ]
 }
