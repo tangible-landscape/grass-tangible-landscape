@@ -118,7 +118,8 @@ class ExperimentPanel(wx.Panel):
         self.buttonBack.Enable(False)
         self.buttonForward.Enable(True)
         self.timeText.SetLabel('00 : 00')
-        self.buttonNext.Show('sublayers' in self.tasks[self.current])
+        if self.configFile:
+            self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.Layout()
 
     def _checkChangeTask(self):
