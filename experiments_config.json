@@ -48,7 +48,7 @@
       ], 
       "base": "drain_dem",
       "time_limit": 600, 
-      "analyses": "", 
+      "analyses": "experiment_drain.py", 
       "filter" : {"threshold": 30, "debug": true},
       "title": "Task 1a: Drain"
     }, 

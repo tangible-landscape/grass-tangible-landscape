@@ -193,9 +193,6 @@ class ExperimentPanel(wx.Panel):
 #        pass
 
     def OnStop(self, event):
-        # pause scanning
-        self.scaniface.pause = True
-        self.scaniface.changedInput = True
         self.timer.Stop()
         ll = self.giface.GetLayerList()
         for l in reversed(ll):
@@ -204,9 +201,15 @@ class ExperimentPanel(wx.Panel):
             self.profileFrame.Destroy()
             self.profileFrame = None
         self.settings['analyses']['file'] = ''
-        self.currentSubtask = 0
         self.LoadHandsOff()
-        wx.CallLater(5000, self.PostProcessing)
+        # scan after hands off
+        wx.CallLater(5000, self._stop)
+
+    def _stop(self):
+        # pause scanning
+        self.scaniface.pause = True
+        self.scaniface.changedInput = True
+        wx.CallLater(3000, self.PostProcessing)
 
     def OnTimer(self, event):
         diff = datetime.datetime.now() - self.startTime
@@ -273,6 +276,7 @@ class ExperimentPanel(wx.Panel):
                                              " scanned_elev=self.settings['scan']['scan_name'],"
                                              " filterResults=self.scaniface.filter['counter'],"
                                              " timeToFinish=self.endTime,"
+                                             " subTask=self.currentSubtask,"
                                              " logDir=self.configuration['logDir'],"
                                              " env=env)")
             except (CalledModuleError, StandardError, ScriptError) as e:
@@ -306,12 +310,15 @@ class ExperimentPanel(wx.Panel):
         self.profileFrame.draw()
 
     def OnSubtask(self, event):
+        self.LoadHandsOff()
+        # keep scanning without hands
+        wx.CallLater(5000, self._subtaskStop)
+
+    def _subtaskStop(self):
         # pause scanning
         self.scaniface.pause = True
-        self.scaniface.changedInput = True          
-
-        self.LoadHandsOff()
-        wx.CallLater(5000, self.PostProcessing, onDone=self._subtaskDone)
+        self.scaniface.changedInput = True
+        wx.CallLater(3000, self.PostProcessing, onDone=self._subtaskDone)
         
     def _subtaskDone(self):
         ll = self.giface.GetLayerList()

@@ -136,7 +136,7 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
                         vector=['line', '{}_line_{}'.format(prefix, postfix)], env=env)
 
 
-def post_trails(real_elev, scanned_elev, filterResults, timeToFinish, logDir, env):
+def post_trails(real_elev, scanned_elev, filterResults, timeToFinish, logDir, env, **kwargs):
     env2 = get_environment(raster=real_elev)
     gisenv = gscript.gisenv()
     logFile = os.path.join(logDir, 'log_{}_trails1a.csv'.format(gisenv['LOCATION_NAME']))
