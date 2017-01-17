@@ -31,7 +31,7 @@ from grass.pygrass.vector import VectorTopo
 
 
 def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
-    analyses.change_detection(before='interp_before@task_diff2', after=scanned_elev,
+    analyses.change_detection(before=real_elev, after=scanned_elev,
                               change='change', height_threshold=[4, 50], cells_threshold=[3, 100], add=True, max_detected=10, env=env)
     points = {}
     point_conn = {}
@@ -124,14 +124,15 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     colors = ['1 255:255:204', '2 199:233:180', '3 127:205:187', '4 65:182:196', '5 044:127:184', '6 037:052:148']
     gscript.write_command('r.colors', map='slope_class', rules='-', stdin='\n'.join(colors), env=env2)
     # increase thickness
-    gscript.run_command('r.grow', input='slope_class', radius=1.1, output='slope_class_buffer', env=env2)
+    resulting = "trails1_slope"
+    gscript.run_command('r.grow', input='slope_class', radius=1.1, output=resulting, env=env2)
 
     # update profile
     event = updateProfile(points=profile_points)
     eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
     # copy results
     postfix = datetime.now().strftime('%H_%M_%S')
-    prefix = 'trails'
+    prefix = 'trails1'
     gscript.run_command('g.copy', raster=['slope_dir', '{}_slope_dir_{}'.format(prefix, postfix)],
                         vector=['line', '{}_line_{}'.format(prefix, postfix)], env=env)
 

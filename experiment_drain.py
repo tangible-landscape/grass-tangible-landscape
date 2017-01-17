@@ -35,11 +35,11 @@ solution = [(316715, 251545),
 
 
 def run_drain(real_elev, scanned_elev, eventHandler, env, **kwargs):
-    analyses.change_detection(before='interp_before@task_diff2', after=scanned_elev,
+    analyses.change_detection(before=real_elev, after=scanned_elev,
                               change='change', height_threshold=[4, 50], cells_threshold=[3, 100], add=True, max_detected=1, env=env)
     point = gscript.read_command('v.out.ascii', input='change',
                                  type='point', format='point', env=env).strip()
-    drain = 'drain'
+    drain = 'drain_line'
     env2 = get_environment(raster=real_elev)
     if point:
         x, y, cat = point.split('|')

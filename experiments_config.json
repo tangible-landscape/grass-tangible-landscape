@@ -56,53 +56,89 @@
       "layers": [
         [
           "d.rast", 
-          "map=aspect"
-        ], 
+          "map=flow_dem"
+        ],
+        [
+          "d.vect",
+          "map=flow_rain", "color=none",
+          "fill_color=173:216:230"
+        ],
+        [
+          "d.rast", 
+          "map=flow_flow",
+          "values=0-0.3", "-i"
+        ],
         [
           "d.vect", 
-          "map=roadsmajor",
-          "color=red"
+          "map=flow_contours_50",
+          "width=3"
+        ],
+        [
+          "d.vect", 
+          "map=flow_contours_10"
+        ],
+        [
+          "d.vect", "map=flow_target",
+          "color=red", "fill_color=red", "width=5", "size=20", "symbol=basic/x"
         ]
       ], 
-      "base": "elev_lid792_1m@PERMANENT",
+      "base": "flow_dem",
       "time_limit": 600, 
       "analyses": "", 
       "filter" : {"threshold": 30, "debug": true},
-      "title": "Task 1b: Channel"
+      "title": "Task 2: Channel"
     }, 
     {
       "layers": [
         [
           "d.rast", 
-          "map=slope"
+          "map=cutfill1_dem1"
         ], 
         [
           "d.vect", 
-          "map=roadsmajor"
+          "map=cutfill1_dem1_contours_5",
+          "width=3"
+        ],
+        [
+          "d.vect", 
+          "map=cutfill1_dem1_contours_05"
+        ],
+        [
+          "d.rast", 
+          "map=cutfill1_diff"
         ]
       ], 
-      "base": "elevation",
+      "base": "cutfill1_dem1",
       "time_limit": 600, 
       "analyses": "", 
       "filter" : {"threshold": 30, "debug": true},
-      "title": "Task 2a: Cut and Fill"
+      "title": "Task 3a: Cut and Fill"
     }, 
     {
       "layers": [
         [
           "d.rast", 
-          "map=elevation"
+          "map=cutfill2_dem1"
         ], 
         [
-          "d.vect", 
-          "map=roadsmajor"
+            "d.vect", 
+            "map=cutfill2_dem1_contours_5",
+            "width=3"
+        ],
+        [
+            "d.vect", 
+            "map=cutfill2_dem1_contours_05"
+        ],
+        [
+          "d.rast", 
+          "map=cutfill2_diff"
         ]
       ], 
-      "base": "elevation",
+      "base": "cutfill2_dem1",
       "time_limit": 600, 
       "analyses": "", 
       "filter" : {"threshold": 30, "debug": true},
-      "title": "Task 2b: Cut and Fill"
+      "title": "Task 3b: Cut and Fill"
     },
     {
       "layers": [
@@ -134,8 +170,8 @@
       "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
       "analyses": "experiment_trails.py", 
       "filter" : {"threshold": 30, "debug": false},
-      "title": "Task 3a: Trails"
-    }
+      "title": "Task 4a: Trails"
+    },
     {
       "layers": [
         [
@@ -166,7 +202,7 @@
       "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
       "analyses": "experiment_trails.py", 
       "filter" : {"threshold": 30, "debug": false},
-      "title": "Task 3b: Trails"
+      "title": "Task 4b: Trails"
     }
   ]
 }
