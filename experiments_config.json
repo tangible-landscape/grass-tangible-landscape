@@ -246,9 +246,9 @@
       ], 
       "base": "transfer_dem",
       "time_limit": 600, 
-      "analyses": "experiment_transfer.py", 
+      "analyses": "experiment_transferA.py", 
       "filter" : {"threshold": 200, "debug": true},
-      "title": "Transfer task"
+      "title": "Transfer task A"
     },
     {
       "layers": [
@@ -276,10 +276,10 @@
         ]
       ], 
       "base": "transfer_dem",
-      "time_limit": 600, 
+      "time_limit": 60, 
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},
-      "title": "Transfer taskB"
+      "title": "Transfer task B"
     }
   ]
 }
