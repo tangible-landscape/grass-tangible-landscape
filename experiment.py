@@ -236,13 +236,14 @@ class ExperimentPanel(wx.Panel):
             else:
                 ll.AddLayer('command', name=' '.join(cmd), checked=True,
                             opacity=1.0, cmd=[])
-        cmd = self.tasks[self.current]["sublayers"][0]
-        if cmd[0] == 'd.rast':
-            ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
-                        opacity=1.0, cmd=cmd)
-        elif cmd[0] == 'd.vect':
-            ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
-                        opacity=1.0, cmd=cmd)
+        if 'sublayers' in self.tasks[self.current]:
+            cmd = self.tasks[self.current]['sublayers'][0]
+            if cmd[0] == 'd.rast':
+                ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                            opacity=1.0, cmd=cmd)
+            elif cmd[0] == 'd.vect':
+                ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
+                            opacity=1.0, cmd=cmd)
         self.giface.GetMapWindow().ZoomToMap(layers=zoom)
 
     def LoadHandsOff(self):
