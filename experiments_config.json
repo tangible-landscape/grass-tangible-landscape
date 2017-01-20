@@ -49,7 +49,7 @@
       "base": "drain_dem",
       "time_limit": 600, 
       "analyses": "experiment_drain.py", 
-      "filter" : {"threshold": 2000, "debug": true},
+      "filter" : {"threshold": 1500, "debug": true},
       "title": "Task 1a: Drain"
     }, 
     {
@@ -169,7 +169,7 @@
       "time_limit": 600, 
       "profile": {"size": [600, 200], "position": [2700, 900], "limitx": [0, 3000], "limity": [1000, 1300], "ticks": 50},
       "analyses": "experiment_trails.py", 
-      "filter" : {"threshold": 700, "debug": true},
+      "filter" : {"threshold": 650, "debug": true},
       "title": "Task 4a: Trails"
     },
     {
@@ -276,7 +276,7 @@
         ]
       ], 
       "base": "transfer_dem",
-      "time_limit": 60, 
+      "time_limit": 600, 
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},
       "title": "Transfer task B"
