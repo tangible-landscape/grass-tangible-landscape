@@ -3,7 +3,7 @@
   "logDir": "/tmp/",
   "handsoff": [
                 "d.text", 
-                "at=25,45",
+                "at=10,45",
                 "size=20",
                 "color=red",
                 "text='HANDS OFF'"
@@ -17,7 +17,7 @@
         ], 
         [
           "d.vect", 
-          "map=drain_contours_10"
+          "map=drain_contours_20"
         ],
         [
           "d.vect", 
@@ -49,33 +49,28 @@
       "base": "drain_dem",
       "time_limit": 600, 
       "analyses": "experiment_drain.py", 
-      "filter" : {"threshold": 30, "debug": true},
+      "filter" : {"threshold": 2000, "debug": true},
       "title": "Task 1a: Drain"
     }, 
     {
       "layers": [
         [
           "d.rast", 
-          "map=flow_dem"
+          "map=scan"
         ],
         [
           "d.vect",
           "map=flow_rain", "color=none",
-          "fill_color=173:216:230"
+          "fill_color=white"
         ],
         [
           "d.rast", 
           "map=flow_flow",
-          "values=0-0.3", "-i"
+          "values=0-0.04", "-i"
         ],
         [
           "d.vect", 
-          "map=flow_contours_50",
-          "width=3"
-        ],
-        [
-          "d.vect", 
-          "map=flow_contours_10"
+          "map=flow_contours"
         ],
         [
           "d.vect", "map=flow_target",
@@ -84,8 +79,8 @@
       ], 
       "base": "flow_dem",
       "time_limit": 600, 
-      "analyses": "", 
-      "filter" : {"threshold": 30, "debug": true},
+      "analyses": "experiment_flow.py", 
+      "filter" : {"threshold": 700, "debug": true},
       "title": "Task 2: Channel"
     }, 
     {
@@ -118,26 +113,31 @@
       "layers": [
         [
           "d.rast", 
-          "map=cutfill2_dem1"
+          "map=cutfill2_dem2"
         ], 
-        [
-            "d.vect", 
-            "map=cutfill2_dem1_contours_5",
-            "width=3"
-        ],
-        [
-            "d.vect", 
-            "map=cutfill2_dem1_contours_05"
-        ],
         [
           "d.rast", 
           "map=cutfill2_diff"
+        ],
+        [
+            "d.vect", 
+            "map=cutfill2_dem2_contours_5",
+            "width=2"
+        ],
+        [
+            "d.vect", 
+            "map=cutfill2_dem2_contours_05", "color=77:77:77"
+        ],
+        [
+           "d.legend",
+           "-tb", "raster=cutfill2_diff",
+           "range=-20,20", "border_color=none"
         ]
       ], 
-      "base": "cutfill2_dem1",
+      "base": "cutfill2_dem2",
       "time_limit": 600, 
-      "analyses": "", 
-      "filter" : {"threshold": 30, "debug": true},
+      "analyses": "experiment_cutfill2.py", 
+      "filter" : {"threshold": 100, "debug": true},
       "title": "Task 3b: Cut and Fill"
     },
     {
@@ -153,7 +153,7 @@
           [
             "d.vect", 
             "map=trails1_contours_50",
-            "width=3"
+            "width=2"
           ],
           [
             "d.vect",
@@ -161,15 +161,15 @@
             "attribute_column=label", "label_size=25", "xref=right", "yref=top"
           ],
           [
-            "d.legend", 
-            "raster=trails1_dem"
+            "d.rast", 
+            "map=trails1_slopedir"
           ]
       ], 
       "base": "trails1_dem",
       "time_limit": 600, 
-      "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
+      "profile": {"size": [600, 200], "position": [2700, 900], "limitx": [0, 3000], "limity": [1000, 1300], "ticks": 50},
       "analyses": "experiment_trails.py", 
-      "filter" : {"threshold": 30, "debug": false},
+      "filter" : {"threshold": 700, "debug": true},
       "title": "Task 4a: Trails"
     },
     {
@@ -201,7 +201,7 @@
       "time_limit": 600, 
       "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
       "analyses": "experiment_trails.py", 
-      "filter" : {"threshold": 30, "debug": false},
+      "filter" : {"threshold": 1000, "debug": false},
       "title": "Task 4b: Trails"
     },
     {

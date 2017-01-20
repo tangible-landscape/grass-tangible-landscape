@@ -17,13 +17,13 @@ from grass.pygrass.vector import VectorTopo
 
 
 def run_contours(real_elev, scanned_elev, eventHandler, env, **kwargs):
-    gscript.run_command('r.contours', input=scanned_elev, output='contours', step=10, env=env)
+    gscript.run_command('r.contour', input=scanned_elev, output='flow_contours', step=15, flags='t', env=env)
 
 
 def run_flow(real_elev, scanned_elev, eventHandler, env, **kwargs):
     gscript.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx', dy='dy', env=env)
-    gscript.run_command('r.sim.water', elevation=scanned_elev, dx='dx', dy='dy', rain='flow_rain',
-                        depth='flow_flow', niterations=5, hmax=0.25, halpha=8)
+    gscript.run_command('r.sim.water', elevation=scanned_elev, dx='dx', dy='dy', rain_value=300,
+                        depth='flow_flow', niterations=5, hmax=0.25, halpha=8, env=env)
     # copy results
 #    postfix = datetime.now().strftime('%H_%M_%S')
 #    prefix = 'trails'
@@ -32,6 +32,9 @@ def run_flow(real_elev, scanned_elev, eventHandler, env, **kwargs):
 
 
 def post_flow(real_elev, scanned_elev, filterResults, timeToFinish, logDir, env, **kwargs):
+    gscript.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx', dy='dy', env=env)
+    gscript.run_command('r.sim.water', elevation=scanned_elev, dx='dx', dy='dy', rain_value=300,
+                        depth='flow_flow_final', niterations=180, hmax=0.25, halpha=8, env=env)
     return
     env2 = get_environment(raster=real_elev)
     gisenv = gscript.gisenv()

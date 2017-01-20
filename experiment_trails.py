@@ -32,20 +32,25 @@ from grass.pygrass.vector import VectorTopo
 
 def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     analyses.change_detection(before=real_elev, after=scanned_elev,
-                              change='change', height_threshold=[4, 50], cells_threshold=[3, 100], add=True, max_detected=10, env=env)
+                              change='change', height_threshold=[90, 160], cells_threshold=[3, 40], add=True, max_detected=4, env=env)
+    data = gscript.read_command('v.out.ascii', input='trails1_points', type='point', format='point', env=env).strip()
+
+    c1, c2 = data.splitlines()
+    c1 = c1.split('|')
+    c2 = c2.split('|')
     points = {}
     point_conn = {}
     distances = {}
     point_cat = {}
     line = ''
-    points[0] = (640151, 224631)
-    points[1] = (640394, 224920)
+    points[0] = (float(c1[0]), float(c1[1]))
+    points[1] = (float(c2[0]), float(c2[1]))
     point_conn[0] = 1
     point_conn[1] = 1
     point_cat[0] = 98
     point_cat[1] = 99
     points_raw = gscript.read_command('v.out.ascii', input='change',
-                                      type='point', format='point', env=env).strip().split()
+                                      type='point', format='point').strip().split()    
     i = 2
     for point in points_raw:
         point = point.split('|')
@@ -62,8 +67,11 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
                                      (points[i][1] - points[j][1]) * (points[i][1] - points[j][1]))
     ordered = sorted(distances.items(), key=lambda x: x[1])
     connections = []
+    i = 0
     while ordered and len(connections) < len(points) - 1:
-        
+        i += 1
+        if i > 50:
+            break
         connection = ordered.pop(0)
         p, d = connection[0], connection[1]
         p1, p2 = p[0], p[1]
@@ -86,8 +94,12 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
         if c[0] == 0 or c[1] == 0:
             valid = True
     if not valid:
-        return        
+        return
+    i = 0
     while len(ordered_connections) != len_connections:
+        i += 1
+        if i > 50:
+            break
         for i, (c, d) in enumerate(connections):
             if c[0] == start:
                 ordered_connections.append((c[0], c[1]))
@@ -108,12 +120,11 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     line += '{x} {y}\n'.format(x=points[l[1]][0], y=points[l[1]][1])
     profile_points.append(points[l[1]])
     line += '1 1\n\n'
-
     gscript.write_command('v.in.ascii', input='-', stdin=line, output='line', format='standard', flags='n', overwrite=True, env=env)
     env2 = get_environment(raster=real_elev)
     # slope along line
     gscript.run_command('v.to.rast', input='line', type='line', output='line_dir', use='dir', env=env2)
-    gscript.mapcalc("slope_dir = abs(atan(tan({slope}) * cos({aspect} - {line_dir})))".format(slope='slope', aspect='aspect',
+    gscript.mapcalc("slope_dir = abs(atan(tan({slope}) * cos({aspect} - {line_dir})))".format(slope='trails1_slope', aspect='trails1_aspect',
                     line_dir='line_dir'), env=env2)
     # reclassify using rules passed as a string to standard input
     # 0:2:1 means reclassify interval 0 to 2 percent of slope to category 1 
@@ -124,7 +135,7 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     colors = ['1 255:255:204', '2 199:233:180', '3 127:205:187', '4 65:182:196', '5 044:127:184', '6 037:052:148']
     gscript.write_command('r.colors', map='slope_class', rules='-', stdin='\n'.join(colors), env=env2)
     # increase thickness
-    resulting = "trails1_slope"
+    resulting = "trails1_slopedir"
     gscript.run_command('r.grow', input='slope_class', radius=1.1, output=resulting, env=env2)
 
     # update profile
@@ -133,8 +144,8 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     # copy results
     postfix = datetime.now().strftime('%H_%M_%S')
     prefix = 'trails1'
-    gscript.run_command('g.copy', raster=['slope_dir', '{}_slope_dir_{}'.format(prefix, postfix)],
-                        vector=['line', '{}_line_{}'.format(prefix, postfix)], env=env)
+#    gscript.run_command('g.copy', raster=['slope_dir', '{}_slope_dir_{}'.format(prefix, postfix)],
+#                        vector=['line', '{}_line_{}'.format(prefix, postfix)], env=env)
 
 
 def post_trails(real_elev, scanned_elev, filterResults, timeToFinish, logDir, env, **kwargs):
