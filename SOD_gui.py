@@ -10,6 +10,7 @@ This program is free software under the GNU General Public License
 import os
 import socket
 import threading
+import Queue
 import requests
 import wx
 
@@ -34,6 +35,9 @@ class SODPanel(wx.Panel):
         self.socket = None
         self.isRunningClientThread = False
         self.clientthread = None
+        self.timer = wx.Timer(self)
+        self.speed = 1000  # 1 second per year
+        self.resultsToDisplay = Queue.Queue()
 
         if 'SOD' not in self.settings:
             self.settings['SOD'] = {}
@@ -51,6 +55,8 @@ class SODPanel(wx.Panel):
         initBtn.Bind(wx.EVT_BUTTON, lambda evt: self._init())
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self._run())
         stopBtn.Bind(wx.EVT_BUTTON, lambda evt: self._stop())
+
+        self.Bind(wx.EVT_TIMER, self._displayResult, self.timer)
 
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -77,7 +83,7 @@ class SODPanel(wx.Panel):
         self.mainSizer.Fit(self)
 
     def _connect(self):
-        self._connectDasboard()
+        self._connectDashboard()
         self._connectSteering()
 
     def _connectSteering(self):
@@ -100,10 +106,10 @@ class SODPanel(wx.Panel):
             return
 
         self.isRunningClientThread = True
-        self.clientthread = threading.Thread(target=self._client)
+        self.clientthread = threading.Thread(target=self._client, args=(self.resultsToDisplay, ))
         self.clientthread.start()
 
-    def _connectDasboard(self):
+    def _connectDashboard(self):
         # reload players
         urlD = self.urlDashboard.GetValue()
         if urlD:
@@ -121,7 +127,7 @@ class SODPanel(wx.Panel):
             except requests.ConnectionError:
                 return
 
-    def _client(self):
+    def _client(self, resultsToDisplay):
         while self.isRunningClientThread:
             data = self.socket.recv(1024)
             if not data:
@@ -154,14 +160,13 @@ class SODPanel(wx.Panel):
                 f.close()
                 gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
                 name = os.path.basename(path).strip('.pack')
-                cmd = ['d.rast', 'map={}'.format(name)]
-                evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
-                self.scaniface.postEvent(evt)
+                resultsToDisplay.put(name)
 
     def _init(self):
         message = 'cmd:start'
         player = self.players.GetStringSelection()
         message += ':output_series={}'.format(player)
+        self.timer.Start(self.speed)
         self.socket.sendall(message)
 
     def _run(self):
@@ -169,6 +174,14 @@ class SODPanel(wx.Panel):
 
     def _stop(self):
         self.socket.sendall('cmd:end')
+        self.timer.Stop()
+
+    def _displayResult(self, event):
+        if not self.resultsToDisplay.empty():
+            name = self.resultsToDisplay.get()
+            cmd = ['d.rast', 'map={}'.format(name)]
+            evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
+            self.scaniface.postEvent(evt)
 
     def OnClose(self, event):
         # first set variable to skip out of thread once possible
@@ -176,11 +189,13 @@ class SODPanel(wx.Panel):
         try:
             # send message to server that we finish sending
             # then we receive empty response, see above
-            self.socket.shutdown(socket.SHUT_WR)
+            if self.socket:
+                self.socket.shutdown(socket.SHUT_WR)
         except socket.error, e:
             print e
             pass
         # wait for ending the thread
-        self.clientthread.join()
+        if self.clientthread and self.clientthread.isAlive():
+            self.clientthread.join()
         # allow clean up in main dialog
         event.Skip()
