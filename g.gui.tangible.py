@@ -29,6 +29,7 @@ from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS
 from drawing import DrawingPanel
 from export import ExportPanel
 from color_interaction import ColorInteractionPanel
+from SOD_gui import SODPanel
 
 
 class AnalysesPanel(wx.Panel):
@@ -303,6 +304,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.drawing_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
         self.color_panel = ColorInteractionPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
         self.notebook.AddPage(self.color_panel, "Color")
+        self.SOD_panel = SODPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
+        self.notebook.AddPage(self.SOD_panel, "SOD")
+        self.SOD_panel.Bind(wx.EVT_CLOSE, self.SOD_panel.OnClose)
         
 
         btnStart = wx.Button(self, label="Start")
@@ -322,7 +326,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnCalibrate.Bind(wx.EVT_BUTTON, self.Calibrate)
         btnScanOnce.Bind(wx.EVT_BUTTON, self.ScanOnce)
         btnHelp.Bind(wx.EVT_BUTTON, self.OnHelp)
-        btnClose.Bind(wx.EVT_BUTTON, self.OnClose)
+        btnClose.Bind(wx.EVT_BUTTON, lambda evt: self.Close())
         self.Layout()
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -354,6 +358,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(EVT_ADD_LAYERS, self.OnAddLayers)
         self.Bind(EVT_REMOVE_LAYERS, self.OnRemoveLayers)
         self.Bind(EVT_CHECK_LAYERS, self.OnCheckLayers)
+
+        self.Bind(wx.EVT_CLOSE, self.SOD_panel.OnClose)
 
         self.pause = None
 
