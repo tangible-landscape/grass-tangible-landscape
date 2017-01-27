@@ -78,6 +78,8 @@ class ExperimentPanel(wx.Panel):
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnTimer)
 
+        self._bindUserStop()
+
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.configPath, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -121,6 +123,22 @@ class ExperimentPanel(wx.Panel):
         if self.configFile:
             self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.Layout()
+
+    def _bindUserStop(self):
+        userStopId = wx.NewId()
+        accel_tbl = wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_F5, userStopId )])
+        # TL
+        topParent = wx.GetTopLevelParent(self)
+        topParent.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+        topParent.SetAcceleratorTable(accel_tbl)
+        # Map displays
+        for mapw in self.giface.GetAllMapDisplays():
+            mapw.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+            mapw.SetAcceleratorTable(accel_tbl)
+        # Layer Manager
+        lm = self.giface.lmgr
+        lm.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+        lm.SetAcceleratorTable(accel_tbl)
 
     def _checkChangeTask(self):
         if self.timer.IsRunning():
@@ -209,7 +227,7 @@ class ExperimentPanel(wx.Panel):
         # pause scanning
         self.scaniface.pause = True
         self.scaniface.changedInput = True
-        wx.CallLater(3000, self.PostProcessing)
+        wx.CallLater(5000, self.PostProcessing)
 
     def OnTimer(self, event):
         diff = datetime.datetime.now() - self.startTime
@@ -343,3 +361,12 @@ class ExperimentPanel(wx.Panel):
         self.scaniface.changedInput = True
         if len(self.tasks[self.current]['sublayers']) <= self.currentSubtask + 1:
             self.buttonNext.Disable()
+
+        self.Raise()
+        self.buttonStop.SetFocus()
+
+    def OnUserStop(self, event):
+        if 'sublayers' in self.tasks[self.current] and len(self.tasks[self.current]['sublayers']) > self.currentSubtask + 1:
+            self.OnSubtask(None)
+        else:
+            self.OnStop(None)
