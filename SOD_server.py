@@ -4,6 +4,7 @@ import socket
 import sys
 import ssl
 from thread import start_new_thread
+from threading import Event
 import select
 
 import grass.script as gscript
@@ -54,7 +55,7 @@ def run_model(settings):
     params['wind'] = 'NE'
     params['start_time'] = 2000
     params['end_time'] = 2010
-    params['random_seed'] = 1
+    params['random_seed'] = 42
     params['ip_address'] = 'localhost'
     params['port'] = 8000
     params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
@@ -63,7 +64,7 @@ def run_model(settings):
     PROCESS = gscript.start_command(model, overwrite=True, **params)
 
 
-def clientGUI(conn, connections):
+def clientGUI(conn, connections, event):
     # Sending message to connected client
     conn.sendall('Welcome to the server.\n')
 
@@ -96,6 +97,7 @@ def clientGUI(conn, connections):
                     conn.sendall(data)
                 except socket.error:
                     print 'erroro sending file'
+                event.set()
         if message[0] == 'cmd':
             if message[1] == 'start':
                 params = {}
@@ -106,7 +108,9 @@ def clientGUI(conn, connections):
                 if 'computation' not in connections:
                     run_model(params)
             elif message[1] == 'end':
+                print "server: get stop from GUI"
                 if 'computation' in connections:
+                    print "server: send stop from GUI to OSD"
                     connections['computation'].sendall('cmd:stop')
                     global PROCESS
                     PROCESS.wait()
@@ -129,22 +133,32 @@ def clientGUI(conn, connections):
     # came out of loop
     conn.shutdown(socket.SHUT_WR)
     conn.close()
+    del connections['GUI']
 
 
-def clientComputation(conn, connections):
+def clientComputation(conn, connections, event):
     # Sending message to connected client
     conn.sendall('Welcome to the server.\n')  # send only takes string
+    # this event blocks sending messages to GUI
+    # when GUI expects files
+    event.set()
     while True:
+        event.wait(2000)
         data = conn.recv(200)
         message = data.split('|')
         for m in message:
-            m = m.split(':')
-            if m[0] == 'output':
+            lm = m.split(':')
+            event.wait(2000)
+            if lm[0] == 'output':
                 # r.pack
-                pack_path = TMP_DIR + m[1] + '.pack'
-                gscript.run_command('r.pack', input=m[1], output=pack_path, overwrite=True)
+                pack_path = TMP_DIR + lm[1] + '.pack'
+                gscript.run_command('r.pack', input=lm[1], output=pack_path, overwrite=True)
                 if 'GUI' in connections:
+                    event.clear()
                     connections['GUI'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+            elif lm[0] == 'info':
+                if lm[1] == 'last':
+                    connections['GUI'].sendall(m)
 
         if not data:
             break
@@ -152,6 +166,7 @@ def clientComputation(conn, connections):
     # came out of loop
     conn.close()
 
+event = Event()
 while True:
     read, write, error = select.select([s, s_c], [s, s_c], [])
     for r in read:
@@ -162,7 +177,7 @@ while True:
 #                                 certfile="/etc/ssl/certs/server.crt",
 #                                 keyfile="/etc/ssl/private/server.key")
             connections['GUI'] = conn
-            start_new_thread(clientGUI, (conn, connections))
+            start_new_thread(clientGUI, (conn, connections, event))
         else:
             connections['computation'] = conn
-            start_new_thread(clientComputation, (conn, connections))
+            start_new_thread(clientComputation, (conn, connections, event))

@@ -13,12 +13,15 @@ import threading
 import Queue
 import requests
 import wx
+import wx.lib.newevent
 
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
 from tangible_utils import addLayers
 
+
+ProcessForDashboardEvent, EVT_PROCESS_NEW_EVENT = wx.lib.newevent.NewEvent()
 TMP_DIR = '/tmp/'
 
 
@@ -38,12 +41,13 @@ class SODPanel(wx.Panel):
         self.timer = wx.Timer(self)
         self.speed = 1000  # 1 second per year
         self.resultsToDisplay = Queue.Queue()
+        self.playersDict = {}
 
         if 'SOD' not in self.settings:
             self.settings['SOD'] = {}
 
-        self.urlDashboard = wx.TextCtrl(self)
-        self.urlSteering = wx.TextCtrl(self)
+        self.urlDashboard = wx.TextCtrl(self, value="localhost:3000")
+        self.urlSteering = wx.TextCtrl(self, value="localhost:8888")
         btnConnect = wx.Button(self, label=u"\u21BB")
         self.players = wx.Choice(self, choices=[])
 
@@ -57,6 +61,7 @@ class SODPanel(wx.Panel):
         stopBtn.Bind(wx.EVT_BUTTON, lambda evt: self._stop())
 
         self.Bind(wx.EVT_TIMER, self._displayResult, self.timer)
+        self.Bind(EVT_PROCESS_NEW_EVENT, self._processForDashboard)
 
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -120,7 +125,8 @@ class SODPanel(wx.Panel):
                 players = resp.json()
                 current = self.players.GetItems()
                 for player in players:
-                    if player and player not in current:
+                    if player and player['name'] not in current:
+                        self.playersDict[player['name']] = player['id']
                         self.players.Append(player['name'])
                 if players:
                     self.players.SetSelection(0)
@@ -161,6 +167,11 @@ class SODPanel(wx.Panel):
                 gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
                 name = os.path.basename(path).strip('.pack')
                 resultsToDisplay.put(name)
+            elif message[0] == 'info':
+                if message[1] == 'last':
+                    name = message[2]
+                    evt = ProcessForDashboardEvent(result=name)
+                    wx.PostEvent(self, evt)
 
     def _init(self):
         message = 'cmd:start'
@@ -182,6 +193,21 @@ class SODPanel(wx.Panel):
             cmd = ['d.rast', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             self.scaniface.postEvent(evt)
+
+    def _processForDashboard(self, event):
+        print 'processing: ' + event.result
+        print gscript.list_grouped(type='raster')
+        playerId = self.playersDict[self.players.GetStringSelection()]
+        # TODO: here computation
+        task = {'try': 1, 'n_dead_oaks': 40000, 'percent_dead_oaks': 6,
+                'infected_area_ha': 3000, 'money_spent': 3000, 'area_treated_ha': 100, 'price_per_oak': 300,
+                'playerId': playerId, 'locationId': 1}
+
+        urlD = self.urlDashboard.GetValue()
+        if urlD:
+            if not urlD.startswith('http'):
+                urlD = 'http://' + urlD + '/results'
+        requests.post(urlD, json=task)
 
     def OnClose(self, event):
         # first set variable to skip out of thread once possible
