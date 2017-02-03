@@ -15,7 +15,7 @@ import wx
 
 class DisplayFrame(wx.Frame):
     def __init__(self, parent, fontsize, average, maximum):
-        wx.Frame.__init__(self, parent)
+        wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.maximum = maximum
         self.label = wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL)
         self.gauge = wx.Gauge(self, range=maximum, style=wx.GA_VERTICAL)
@@ -42,9 +42,9 @@ class DisplayFrame(wx.Frame):
 if __name__ == "__main__":
     app = wx.App()
     fr = DisplayFrame(None, 20, 3, 100)
-    fr.SetPosition((500, 100))
+    fr.SetPosition((2700, 200))
     fr.SetSize((100, 500))
-    fr.show_value(100)
+    fr.show_value(50)
     fr.Show()
    
     app.MainLoop()
