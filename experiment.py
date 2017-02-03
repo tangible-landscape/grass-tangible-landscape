@@ -21,8 +21,10 @@ from grass.pydispatch.signal import Signal
 
 from tangible_utils import get_environment
 from experiment_profile import ProfileFrame
+from experiment_display import DisplayFrame
 
 updateProfile, EVT_UPDATE_PROFILE = wx.lib.newevent.NewEvent()
+updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
 
 
 class ExperimentPanel(wx.Panel):
@@ -43,6 +45,7 @@ class ExperimentPanel(wx.Panel):
         self.tasks = []
         self.configuration = {}
         self.profileFrame = None
+        self.displayFrame = None
         self.handsoff = None
 
         # we want to start in pause mode to not capture any data
@@ -104,6 +107,7 @@ class ExperimentPanel(wx.Panel):
         self.Layout()
 
         self.Bind(EVT_UPDATE_PROFILE, self.OnProfileUpdate)
+        self.Bind(EVT_UPDATE_DISPLAY, self.OnDisplayUpdate)
 
         self._init()
 
@@ -202,6 +206,9 @@ class ExperimentPanel(wx.Panel):
         # profile
         if 'profile' in self.tasks[self.current]:
             self.StartProfile()
+        # display
+        if 'display' in self.tasks[self.current]:
+            self.StartDisplay()
 
         self.startTime = datetime.datetime.now()
         self.endTime = 0
@@ -218,6 +225,9 @@ class ExperimentPanel(wx.Panel):
         if self.profileFrame:
             self.profileFrame.Destroy()
             self.profileFrame = None
+        if self.displayFrame:
+            self.displayFrame.Destroy()
+            self.displayFrame = None
         self.settings['analyses']['file'] = ''
         self.LoadHandsOff()
         # scan after hands off
@@ -327,6 +337,22 @@ class ExperimentPanel(wx.Panel):
         env = get_environment(raster=self.tasks[self.current]['base'])
         self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['base'], env=env)
         self.profileFrame.draw()
+
+    def StartDisplay(self):
+        fontsize = self.tasks[self.current]['display']['fontsize']
+        average = self.tasks[self.current]['display']['average']
+        maximum = self.tasks[self.current]['display']['maximum']
+        self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum)
+        pos = self.tasks[self.current]['display']['position']
+        size = self.tasks[self.current]['display']['size']
+        self.displayFrame.SetPosition(pos)
+        self.displayFrame.SetSize(size)
+        self.displayFrame.Show()
+
+    def OnDisplayUpdate(self, event):
+        if not self.displayFrame:
+            return
+        self.displayFrame.show_value(event.value)
 
     def OnSubtask(self, event):
         self.LoadHandsOff()

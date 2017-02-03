@@ -45,7 +45,23 @@
          "color=red", "fill_color=red", "width=5", "size=20", "icon=basic/x"],
         ["d.vect", "map=drain_targets", "cats=7",
          "color=red", "fill_color=red", "width=5", "size=20", "icon=basic/x"]
-      ], 
+      ],
+      "solutions": [
+        ["d.vect", "map=drain_solutions", "cats=1",
+         "color=red", "fill_color=green", "width=5", "size=20", "icon=basic/x"],
+        ["d.vect", "map=drain_solutions", "cats=2",
+         "color=red", "fill_color=green", "width=5", "size=20", "icon=basic/x"],
+        ["d.vect", "map=drain_solutions", "cats=3",
+         "color=red", "fill_color=green", "width=5", "size=20", "icon=basic/x"],
+        ["d.vect", "map=drain_solutions", "cats=4",
+         "color=red", "fill_color=green", "width=5", "size=20", "icon=basic/x"],
+        ["d.vect", "map=drain_solutions", "cats=5",
+         "color=red", "fill_color=green", "width=5", "size=20", "icon=basic/x"],
+        ["d.vect", "map=drain_solutions", "cats=6",
+         "color=red", "fill_color=green", "width=5", "size=20", "icon=basic/x"],
+        ["d.vect", "map=drain_solutions", "cats=7",
+         "color=red", "fill_color=green", "width=5", "size=20", "icon=basic/x"]
+      ],
       "base": "drain_dem",
       "time_limit": 600, 
       "analyses": "experiment_drain.py", 
@@ -280,6 +296,28 @@
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},
       "title": "Transfer task B"
+    },
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=scan"
+        ], 
+        [
+          "d.vect", 
+          "map=flow_contours"
+        ],
+        [
+          "d.rast",
+          "map=transfer_dam"
+        ]
+      ], 
+      "base": "flow_dem",
+      "time_limit": 600, 
+      "display": {"size": [150, 500], "position": [900, 800], "fontsize": 20, "average": 3, "maximum": 5000},
+      "analyses": "experiment_dams.py", 
+      "filter" : {"threshold": 700, "debug": false},
+      "title": "Dams"
     }
   ]
 }
