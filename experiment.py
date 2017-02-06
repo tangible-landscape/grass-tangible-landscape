@@ -260,7 +260,8 @@ class ExperimentPanel(wx.Panel):
             if cmd[0] == 'd.rast':
                 l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
                                 opacity=opacity, cmd=cmd)
-                zoom.append(l.maplayer)
+                if cmd[1].split('=')[1] != 'scan':
+                    zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=opacity, cmd=cmd)
