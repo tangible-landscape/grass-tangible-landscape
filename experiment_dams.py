@@ -8,13 +8,19 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import grass.script as gscript
+from datetime import datetime
 from experiment import updateDisplay
 
 
 def run_contours(real_elev, scanned_elev, eventHandler, env, **kwargs):
-    gscript.run_command('r.contour', input=scanned_elev, output='flow_contours', step=15, flags='t', env=env)
+    gscript.run_command('r.contour', input=scanned_elev, output='flow_contours', step=20, flags='t', env=env)
 
 def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
+    # copy scan
+    postfix = datetime.now().strftime('%H_%M_%S')
+    prefix = 'dams'
+    gscript.run_command('g.copy', raster=[scanned_elev, '{}_scan_{}'.format(prefix, postfix)], env=env)
+
     filter_depth = 1
     repeat = 2
     input_dem = scanned_elev
@@ -52,13 +58,14 @@ def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
         colors = ['0 179:235:243', '10 46:132:223', '20 11:11:147', '100 11:11:50']
         gscript.write_command('r.colors', map=new, rules='-', stdin='\n'.join(colors), env=env)
         data = gscript.parse_command('r.univar', map=new, flags='g', env=env)
-        reg = gscript.region()
-        volume = float(data['sum']) * reg['nsres'] * reg['ewres']
-        gscript.mapcalc("dams_volume = {}".format(int(volume /1000)), env=env)
-        event = updateDisplay(value=int(volume /1000))
+        reg = gscript.parse_command('g.region', flags='pg', env=env)
+        volume = float(data['sum']) * float(reg['nsres']) * float(reg['ewres'])
+        event = updateDisplay(value=int(volume /100000))
     else:
         gscript.mapcalc('{} = null()'.format(new), env=env)
         event = updateDisplay(value=0)
     # update profile
     eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
 
+    # copy results
+    gscript.run_command('g.copy', raster=[new, '{}_dams_{}'.format(prefix, postfix)], env=env)
