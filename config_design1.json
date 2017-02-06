@@ -1,0 +1,127 @@
+{
+  "taskDir": "/home/tangible/dev/grass-tangible-landscape",
+  "logDir": "/tmp/",
+  "handsoff": [
+                "d.text", 
+                "at=10,45",
+                "size=20",
+                "color=red",
+                "text='HANDS OFF'"
+        ],
+  "tasks": [
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=drain_dem"
+        ], 
+        [
+          "d.vect", 
+          "map=drain_contours_20"
+        ],
+        [
+          "d.vect", 
+          "map=drain_contours_100",
+          "width=2"
+      ],
+        [
+          "d.vect", 
+          "map=drain_line",
+          "width=3", "color=15:125:255"
+        ]
+      ],
+     "layers_opacity": [1.0, 0.5, 0.5, 1.0],
+      "sublayers": [
+        ["d.vect", "map=drain_targets", "cats=1",
+         "color=blue", "fill_color=blue", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_targets", "cats=2",
+         "color=blue", "fill_color=blue", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_targets", "cats=3",
+         "color=blue", "fill_color=blue", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_targets", "cats=4",
+         "color=blue", "fill_color=blue", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_targets", "cats=5",
+         "color=blue", "fill_color=blue", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_targets", "cats=6",
+         "color=blue", "fill_color=blue", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_targets", "cats=7",
+         "color=blue", "fill_color=blue", "width=2", "size=30", "icon=basic/marker"]
+      ],
+      "solutions": [
+        ["d.vect", "map=drain_solutions", "cats=1",
+         "color=green", "fill_color=green", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_solutions", "cats=2",
+         "color=green", "fill_color=green", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_solutions", "cats=3",
+         "color=green", "fill_color=green", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_solutions", "cats=4",
+         "color=green", "fill_color=green", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_solutions", "cats=5",
+         "color=green", "fill_color=green", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_solutions", "cats=6",
+         "color=green", "fill_color=green", "width=2", "size=30", "icon=basic/marker"],
+        ["d.vect", "map=drain_solutions", "cats=7",
+         "color=green", "fill_color=green", "width=2", "size=30", "icon=basic/marker"]
+      ],
+      "base": "drain_dem",
+      "time_limit": 600, 
+      "analyses": "experiment_drain.py", 
+      "filter" : {"threshold": 750, "debug": true},
+      "title": "Task 1: Drain"
+    },
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=scan"
+        ], 
+        [
+          "d.vect", 
+          "map=flow_contours"
+        ],
+        [
+          "d.rast",
+          "map=transfer_dam"
+        ]
+      ], 
+      "layer_opacity": [1.0, 0.6, 1.0],
+      "base": "flow_dem",
+      "time_limit": 600, 
+      "display": {"size": [100, 300], "position": [2760, 550], "fontsize": 15, "average": 3, "maximum": 140},
+      "analyses": "experiment_dams.py", 
+      "filter" : {"threshold": 650, "debug": false},
+      "title": "Task 2: Dams"
+    },
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=scan"
+        ],
+        [
+          "d.vect",
+          "map=flow_rain", "color=none",
+          "fill_color=white"
+        ],
+        [
+          "d.rast", 
+          "map=flow_flow",
+          "values=0-0.04", "-i"
+        ],
+        [
+          "d.vect", 
+          "map=flow_contours"
+        ],
+        [
+          "d.vect", "map=flow_target",
+          "color=red", "fill_color=red", "width=2", "size=25", "icon=basic/marker"
+        ]
+      ], 
+      "base": "flow_dem",
+      "time_limit": 600, 
+      "analyses": "experiment_flow.py", 
+      "filter" : {"threshold": 650, "debug": false},
+      "title": "Task 3: Channel"
+    }
+  ]
+}
