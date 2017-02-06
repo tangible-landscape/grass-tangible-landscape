@@ -253,17 +253,20 @@ class ExperimentPanel(wx.Panel):
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
         zoom = []
-        for cmd in self.tasks[self.current]['layers']:
+        for i, cmd in enumerate(self.tasks[self.current]['layers']):
+            opacity = 1.0
+            if "layers_opacity" in self.tasks[self.current]:
+                opacity = float(self.tasks[self.current]['layers_opacity'][i])
             if cmd[0] == 'd.rast':
                 l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
-                                opacity=1.0, cmd=cmd)
+                                opacity=opacity, cmd=cmd)
                 zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
-                            opacity=1.0, cmd=cmd)
+                            opacity=opacity, cmd=cmd)
             else:
                 ll.AddLayer('command', name=' '.join(cmd), checked=True,
-                            opacity=1.0, cmd=[])
+                            opacity=opacity, cmd=[])
         if 'sublayers' in self.tasks[self.current]:
             cmd = self.tasks[self.current]['sublayers'][0]
             if cmd[0] == 'd.rast':
@@ -363,9 +366,32 @@ class ExperimentPanel(wx.Panel):
         # pause scanning
         self.scaniface.pause = True
         self.scaniface.changedInput = True
-        wx.CallLater(3000, self.PostProcessing, onDone=self._subtaskDone)
-        
+
+        if 'solutions' in self.tasks[self.current]:
+            wx.CallLater(3000, self.PostProcessing, onDone=self._showSolutions)
+        else:
+            wx.CallLater(3000, self.PostProcessing, onDone=self._subtaskDone)
+
+    def _showSolutions(self):
+        ll = self.giface.GetLayerList()
+        if self.handsoff:
+            ll.DeleteLayer(self.handsoff)
+            
+        cmd = self.tasks[self.current]['solutions'][self.currentSubtask]
+        if cmd[0] == 'd.rast':
+            ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                        opacity=1.0, cmd=cmd)
+        elif cmd[0] == 'd.vect':
+            ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
+                        opacity=1.0, cmd=cmd)
+        wx.CallLater(6000, self._subtaskDone)
+
     def _subtaskDone(self):
+        ll = self.giface.GetLayerList()
+        for l in ll:
+            if 'solutions' in self.tasks[self.current] and l.cmd == self.tasks[self.current]["solutions"][self.currentSubtask]:
+                ll.DeleteLayer(l)
+                break
         ll = self.giface.GetLayerList()
         for l in ll:
             if l.cmd == self.tasks[self.current]["sublayers"][self.currentSubtask]:
@@ -385,8 +411,8 @@ class ExperimentPanel(wx.Panel):
             each.GetMapWindow().UpdateMap()
         self.scaniface.pause = False
         self.scaniface.changedInput = True
-        if len(self.tasks[self.current]['sublayers']) <= self.currentSubtask + 1:
-            self.buttonNext.Disable()
+        #if len(self.tasks[self.current]['sublayers']) <= self.currentSubtask + 1:
+        #    self.buttonNext.Disable()
 
         self.Raise()
         self.buttonStop.SetFocus()
