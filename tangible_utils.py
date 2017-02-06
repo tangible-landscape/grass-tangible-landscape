@@ -70,8 +70,11 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         if info['max'] - info['min'] > threshold:
             scanFilter['counter'] += 1
             return
-
-    gscript.run_command('g.copy', raster=[scan_params['scan_name'] + 'tmp', scan_params['scan_name']], overwrite=True, quiet=True)
+    try:
+        gscript.run_command('g.copy', raster=[scan_params['scan_name'] + 'tmp', scan_params['scan_name']], overwrite=True, quiet=True)
+    except CalledModuleError:
+        print 'error copying scanned data from temporary name'
+        return
     env = get_environment(rast=scan_params['scan_name'])
     if not analysesFile or not os.path.exists(analysesFile):
         return
