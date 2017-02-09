@@ -51,6 +51,9 @@ class ProfileFrame(wx.Frame):
         return sqrt((p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1]))
 
     def compute_profile(self, points, raster, env):
+        if not points:
+            self.draw(clear=True)
+            return
         coords = []
         for p in points:
             coords.append('{},{}'.format(p[0], p[1]))
@@ -71,24 +74,26 @@ class ProfileFrame(wx.Frame):
             e = interp(d, self.distances, self.elevations)
             self.point_distances.append(d)
             self.point_elevations.append(e)
+        self.draw()
             
         
             
-    def draw(self):
+    def draw(self, clear=False):
         self.axes.clear()
         self.axes.set_ylim(self.limy)
         self.axes.set_xlim(self.limx)
         major_ticks = arange(self.limy[0], self.limy[1], self.ticks)                                              
         self.axes.set_yticks(major_ticks)                                                       
         self.axes.yaxis.grid(True, alpha=0.7)
-        self.axes.annotate('A', xy=(self.point_distances[0], self.point_elevations[0]),  xycoords='data',
-            xytext=(self.point_distances[0], self.point_elevations[0]),
-            horizontalalignment='right', verticalalignment='top')
-        self.axes.annotate('B', xy=(self.point_distances[-1], self.point_elevations[-1]),  xycoords='data',
-            xytext=(self.point_distances[-1], self.point_elevations[-1]), textcoords='data',
-            horizontalalignment='left', verticalalignment='top')
-        self.axes.plot(self.distances, self.elevations, color='black')
-        self.axes.plot(self.point_distances, self.point_elevations, marker='o', linestyle='None', color='red')
+        if not clear:
+            self.axes.annotate('A', xy=(self.point_distances[0], self.point_elevations[0]),  xycoords='data',
+                               xytext=(self.point_distances[0], self.point_elevations[0]),
+                               horizontalalignment='right', verticalalignment='top')
+            self.axes.annotate('B', xy=(self.point_distances[-1], self.point_elevations[-1]),  xycoords='data',
+                               xytext=(self.point_distances[-1], self.point_elevations[-1]), textcoords='data',
+                               horizontalalignment='left', verticalalignment='top')
+            self.axes.plot(self.distances, self.elevations, color='black')
+            self.axes.plot(self.point_distances, self.point_elevations, marker='o', linestyle='None', color='red')
         self.canvas.draw()
 
 

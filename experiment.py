@@ -223,7 +223,7 @@ class ExperimentPanel(wx.Panel):
         for l in reversed(ll):
             ll.DeleteLayer(l)
         if self.profileFrame:
-            self.profileFrame.Destroy()
+            self.profileFrame.Close()
             self.profileFrame = None
         if self.displayFrame:
             self.displayFrame.Destroy()
@@ -340,7 +340,6 @@ class ExperimentPanel(wx.Panel):
             return
         env = get_environment(raster=self.tasks[self.current]['base'])
         self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['base'], env=env)
-        self.profileFrame.draw()
 
     def StartDisplay(self):
         fontsize = self.tasks[self.current]['display']['fontsize']

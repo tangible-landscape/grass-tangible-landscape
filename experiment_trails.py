@@ -15,102 +15,77 @@ from tangible_utils import get_environment
 from experiment import updateProfile
 import grass.script as gscript
 from grass.pygrass.vector import VectorTopo
+from TSP import solve_tsp_numpy
+
+
+def dist(points, i, j):
+    x2 = (points[i][0] - points[j][0]) * (points[i][0] - points[j][0])
+    y2 = (points[i][1] - points[j][1]) * (points[i][1] - points[j][1])
+    return sqrt(x2 + y2)
 
 
 def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     resulting = "trails1_slopedir"
-    analyses.change_detection(before=real_elev, after=scanned_elev,
-                              change='change', height_threshold=[90, 160], cells_threshold=[3, 40], add=True, max_detected=4, env=env)
+    before = 'scan_saved'
+    #env_crop = get_environment(raster=real_elev, n='n-100', s='s+100', e='e-100', w='w+100')
+    analyses.change_detection(before=before, after=scanned_elev,
+                              change='change', height_threshold=[70, 335], cells_threshold=[3, 100], add=True, max_detected=10, env=env)
+    points = {}
+    # start and end
     data = gscript.read_command('v.out.ascii', input='trails1_points', type='point', format='point', env=env).strip()
     c1, c2 = data.splitlines()
     c1 = c1.split('|')
     c2 = c2.split('|')
-    points = {}
-    point_conn = {}
-    distances = {}
-    point_cat = {}
-    line = ''
     points[0] = (float(c1[0]), float(c1[1]))
     points[1] = (float(c2[0]), float(c2[1]))
-    point_conn[0] = 1
-    point_conn[1] = 1
-    point_cat[0] = 98
-    point_cat[1] = 99
 
+    # detected points
     points_raw = gscript.read_command('v.out.ascii', input='change',
                                       type='point', format='point').strip().split()
-
     i = 2
     for point in points_raw:
         point = point.split('|')
-        point_cat[i] = point[2]
         point = (float(point[0]), float(point[1]))
         points[i] = point
-        point_conn[i] = 0
         i += 1
-    if len(points) == 2:
+    length = len(points)
+    if length == 2:
         gscript.mapcalc("{} = null()".format(resulting), env=env)
+        event = updateProfile(points=[])
+        eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
         return
-    for i in range(len(points) - 1):
-        for j in range(i + 1, len(points)):
-            distances[(i, j)] = sqrt((points[i][0] - points[j][0]) * (points[i][0] - points[j][0]) +
-                                     (points[i][1] - points[j][1]) * (points[i][1] - points[j][1]))
-    ordered = sorted(distances.items(), key=lambda x: x[1])
-    connections = []
-    i = 0
-    while ordered and len(connections) < len(points) - 1:
-        i += 1
-        if i > 50:
-            break
-        connection = ordered.pop(0)
-        p, d = connection[0], connection[1]
-        p1, p2 = p[0], p[1]
-        if point_conn[p1] >= 2 or point_conn[p2] >= 2:
-#            print 'vyrazeny: ' + str(point_cat[p1]) + ' ' + str(point_cat[p2])
-            continue
-        else:
-            # TODO: check if we create a loop
-            point_conn[p2] += 1
-            point_conn[p1] += 1
-#            print 'pridany: ' + str(point_cat[p1]) + ' ' + str(point_cat[p2])
-            connections.append(connection)
 
-    start = 0
-    ordered_connections = []
-    len_connections = len(connections)
-    valid = False
-    for i, (c, d) in enumerate(connections):
-        # if the first point has no connection, it's invalid
-        if c[0] == 0 or c[1] == 0:
-            valid = True
-    if not valid:
-        return
-    j = 0
-    while len(ordered_connections) != len_connections:
-        j += 1
-        if j > 50:
-            break
-        for i, (c, d) in enumerate(connections):
-            if c[0] == start:
-                ordered_connections.append((c[0], c[1]))
-                start = c[1]
-                del connections[i]
-                break
-            elif c[1] == start:
-                ordered_connections.append((c[1], c[0]))
-                start = c[0]
-                del connections[i]
-                break
+    # distance matrix
+    D = []
+    for i in range(length):
+        D.append([0] * length)
+    for p1 in range(0, length - 1):
+        for p2 in range(p1 + 1, length):
+            d = dist(points, p1, p2)
+            D[p1][p2] = d
+            D[p2][p1] = d
+    # 0 distance for start and end to make sure it's always connected
+    D[0][1] = 0
+    D[1][0] = 0
 
+    # solve
+    solution = solve_tsp_numpy(D, optim_steps=10)
+    # rearange solutions to start in start point
+    ind1 = solution.index(0)
+    ind2 = solution.index(1)
+    if ind2 > ind1:
+        solution = solution[::-1]
+    ind = solution.index(0)
+    solution = solution[ind :] + solution[:ind ]
+
+    # export line
     profile_points = []
-    line += 'L {} 1\n'.format(len(ordered_connections) + 1)
-    for l in ordered_connections:
-        line += '{x} {y}\n'.format(x=points[l[0]][0], y=points[l[0]][1])
-        profile_points.append(points[l[0]])
-    line += '{x} {y}\n'.format(x=points[l[1]][0], y=points[l[1]][1])
-    profile_points.append(points[l[1]])
-    line += '1 1\n\n'
-    gscript.write_command('v.in.ascii', input='-', stdin=line, output='line', format='standard', flags='n', overwrite=True, env=env)
+    line = 'L {} 1\n'.format(len(solution))
+    for i in solution:
+        line += '{} {}\n'.format(points[i][0], points[i][1])
+        profile_points.append(points[i])
+    line += '1 1'
+    gscript.write_command('v.in.ascii', input='-', stdin=line, output='line', format='standard', flags='n', env=env)
 
     env2 = get_environment(raster=real_elev)
     # slope along line
@@ -121,7 +96,7 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     colors = ['0 green', '5 green', '5 yellow', '12 yellow', '12 red', '90 red']
     gscript.write_command('r.colors', map='slope_dir', rules='-', stdin='\n'.join(colors), env=env2)
     # increase thickness
-    gscript.run_command('r.grow', input='slope_dir', radius=1.1, output=resulting, env=env2)
+    gscript.run_command('r.grow', input='slope_dir', radius=2.1, output=resulting, env=env2)
 
     # update profile
     event = updateProfile(points=profile_points)
