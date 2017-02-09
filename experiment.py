@@ -67,10 +67,10 @@ class ExperimentPanel(wx.Panel):
         self.buttonBack.Bind(wx.EVT_BUTTON, self.OnBack)
         self.buttonForward.Bind(wx.EVT_BUTTON, self.OnForward)
         self.buttonStart = wx.Button(self, label='Start task')
-#        self.buttonPause = wx.Button(self, label='Pause')
+        self.buttonCalibrate = wx.Button(self, label='Calibrate')
         self.buttonStop = wx.Button(self, label='End task')
         self.buttonStart.Bind(wx.EVT_BUTTON, self.OnStart)
-#        self.buttonPause.Bind(wx.EVT_BUTTON, self.OnPause)
+        self.buttonCalibrate.Bind(wx.EVT_BUTTON, self.OnCalibrate)
         self.buttonStop.Bind(wx.EVT_BUTTON, self.OnStop)
         self.timeText = wx.StaticText(self, label='00 : 00', style=wx.ALIGN_CENTRE)
         self.timeText.SetFont(wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
@@ -91,6 +91,9 @@ class ExperimentPanel(wx.Panel):
         sizer.Add(self.title, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.buttonBack, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.buttonForward, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.buttonCalibrate, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.buttonStart, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -126,6 +129,7 @@ class ExperimentPanel(wx.Panel):
         self.timeText.SetLabel('00 : 00')
         if self.configFile:
             self.buttonNext.Show('sublayers' in self.tasks[self.current])
+            self.buttonCalibrate.Show('calibrate' in self.tasks[self.current])
         self.Layout()
 
     def _bindUserStop(self):
@@ -163,6 +167,22 @@ class ExperimentPanel(wx.Panel):
                 self.tasks = self.configuration['tasks']
                 self.title.SetLabel(self.tasks[self.current]['title'])
 
+    def OnCalibrate(self, event):
+        self._loadConfiguration(None)
+        self.settings['scan']['elevation'] = self.tasks[self.current]['base']
+        self.settings['scan']['scan_name'] = 'scan_saved'
+        self.settings['analyses']['file'] = ''
+        # resume scanning
+        self.scaniface.filter['filter'] = False
+        self.scaniface.pause = False
+        self.scaniface.changedInput = True
+
+        wx.CallLater(3000, self.OnCalibrationDone)
+
+    def OnCalibrationDone(self):
+        self.scaniface.pause = True
+        self.scaniface.changedInput = True
+
     def OnBack(self, event):
         if not self._checkChangeTask():
             return
@@ -174,6 +194,7 @@ class ExperimentPanel(wx.Panel):
             self.title.SetLabel(self.tasks[self.current]['title'])
         self.timeText.SetLabel('00 : 00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
+        self.buttonCalibrate.Show('calibrate' in self.tasks[self.current])
         self.Layout()
 
     def OnForward(self, event):
@@ -187,6 +208,7 @@ class ExperimentPanel(wx.Panel):
             self.title.SetLabel(self.tasks[self.current]['title'])
         self.timeText.SetLabel('00 : 00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
+        self.buttonCalibrate.Show('calibrate' in self.tasks[self.current])
         self.Layout()
 
     def OnStart(self, event):
