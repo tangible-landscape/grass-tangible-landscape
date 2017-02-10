@@ -67,7 +67,7 @@ class ExperimentPanel(wx.Panel):
         self.buttonBack.Bind(wx.EVT_BUTTON, self.OnBack)
         self.buttonForward.Bind(wx.EVT_BUTTON, self.OnForward)
         self.buttonStart = wx.Button(self, label='Start task')
-        self.buttonCalibrate = wx.Button(self, label='Calibrate')
+        self.buttonCalibrate = wx.Button(self, size=(150, -1), label='Calibrate')
         self.buttonStop = wx.Button(self, label='End task')
         self.buttonStart.Bind(wx.EVT_BUTTON, self.OnStart)
         self.buttonCalibrate.Bind(wx.EVT_BUTTON, self.OnCalibrate)
@@ -173,6 +173,7 @@ class ExperimentPanel(wx.Panel):
         self.settings['scan']['scan_name'] = 'scan_saved'
         self.settings['analyses']['file'] = ''
         # resume scanning
+        self.buttonCalibrate.SetLabel("Calibrating...")
         self.scaniface.filter['filter'] = False
         self.scaniface.pause = False
         self.scaniface.changedInput = True
@@ -180,6 +181,7 @@ class ExperimentPanel(wx.Panel):
         wx.CallLater(3000, self.OnCalibrationDone)
 
     def OnCalibrationDone(self):
+        self.buttonCalibrate.SetLabel("Calibrate")
         self.scaniface.pause = True
         self.scaniface.changedInput = True
 
@@ -217,6 +219,7 @@ class ExperimentPanel(wx.Panel):
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
+        self.settings['scan']['scan_name'] = 'scan'
         # resume scanning
         self.scaniface.filter['filter'] = True
         self.scaniface.filter['counter'] = 0
