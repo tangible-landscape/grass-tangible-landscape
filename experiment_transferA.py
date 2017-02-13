@@ -10,13 +10,15 @@ This program is free software under the GNU General Public License
 from datetime import datetime
 import analyses
 from tangible_utils import get_environment
+from experiment import updateDisplay
 import grass.script as gscript
 
 
 def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
     env2 = get_environment(raster=real_elev)
-    analyses.change_detection(before=real_elev, after=scanned_elev,
-                              change='change', height_threshold=[30, 70], cells_threshold=[3, 100], add=True, max_detected=1, env=env)
+    before = 'scan_saved'
+    analyses.change_detection(before=before, after=scanned_elev,
+                              change='change', height_threshold=[18, 50], cells_threshold=[3, 100], add=True, max_detected=1, debug=False, env=env)
     point = gscript.read_command('v.out.ascii', input='change',
                                  type='point', format='point', env=env).strip()
 
@@ -25,7 +27,7 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
     resulting = "transfer_slopedir"
     if point:
         x, y, cat = point.split('|')
-        gscript.run_command('r.drain', input='transfer_cost', direction='transfer_costdir', output=conn,
+        gscript.run_command('r.drain', input='transfer_cost2', direction='transfer_costdir2', output=conn,
                             start_points='change', drain=conn, flags='d', env=env2)
 
         gscript.run_command('v.to.rast', input=conn, type='line', output=conn + '_dir', use='dir', env=env2)
@@ -42,14 +44,27 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
         gscript.run_command('r.drain', input=real_elev, output=drain,
                             start_points='change', drain=drain, env=env2)
 
-        #gscript.run_command('r.viewshed', input=real_elev, output='transfer_viewshed', observer_elevation=67,
-        #                    coordinates=[x, y], flags='b', env=env2)
-        #gscript.write_command('r.colors', map='transfer_viewshed', rules='-', stdin='0 black', env=env2)
+        gscript.run_command('r.viewshed', input=real_elev, output='transfer_viewshed', observer_elevation=45,
+                            coordinates=[x, y], flags='b', env=env2)
+        gscript.write_command('r.colors', map='transfer_viewshed', rules='-', stdin='0 black', env=env2)
+
+        env3 = get_environment(raster='transfer_road')
+        gscript.mapcalc('visible_road = if(transfer_viewshed == 1 && ! isnull(transfer_road), 1, null())', env=env3)
+        road_full = float(gscript.parse_command('r.univar', map='transfer_road', flags='g', env=env3)['n'])
+        try:
+            road_v = float(gscript.parse_command('r.univar', map='visible_road', flags='g', env=env3)['n'])
+        except KeyError:
+            road_v = 0
+        event = updateDisplay(value=int(100 * road_v / road_full))
     else:
         gscript.run_command('v.edit', map=conn, tool='create', env=env)
         gscript.run_command('v.edit', map=drain, tool='create', env=env)
         gscript.mapcalc('{} = null()'.format(resulting), env=env)
         gscript.mapcalc('{} = null()'.format('transfer_viewshed'), env=env)
+        event = updateDisplay(value=None)
+
+    # update viewshed score
+    eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
 
     # copy results
     postfix = datetime.now().strftime('%H_%M_%S')
