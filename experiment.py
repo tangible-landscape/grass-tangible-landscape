@@ -172,6 +172,9 @@ class ExperimentPanel(wx.Panel):
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['scan']['scan_name'] = 'scan_saved'
         self.settings['analyses']['file'] = ''
+        if 'scanning_params' in self.tasks[self.current]:
+            for each in self.tasks[self.current]['scanning_params'].keys():
+                self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
         # resume scanning
         self.buttonCalibrate.SetLabel("Calibrating...")
         self.scaniface.filter['filter'] = False
@@ -220,6 +223,9 @@ class ExperimentPanel(wx.Panel):
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
         self.settings['scan']['scan_name'] = 'scan'
+        if 'scanning_params' in self.tasks[self.current]:
+            for each in self.tasks[self.current]['scanning_params'].keys():
+                self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
         # resume scanning
         self.scaniface.filter['filter'] = True
         self.scaniface.filter['counter'] = 0
