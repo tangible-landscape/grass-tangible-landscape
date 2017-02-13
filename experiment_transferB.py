@@ -8,10 +8,11 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import grass.script as gscript
+from experiment import updateDisplay
 
 
 def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
-    filter_depth = 0
+    filter_depth = 1
     repeat = 2
     input_dem = scanned_elev
     new = 'transfer_dam'
@@ -29,7 +30,7 @@ def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
     if len(stats) > 0 and stats[0]:
         cats = []
         for stat in stats:
-            if float(stat.split()[1]) > 100: # larger than specified number of cells
+            if float(stat.split()[1]) > 80: # larger than specified number of cells
                 cat, value = stat.split()
                 cats.append(cat)
         if cats:
@@ -40,13 +41,21 @@ def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
                 expression += '{clump} == {val}'.format(clump='clumps', val=cat)
             expression += '), {}, null())'.format(output2)
             gscript.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
+        else:
+            gscript.mapcalc('{} = null()'.format(new), env=env)
+            event = updateDisplay(value=None)
+            eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
+            return
         colors = ['0 179:235:243', '10 46:132:223', '20 11:11:147', '100 11:11:50']
         gscript.write_command('r.colors', map=new, rules='-', stdin='\n'.join(colors), env=env)
         data = gscript.parse_command('r.univar', map=new, flags='g', env=env)
-        reg = gscript.region()
-        print float(data['sum']) * reg['nsres'] * reg['ewres']
+        event = updateDisplay(value=float(data['n'])/100)
+        
     else:
         gscript.mapcalc('{} = null()'.format(new), env=env)
+        event = updateDisplay(value=None)
+
+    eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
 
 def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask, logDir, env):
     # TODO
