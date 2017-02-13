@@ -29,7 +29,7 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     before = 'scan_saved'
     #env_crop = get_environment(raster=real_elev, n='n-100', s='s+100', e='e-100', w='w+100')
     analyses.change_detection(before=before, after=scanned_elev,
-                              change='change', height_threshold=[70, 335], cells_threshold=[3, 100], add=True, max_detected=10, env=env)
+                              change='change', height_threshold=[70, 335], cells_threshold=[3, 100], add=True, max_detected=10, debug=True, env=env)
     points = {}
     # start and end
     data = gscript.read_command('v.out.ascii', input='trails1_points', type='point', format='point', env=env).strip()

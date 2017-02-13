@@ -34,8 +34,9 @@ solution = [(316715, 251545),
             (317705, 252645)]
 
 def run_drain(real_elev, scanned_elev, eventHandler, env, **kwargs):
-    analyses.change_detection(before=real_elev, after=scanned_elev,
-                              change='change', height_threshold=[100, 220], cells_threshold=[5, 80], add=True, max_detected=1, env=env)
+    before = 'scan_saved'
+    analyses.change_detection(before=before, after=scanned_elev,
+                              change='change', height_threshold=[100, 220], cells_threshold=[5, 80], add=True, max_detected=1, debug=True, env=env)
     point = gscript.read_command('v.out.ascii', input='change',
                                  type='point', format='point', env=env).strip()
     drain = 'drain_line'
