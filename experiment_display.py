@@ -27,7 +27,7 @@ class DisplayFrame(wx.Frame):
         self.sizer.Add(self.gauge, 1, wx.ALL|wx.EXPAND, border=5)
         self.sizer.Add(self.label, 0, wx.ALL|wx.ALIGN_CENTER|wx.GROW, border=10)
         self.SetSizer(self.sizer)
-        self.Fit()
+        self.sizer.Fit(self)
 
         self.values = deque(maxlen=average)
 
@@ -42,6 +42,8 @@ class DisplayFrame(wx.Frame):
         if value > self.maximum:
             value = self.maximum
         self.gauge.SetValue(value)
+        self.sizer.Layout()
+        self.Layout()
 
 
 if __name__ == "__main__":
