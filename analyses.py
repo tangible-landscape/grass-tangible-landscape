@@ -219,7 +219,7 @@ def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
     gcore.run_command('g.remove', type='raster', pattern="*tmp_get_marker", flags='f')
 
 
-def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
+def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, debug, env):
     diff_thr = 'diff_thr_' + str(uuid.uuid4()).replace('-', '')
     diff_thr_clump = 'diff_thr_clump_' + str(uuid.uuid4()).replace('-', '')
     regressed = 'regressed_' + str(uuid.uuid4()).replace('-', '')
@@ -240,6 +240,8 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
 
         gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
         stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split(os.linesep)
+        if debug:
+            print 'DEBUG: {}'.format(stats)
         if len(stats) > 0 and stats[0]:
             cats = []
             found = 0
