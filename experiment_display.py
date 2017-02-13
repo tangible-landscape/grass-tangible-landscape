@@ -14,9 +14,10 @@ from collections import deque
 import wx
 
 class DisplayFrame(wx.Frame):
-    def __init__(self, parent, fontsize, average, maximum):
+    def __init__(self, parent, fontsize, average, maximum, formatting_string='{}'):
         wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.maximum = maximum
+        self.formatting_string = formatting_string
         self.label = wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL)
         self.gauge = wx.Gauge(self, range=maximum, style=wx.GA_VERTICAL)
         self.gauge.SetBackgroundColour(wx.WHITE)
@@ -31,9 +32,13 @@ class DisplayFrame(wx.Frame):
         self.values = deque(maxlen=average)
 
     def show_value(self, value):
+        if value is None:
+            self.label.SetLabel('')
+            self.gauge.SetValue(0)
+            return
         self.values.append(value)
         mean = np.mean(np.array(self.values))
-        self.label.SetLabel("{}".format(int(mean)))
+        self.label.SetLabel(self.formatting_string.format(int(mean)))
         if value > self.maximum:
             value = self.maximum
         self.gauge.SetValue(value)

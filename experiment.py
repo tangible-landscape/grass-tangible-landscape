@@ -370,7 +370,8 @@ class ExperimentPanel(wx.Panel):
         fontsize = self.tasks[self.current]['display']['fontsize']
         average = self.tasks[self.current]['display']['average']
         maximum = self.tasks[self.current]['display']['maximum']
-        self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum)
+        formatting_string = self.tasks[self.current]['display']['formatting_string']
+        self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum, formatting_string=formatting_string)
         pos = self.tasks[self.current]['display']['position']
         size = self.tasks[self.current]['display']['size']
         self.displayFrame.SetPosition(pos)
