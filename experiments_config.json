@@ -8,6 +8,8 @@
                 "color=red",
                 "text='HANDS OFF'"
         ],
+  "duration_handsoff": 5000,
+  "duration_handsoff_after": 5000,
   "tasks": [
     {
       "layers": [

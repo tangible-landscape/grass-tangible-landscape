@@ -262,13 +262,21 @@ class ExperimentPanel(wx.Panel):
         self.settings['analyses']['file'] = ''
         self.LoadHandsOff()
         # scan after hands off
-        wx.CallLater(5000, self._stop)
+        if 'duration_handsoff' in self.configuration:
+            t = self.configuration['duration_handsoff']
+        else:
+            t = 0
+        wx.CallLater(t, self._stop)
 
     def _stop(self):
         # pause scanning
         self.scaniface.pause = True
         self.scaniface.changedInput = True
-        wx.CallLater(5000, self.PostProcessing)
+        if 'duration_handsoff_after' in self.configuration:
+            t = self.configuration['duration_handsoff_after']
+        else:
+            t = 0
+        wx.CallLater(t, self.PostProcessing)
 
     def OnTimer(self, event):
         diff = datetime.datetime.now() - self.startTime
@@ -310,10 +318,11 @@ class ExperimentPanel(wx.Panel):
         self.giface.GetMapWindow().ZoomToMap(layers=zoom)
 
     def LoadHandsOff(self):
-        ll = self.giface.GetLayerList()
-        cmd = self.configuration['handsoff']
-        self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
-                                    opacity=1.0, cmd=[])
+        if 'handsoff' in self.configuration:
+            ll = self.giface.GetLayerList()
+            cmd = self.configuration['handsoff']
+            self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
+                                        opacity=1.0, cmd=[])
 
     def PostProcessing(self, onDone=None):
         wx.BeginBusyCursor()
