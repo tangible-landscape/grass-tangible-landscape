@@ -22,6 +22,7 @@ from grass.pydispatch.signal import Signal
 from tangible_utils import get_environment
 from experiment_profile import ProfileFrame
 from experiment_display import DisplayFrame
+from experiment_slides import Slides
 
 updateProfile, EVT_UPDATE_PROFILE = wx.lib.newevent.NewEvent()
 updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
@@ -47,6 +48,7 @@ class ExperimentPanel(wx.Panel):
         self.profileFrame = None
         self.displayFrame = None
         self.handsoff = None
+        self.slides = None
 
         # we want to start in pause mode to not capture any data
         self.scaniface.pause = True
@@ -218,6 +220,26 @@ class ExperimentPanel(wx.Panel):
 
     def OnStart(self, event):
         self._loadConfiguration(None)
+        if self.configuration['slides']:
+            self._startSlides()
+        else:
+            # if no slides, start right away
+            self._startTask()
+
+    def _startSlides(self):
+        self.slides = Slides(self)
+        self.slides.SetPosition(self.configuration['slides']['position'])
+        self.slides.LoadURL('file://' + os.path.join(self.configuration['slides']['dir'], self.tasks[self.current]['slides']))
+        self.slides.Maximize(True)
+        self.slides.Show()
+        for t in self.configuration['slides']['switch']:
+            wx.CallLater(t * 1000, self._switchSlide)
+        wx.CallLater(self.configuration['slides']['switch'][-1] * 1000, self._startTask)
+
+    def _switchSlide(self):
+        self.slides.Next()
+
+    def _startTask(self):
         self.currentSubtask = 0
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
@@ -249,6 +271,8 @@ class ExperimentPanel(wx.Panel):
 #        pass
 
     def OnStop(self, event):
+        if self.slides:
+            self.slides.Close()
         self.timer.Stop()
         ll = self.giface.GetLayerList()
         for l in reversed(ll):
