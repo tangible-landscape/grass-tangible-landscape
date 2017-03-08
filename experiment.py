@@ -74,8 +74,10 @@ class ExperimentPanel(wx.Panel):
         self.buttonStart.Bind(wx.EVT_BUTTON, self.OnStart)
         self.buttonCalibrate.Bind(wx.EVT_BUTTON, self.OnCalibrate)
         self.buttonStop.Bind(wx.EVT_BUTTON, self.OnStop)
-        self.timeText = wx.StaticText(self, label='00 : 00', style=wx.ALIGN_CENTRE)
-        self.timeText.SetFont(wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
+        self.timeText = wx.StaticText(self, label='00:00', style=wx.ALIGN_CENTRE)
+        self.timeText.SetFont(wx.Font(15, wx.FONTFAMILY_TELETYPE, wx.NORMAL, wx.FONTWEIGHT_BOLD))
+        self.slidesStatus = wx.StaticText(self, label='Slides off', style=wx.ALIGN_CENTRE | wx.ALIGN_CENTRE_HORIZONTAL)
+        self.slidesStatus.SetFont(wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
 
         self.buttonNext = wx.Button(self, label='Next')
         self.buttonNext.Bind(wx.EVT_BUTTON, self.OnSubtask)
@@ -101,7 +103,8 @@ class ExperimentPanel(wx.Panel):
         sizer.Add(self.buttonStart, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 #        sizer.Add(self.buttonPause, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.buttonStop, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.timeText, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER | wx.LEFT, border=10)
+        sizer.Add(self.slidesStatus, proportion=0, flag=wx.EXPAND |wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, border=10)
+        sizer.Add(self.timeText, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER | wx.LEFT, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.buttonNext, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
@@ -118,9 +121,12 @@ class ExperimentPanel(wx.Panel):
 
     def _init(self):
         if self.configFile:
-            with open(self.configFile, 'r') as f:
-                self.configuration = json.load(f)
-                self.tasks = self.configuration['tasks']
+            try:
+                with open(self.configFile, 'r') as f:
+                    self.configuration = json.load(f)
+                    self.tasks = self.configuration['tasks']
+            except IOError:
+                self.configFile = None
 
         self.current = 0
         self.settings['analyses']['file'] = ''
@@ -128,7 +134,7 @@ class ExperimentPanel(wx.Panel):
             self.title.SetLabel(self.tasks[self.current]['title'])
         self.buttonBack.Enable(False)
         self.buttonForward.Enable(True)
-        self.timeText.SetLabel('00 : 00')
+        self.timeText.SetLabel('00:00')
         if self.configFile:
             self.buttonNext.Show('sublayers' in self.tasks[self.current])
             self.buttonCalibrate.Show('calibrate' in self.tasks[self.current])
@@ -199,7 +205,7 @@ class ExperimentPanel(wx.Panel):
         self.buttonForward.Enable(True)
         if self.tasks:
             self.title.SetLabel(self.tasks[self.current]['title'])
-        self.timeText.SetLabel('00 : 00')
+        self.timeText.SetLabel('00:00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.buttonCalibrate.Show('calibrate' in self.tasks[self.current])
         self.Layout()
@@ -213,7 +219,7 @@ class ExperimentPanel(wx.Panel):
         self.buttonBack.Enable(True)
         if self.tasks:
             self.title.SetLabel(self.tasks[self.current]['title'])
-        self.timeText.SetLabel('00 : 00')
+        self.timeText.SetLabel('00:00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.buttonCalibrate.Show('calibrate' in self.tasks[self.current])
         self.Layout()
@@ -229,15 +235,20 @@ class ExperimentPanel(wx.Panel):
     def _startSlides(self):
         self.slides = Slides(self)
         self.slides.SetPosition(self.configuration['slides']['position'])
-        self.slides.LoadURL('file://' + os.path.join(self.configuration['slides']['dir'], self.tasks[self.current]['slides']))
+        self.slides.LoadURL('file://' + os.path.join(self.configuration['slides']['dir'], self.tasks[self.current]['slides']['file']))
         self.slides.Maximize(True)
         self.slides.Show()
-        for t in self.configuration['slides']['switch']:
-            wx.CallLater(t * 1000, self._switchSlide)
-        wx.CallLater(self.configuration['slides']['switch'][-1] * 1000, self._startTask)
+        slidenum = 1
+        self.slidesStatus.SetLabel("Slide {}".format(slidenum))
+        for t in self.tasks[self.current]['slides']['switch']:
+            slidenum += 1
+            wx.CallLater(t * 1000, self._switchSlide, slidenum)
+        wx.CallLater(self.tasks[self.current]['slides']['switch'][-1] * 1000, self._startTask)
 
-    def _switchSlide(self):
-        self.slides.Next()
+    def _switchSlide(self, slidenum):
+        if self.slides:  # in case it's closed prematurely
+            self.slides.Next()
+            self.slidesStatus.SetLabel("Slide {}".format(slidenum))
 
     def _startTask(self):
         self.currentSubtask = 0
@@ -273,6 +284,7 @@ class ExperimentPanel(wx.Panel):
     def OnStop(self, event):
         if self.slides:
             self.slides.Close()
+            self.slidesStatus.SetLabel('Slides off')
         self.timer.Stop()
         ll = self.giface.GetLayerList()
         for l in reversed(ll):
@@ -306,7 +318,7 @@ class ExperimentPanel(wx.Panel):
         diff = datetime.datetime.now() - self.startTime
         minutes = diff.seconds // 60
         seconds = diff.seconds - (minutes * 60)
-        self.timeText.SetLabel('{:02d} : {:02d}'.format(minutes, seconds))
+        self.timeText.SetLabel('{:02d}:{:02d}'.format(minutes, seconds))
         self.endTime = diff.seconds
         if diff > datetime.timedelta(seconds=self.tasks[self.current]['time_limit']):
             self.timer.Stop()

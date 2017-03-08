@@ -4,7 +4,6 @@
   "slides":
     {
         "dir": "/home/tangible/Rogers_experiment/experiment_slides/",
-        "switch": [5, 10, 15],
         "position": [2000, 300]
     },
   "handsoff": [
@@ -77,7 +76,7 @@
       "scanning_params": {"smooth_radius": 10, "numscan": 1},
       "analyses": "experiment_drain.py", 
       "filter" : {"threshold": 750, "debug": true},
-      "slides": "drain.html",
+      "slides": {"switch": [5, 10, 15], "file": "drain.html"},
       "title": "Task 1: Drain"
     }, 
     {
