@@ -33,7 +33,7 @@ solution = [(316715, 251545),
             (315725, 251855),
             (317705, 252645)]
 
-def run_drain(real_elev, scanned_elev, eventHandler, env, **kwargs):
+def run_drain(real_elev, scanned_elev, eventHandler, env, subTask, **kwargs):
     before = 'scan_saved'
     analyses.change_detection(before=before, after=scanned_elev,
                               change='change', height_threshold=[100, 220], cells_threshold=[5, 80], add=True, max_detected=1, debug=True, env=env)
@@ -50,14 +50,14 @@ def run_drain(real_elev, scanned_elev, eventHandler, env, **kwargs):
     # copy results
     postfix = datetime.now().strftime('%H_%M_%S')
     prefix = 'drain'
-    gscript.run_command('g.copy', vector=['change', '{}_change_{}'.format(prefix, postfix)], env=env)
+    gscript.run_command('g.copy', vector=['change', '{}_change_{}_{}'.format(prefix, subTask, postfix)], env=env)
 
 
 def post_drain(real_elev, scanned_elev, filterResults, timeToFinish, subTask, logDir, env):
     gisenv = gscript.gisenv()
     logFile = os.path.join(logDir, 'log_{}_drain.csv'.format(gisenv['LOCATION_NAME']))
     scoreFile = os.path.join(logDir, 'score_{}.csv'.format(gisenv['LOCATION_NAME']))
-    points = gscript.list_grouped(type='vector', pattern="*change_*_*_*", exclude="*processed")[gisenv['MAPSET']]
+    points = gscript.list_grouped(type='vector', pattern="*change_{}_*_*_*".format(subTask))[gisenv['MAPSET']]
     times = [each.split('_')[-3:] for each in points]
     points_text = []
     mode = 'w' if subTask == 0 else 'a'
@@ -71,7 +71,6 @@ def post_drain(real_elev, scanned_elev, filterResults, timeToFinish, subTask, lo
             points_text.append('{}|{}'.format(px, py))
             dist = sqrt((px - solution[subTask][0]) * (px - solution[subTask][0]) + (py - solution[subTask][1]) * (py - solution[subTask][1]))
             distances.append(dist)
-            gscript.run_command('g.rename', vector=[points[i], points[i] + '_processed'], env=env)
             time = times[i]
             f.write('{time},{d},{sub}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]), d=dist, sub=subTask))
 

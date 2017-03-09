@@ -49,6 +49,7 @@ class ExperimentPanel(wx.Panel):
         self.displayFrame = None
         self.handsoff = None
         self.slides = None
+        self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
 
         # we want to start in pause mode to not capture any data
         self.scaniface.pause = True
@@ -252,6 +253,7 @@ class ExperimentPanel(wx.Panel):
 
     def _startTask(self):
         self.currentSubtask = 0
+        self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
