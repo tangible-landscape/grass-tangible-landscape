@@ -484,6 +484,7 @@ class ExperimentPanel(wx.Panel):
                                 opacity=1.0, cmd=cmd)
                 break
         self.currentSubtask += 1
+        self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
         # update
         self.scaniface.filter['counter'] = 0
         for each in self.giface.GetAllMapDisplays():
