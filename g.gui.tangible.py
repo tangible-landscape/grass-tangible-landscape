@@ -292,6 +292,8 @@ class TangibleLandscapePlugin(wx.Dialog):
                        'counter': 0,
                        'threshold': 0.1,
                        'debug': False}
+        # to be able to add params to runAnalyses from outside
+        self.additionalParams4Analyses = {}
 
         self.notebook = wx.Notebook(self)
         scanning_panel = ScanningPanel(self.notebook, self.giface, self.settings['tangible'])
@@ -519,11 +521,12 @@ class TangibleLandscapePlugin(wx.Dialog):
         gisenv = gscript.gisenv()
         mapsetPath = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
         path1 = os.path.join(mapsetPath, 'fcell')
+        if not os.path.exists(path1):
+            os.mkdir(os.path.join(mapsetPath, 'fcell'))
         path2 = os.path.join(mapsetPath, 'vector')
-        if not os.path.exists(path1) or not os.path.exists(path2):  # this happens in new mapset
-            paths = [mapsetPath, mapsetPath]
-        else:
-            paths = [path1, path2]
+        if not os.path.exists(path2):
+            os.mkdir(os.path.join(mapsetPath, 'vector'))
+        paths = [path1, path2]
         handlers = [RasterChangeHandler(self.runImport, self.scan),
                     DrawingChangeHandler(self.runImportDrawing, self.settings['tangible']['drawing']['name'])]
         self.observer = Observer()
@@ -561,14 +564,16 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def runImport(self):
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter,
+                     **self.additionalParams4Analyses)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
     def runImportDrawing(self):
         self.drawing_panel.appendVector()
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter,
+                     **self.additionalParams4Analyses)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
