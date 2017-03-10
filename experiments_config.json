@@ -68,15 +68,15 @@
         ["d.vect", "map=drain_solutions", "cats=6",
          "color=green", "fill_color=green", "width=5", "size=20", "icon=extra/ring"],
         ["d.vect", "map=drain_solutions", "cats=7",
-         "color=green", "fill_color=green", "width=5", "size=20", "icon=basic/marker"]
+         "color=green", "fill_color=green", "width=5", "size=20", "icon=basic/ring"]
       ],
       "base": "drain_dem",
       "calibrate": true,
       "time_limit": 600, 
       "scanning_params": {"smooth": 10, "numscans": 1},
       "analyses": "experiment_drain.py", 
-      "filter" : {"threshold": 750, "debug": true},
-      "slides": {"switch": [5, 10, 15], "file": "drain.html"},
+      "filter" : {"threshold": 750, "debug": false},
+      "slides": {"switch": [1, 2, 3], "file": "drain.html"},
       "title": "Task 1: Drain"
     }, 
     {
@@ -197,12 +197,13 @@
       ], 
       "base": "trails1_dem",
       "layers_opacity": [1.0, 0.5, 0.5, 1.0, 1.0],
-      "scanning_params": {"smooth": 10, "numscans": 1},
+      "scanning_params": {"smooth": 8, "numscans": 2},
       "time_limit": 600, 
       "calibrate": true,
-      "profile": {"size": [600, 200], "position": [2700, 900], "limitx": [0, 3000], "limity": [1000, 1350], "ticks": 50},
-      "analyses": "experiment_trails.py", 
+      "profile": {"size": [600, 200], "position": [2700, 900], "limitx": [0, 3000], "limity": [1000, 1350], "ticks": 50, "raster": "scan_saved"},
+      "analyses": "experiment_trailsA.py", 
       "filter" : {"threshold": 650, "debug": true},
+      "slides": {"switch": [1, 2, 3], "file": "trails_A.html"},
       "title": "Task 4a: Trails"
     },
     {
@@ -226,17 +227,18 @@
           "attribute_column=label", "label_size=25", "xref=right", "yref=top"
         ],
         [
-          "d.legend", 
-          "raster=trails2_dem"
+          "d.rast", 
+          "map=trails2_slopedir"
         ]
       ], 
       "base": "trails2_dem",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1},
+      "scanning_params": {"smooth": 8, "numscans": 2},
       "calibrate": true,
-      "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 500], "limity": [80, 105], "ticks": 5},
-      "analyses": "experiment_trails.py", 
-      "filter" : {"threshold": 1000, "debug": false},
+      "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 3000], "limity": [1200, 1500], "ticks": 50, "raster": "scan_saved"},
+      "analyses": "experiment_trailsB.py", 
+      "filter" : {"threshold": 1000, "debug": true},
+      "slides": {"switch": [1, 2, 3], "file": "trails_B.html"},
       "title": "Task 4b: Trails"
     },
     {
