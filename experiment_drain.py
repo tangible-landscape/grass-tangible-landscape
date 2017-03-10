@@ -73,7 +73,7 @@ def post_drain(real_elev, scanned_elev, filterResults, timeToFinish, subTask, lo
         found = False
         query = gscript.vector_what(map='drain_basins_buffered', coord=(px, py))
         for each in query:
-            if each['Category'] == subTask + 1:
+            if 'Category' in each and each['Category'] == subTask + 1:
                 found = True
 
         f.write("drain: inside watershed: {}\n".format(found))
