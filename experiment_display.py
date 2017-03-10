@@ -39,9 +39,9 @@ class DisplayFrame(wx.Frame):
         self.values.append(value)
         mean = np.mean(np.array(self.values))
         self.label.SetLabel(self.formatting_string.format(int(mean)))
-        if value > self.maximum:
-            value = self.maximum
-        self.gauge.SetValue(value)
+        if mean > self.maximum:
+            mean = self.maximum
+        self.gauge.SetValue(mean)
         self.sizer.Layout()
         self.Layout()
 
