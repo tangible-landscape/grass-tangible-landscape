@@ -50,6 +50,7 @@ class ExperimentPanel(wx.Panel):
         self.handsoff = None
         self.slides = None
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
+        self._processingSubTask = False
 
         # we want to start in pause mode to not capture any data
         self.scaniface.pause = True
@@ -187,15 +188,13 @@ class ExperimentPanel(wx.Panel):
         # resume scanning
         self.buttonCalibrate.SetLabel("Calibrating...")
         self.scaniface.filter['filter'] = False
-        self.scaniface.pause = False
-        self.scaniface.changedInput = True
+        self._startScanning()
 
         wx.CallLater(3000, self.OnCalibrationDone)
 
     def OnCalibrationDone(self):
         self.buttonCalibrate.SetLabel("Calibrate")
-        self.scaniface.pause = True
-        self.scaniface.changedInput = True
+        self._stopScanning()
 
     def OnBack(self, event):
         if not self._checkChangeTask():
@@ -253,6 +252,7 @@ class ExperimentPanel(wx.Panel):
 
     def _startTask(self):
         self.currentSubtask = 0
+        self._processingSubTask = False
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
@@ -266,8 +266,7 @@ class ExperimentPanel(wx.Panel):
         self.scaniface.filter['counter'] = 0
         self.scaniface.filter['threshold'] = self.tasks[self.current]['filter']['threshold']
         self.scaniface.filter['debug'] = self.tasks[self.current]['filter']['debug']
-        self.scaniface.pause = False
-        self.scaniface.changedInput = True
+        self._startScanning()
 
         # profile
         if 'profile' in self.tasks[self.current]:
@@ -283,20 +282,34 @@ class ExperimentPanel(wx.Panel):
 #    def OnPause(self, event):
 #        pass
 
-    def OnStop(self, event):
+    def _closeAdditionalWindows(self):
         if self.slides:
             self.slides.Close()
             self.slidesStatus.SetLabel('Slides off')
-        self.timer.Stop()
-        ll = self.giface.GetLayerList()
-        for l in reversed(ll):
-            ll.DeleteLayer(l)
         if self.profileFrame:
             self.profileFrame.Close()
             self.profileFrame = None
         if self.displayFrame:
             self.displayFrame.Destroy()
             self.displayFrame = None
+
+    def _stopScanning(self):
+        self.scaniface.pause = True
+        self.scaniface.changedInput = True
+
+    def _startScanning(self):
+        self.scaniface.pause = False
+        self.scaniface.changedInput = True
+
+    def _removeAllLayers(self):
+        ll = self.giface.GetLayerList()
+        for l in reversed(ll):
+            ll.DeleteLayer(l)
+
+    def OnStop(self, event):
+        self.timer.Stop()
+        self._closeAdditionalWindows()
+        self._removeAllLayers()
         self.settings['analyses']['file'] = ''
         self.LoadHandsOff()
         # scan after hands off
@@ -308,8 +321,7 @@ class ExperimentPanel(wx.Panel):
 
     def _stop(self):
         # pause scanning
-        self.scaniface.pause = True
-        self.scaniface.changedInput = True
+        self._stopScanning()
         if 'duration_handsoff_after' in self.configuration:
             t = self.configuration['duration_handsoff_after']
         else:
@@ -437,19 +449,26 @@ class ExperimentPanel(wx.Panel):
         self.displayFrame.show_value(event.value)
 
     def OnSubtask(self, event):
+        self._processingSubTask = True
         self.LoadHandsOff()
         # keep scanning without hands
-        wx.CallLater(5000, self._subtaskStop)
+        if 'duration_handsoff' in self.configuration:
+            t = self.configuration['duration_handsoff']
+        else:
+            t = 0
+        wx.CallLater(t, self._subtaskStop)
 
     def _subtaskStop(self):
         # pause scanning
-        self.scaniface.pause = True
-        self.scaniface.changedInput = True
-
-        if 'solutions' in self.tasks[self.current]:
-            wx.CallLater(3000, self.PostProcessing, onDone=self._showSolutions)
+        self._stopScanning()
+        if 'duration_handsoff_after' in self.configuration:
+            t = self.configuration['duration_handsoff_after']
         else:
-            wx.CallLater(3000, self.PostProcessing, onDone=self._subtaskDone)
+            t = 0
+        if 'solutions' in self.tasks[self.current]:
+            wx.CallLater(t, self.PostProcessing, onDone=self._showSolutions)
+        else:
+            wx.CallLater(t, self.PostProcessing, onDone=self._subtaskDone)
 
     def _showSolutions(self):
         ll = self.giface.GetLayerList()
@@ -466,39 +485,46 @@ class ExperimentPanel(wx.Panel):
         wx.CallLater(6000, self._subtaskDone)
 
     def _subtaskDone(self):
-        ll = self.giface.GetLayerList()
-        for l in ll:
-            if 'solutions' in self.tasks[self.current] and l.cmd == self.tasks[self.current]["solutions"][self.currentSubtask]:
-                ll.DeleteLayer(l)
-                break
-        ll = self.giface.GetLayerList()
-        for l in ll:
-            if l.cmd == self.tasks[self.current]["sublayers"][self.currentSubtask]:
-                ll.DeleteLayer(l)
-                cmd = self.tasks[self.current]["sublayers"][self.currentSubtask + 1]
-                if cmd[0] == 'd.rast':
-                    ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
-                                opacity=1.0, cmd=cmd)
-                elif cmd[0] == 'd.vect':
-                    ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
-                                opacity=1.0, cmd=cmd)
-                break
-        self.currentSubtask += 1
-        self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
-        # update
-        self.scaniface.filter['counter'] = 0
-        for each in self.giface.GetAllMapDisplays():
-            each.GetMapWindow().UpdateMap()
-        self.scaniface.pause = False
-        self.scaniface.changedInput = True
-        #if len(self.tasks[self.current]['sublayers']) <= self.currentSubtask + 1:
-        #    self.buttonNext.Disable()
+        # check if it was the last subTask
+        if self.currentSubtask + 1 >= len(self.tasks[self.current]['sublayers']):
+            # that was the last one
+            self.timer.Stop()
+            self._closeAdditionalWindows()
+            self._removeAllLayers()
+            self.settings['analyses']['file'] = ''
+        else:
+            # load new layers
+            ll = self.giface.GetLayerList()
+            for l in ll:
+                if 'solutions' in self.tasks[self.current] and l.cmd == self.tasks[self.current]["solutions"][self.currentSubtask]:
+                    ll.DeleteLayer(l)
+                    break
+            ll = self.giface.GetLayerList()
+            for l in ll:
+                if l.cmd == self.tasks[self.current]["sublayers"][self.currentSubtask]:
+                    ll.DeleteLayer(l)
+                    cmd = self.tasks[self.current]["sublayers"][self.currentSubtask + 1]
+                    if cmd[0] == 'd.rast':
+                        ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                                    opacity=1.0, cmd=cmd)
+                    elif cmd[0] == 'd.vect':
+                        ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
+                                    opacity=1.0, cmd=cmd)
+                    break
+            self.currentSubtask += 1
+            self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
+            # update
+            self.scaniface.filter['counter'] = 0
+            for each in self.giface.GetAllMapDisplays():
+                each.GetMapWindow().UpdateMap()
+            self._startScanning()
 
-        self.Raise()
-        self.buttonStop.SetFocus()
+            self.Raise()
+            self.buttonStop.SetFocus()
+        # now user can proceed to next task
+        self._processingSubTask = False
 
     def OnUserStop(self, event):
-        if 'sublayers' in self.tasks[self.current] and len(self.tasks[self.current]['sublayers']) > self.currentSubtask + 1:
-            self.OnSubtask(None)
-        else:
-            self.OnStop(None)
+        if self._processingSubTask:
+            return
+        self.OnSubtask(None)
