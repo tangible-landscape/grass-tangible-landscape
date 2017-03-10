@@ -428,8 +428,8 @@ class ExperimentPanel(wx.Panel):
         # event can be received after frame is destroyed
         if not self.profileFrame:
             return
-        env = get_environment(raster=self.tasks[self.current]['base'])
-        self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['base'], env=env)
+        env = get_environment(raster=self.tasks[self.current]['profile']['raster'])
+        self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['profile']['raster'], env=env)
 
     def StartDisplay(self):
         fontsize = self.tasks[self.current]['display']['fontsize']
@@ -527,4 +527,7 @@ class ExperimentPanel(wx.Panel):
     def OnUserStop(self, event):
         if self._processingSubTask:
             return
-        self.OnSubtask(None)
+        if 'sublayers' in self.tasks[self.current]:
+            self.OnSubtask(None)
+        else:
+            self.OnStop(None)
