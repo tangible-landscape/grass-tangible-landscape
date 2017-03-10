@@ -7,8 +7,11 @@ This program is free software under the GNU General Public License
 
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
+import os
+from datetime import datetime
 import grass.script as gscript
 from experiment import updateDisplay
+from tangible_utils import get_environment
 
 
 def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
@@ -50,13 +53,65 @@ def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
         gscript.write_command('r.colors', map=new, rules='-', stdin='\n'.join(colors), env=env)
         data = gscript.parse_command('r.univar', map=new, flags='g', env=env)
         event = updateDisplay(value=float(data['n'])/100)
+        found = True
         
     else:
         gscript.mapcalc('{} = null()'.format(new), env=env)
         event = updateDisplay(value=None)
+        found = False
 
     eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
 
-def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask, logDir, env):
-    # TODO
-    return
+    # copy results
+    if found:
+        postfix = datetime.now().strftime('%H_%M_%S')
+        prefix = 'transfer2'
+        gscript.run_command('g.copy', raster=[scanned_elev, '{}_scan_{}'.format(prefix, postfix)], env=env)
+        gscript.run_command('g.copy', raster=[new, '{}_dams_{}'.format(prefix, postfix)], env=env)
+
+
+def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask, logDir, env, **kwargs):
+    gisenv = gscript.gisenv()
+    logFile = os.path.join(logDir, 'log_{}_transfer2.csv'.format(gisenv['LOCATION_NAME']))
+    scoreFile = os.path.join(logDir, 'score_{}.csv'.format(gisenv['LOCATION_NAME']))
+    dams = gscript.list_grouped(type='raster', pattern="transfer2_dams_*_*_*")[gisenv['MAPSET']]
+
+    times = [each.split('_')[-3:] for each in dams]
+    score_volume = []
+    score_area = []
+    score_max = []
+    with open(logFile, 'w') as f:
+        f.write('time,dam_volume,dam_area,dam_max\n')
+        for i in range(len(dams)):
+            env2 = get_environment(raster=dams[i])
+            data_dams = gscript.parse_command('r.univar', map=dams[i], flags='g', env=env2)
+            rinfo = gscript.raster_info(dams[i])
+            cell_area = rinfo['nsres'] * rinfo['ewres']
+            volume = float(data_dams['sum']) * cell_area
+            area = float(data_dams['n']) * cell_area
+            max_depth = float(data_dams['max'])
+            score_volume.append(volume)
+            score_area.append(area)
+            score_max.append(max_depth)
+            time = times[i]
+            f.write('{time},{dam_volume},{dam_area},{dam_max}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]),
+                    dam_volume=volume,
+                    dam_area=area,
+                    dam_max=max_depth))
+
+    with open(scoreFile, 'a') as f:
+        # to make sure we don't get error if they skip quickly
+        count = 3
+        if len(score_volume) < count:
+            # shouldn't happen
+            count = len(score_volume)
+
+        # here convert to some scale?
+        mean_volume = sum(score_volume[-count:]) / float(count)
+        mean_area = sum(score_area[-count:]) / float(count)
+        max_depth = max(score_max[-count:])
+        f.write("transfer 2: volume: {}\n".format(mean_volume))
+        f.write("transfer 2: area: {}\n".format(mean_area))
+        f.write("transfer 2: max depth: {}\n".format(max_depth))
+        f.write("transfer 2: filtered scans: {}\n".format(filterResults))
+        f.write("transfer 2: time: {}\n".format(timeToFinish))
