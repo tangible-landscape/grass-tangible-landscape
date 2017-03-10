@@ -327,7 +327,7 @@
       "base": "transfer_dem",
       "time_limit": 600,
       "scanning_params": {"smooth": 8, "numscans": 2},
-      "display": {"size": [100, 500], "position": [2700, 300], "fontsize": 18, "average": 3, "maximum": 50, "formatting_string": "{}"},
+      "display": {"size": [100, 500], "position": [2700, 300], "fontsize": 18, "average": 3, "maximum": 100, "formatting_string": "{}"},
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},
       "slides": {"switch": [1, 2, 3], "file": "transfer_B.html"},
