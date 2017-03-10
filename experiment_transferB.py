@@ -52,7 +52,9 @@ def run_dams(real_elev, scanned_elev, eventHandler, env, **kwargs):
         colors = ['0 179:235:243', '10 46:132:223', '20 11:11:147', '100 11:11:50']
         gscript.write_command('r.colors', map=new, rules='-', stdin='\n'.join(colors), env=env)
         data = gscript.parse_command('r.univar', map=new, flags='g', env=env)
-        event = updateDisplay(value=float(data['n'])/100)
+        rinfo = gscript.raster_info(new)
+        volume = float(data['sum']) * rinfo['nsres'] * rinfo['ewres']
+        event = updateDisplay(value=volume / 10000)
         found = True
         
     else:
