@@ -90,6 +90,7 @@ def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask,
     times = [each.split('_')[-3:] for each in slopes]
     visible_road = []
     outside_of_buffer = []
+    inbasin = []
     slope_sum = []
     slope_mean = []
     slope_max = []
@@ -126,11 +127,19 @@ def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask,
             rinfo = gscript.raster_info(lines[i])
             length = data_lines['n'] * (rinfo['nsres'] + rinfo['ewres']) / 2.
             lines.append(length)
+            # basin
+            query = gscript.vector_what(map='transfer_basin_buffered', coord=(px, py))
+            found2 = False
+            for each in query:
+                if 'Category' in each:
+                    found = True
+            inbasin.append(found2)
             # time
             time = times[i]
-            f.write('{time},{v_road},{outside_of_buffer},{sl_mean},{sl_sum},{sl_max},{length}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]),
+            f.write('{time},{v_road},{outside_of_buffer},{inbasin},{sl_mean},{sl_sum},{sl_max},{length}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]),
                     v_road=v_road_perc,
                     outside_of_buffer=found,
+                    inbasin=found2,
                     sl_mean=data_slopes['mean'],
                     sl_sum=data_slopes['sum'],
                     sl_max=data_slopes['max'],
@@ -141,6 +150,7 @@ def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask,
         # take means?
         f.write("transfer 1: visible road: {}\n".format(visible_road[-1]))
         f.write("transfer 1: outside of buffer: {}\n".format(outside_of_buffer[-1]))
+        f.write("transfer 1: inside basin: {}\n".format(inbasin[-1]))
         f.write("transfer 1: sum slope: {}\n".format(slope_sum[-1]))
         f.write("transfer 1: max slope: {}\n".format(slope_max[-1]))
         f.write("transfer 1: length line: {}\n".format(lines[-1]))
