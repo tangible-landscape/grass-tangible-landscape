@@ -7,6 +7,7 @@ This program is free software under the GNU General Public License
 
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
+import os
 from datetime import datetime
 import analyses
 from tangible_utils import get_environment
@@ -27,7 +28,7 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
     resulting = "transfer_slopedir"
     if point:
         x, y, cat = point.split('|')
-        gscript.run_command('r.drain', input='transfer_cost2', direction='transfer_costdir2', output=conn,
+        gscript.run_command('r.drain', input='transfer_cost', direction='transfer_costdir', output=conn,
                             start_points='change', drain=conn, flags='d', env=env2)
 
         gscript.run_command('v.to.rast', input=conn, type='line', output=conn + '_dir', use='dir', env=env2)
@@ -44,13 +45,14 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
         gscript.run_command('r.drain', input=real_elev, output=drain,
                             start_points='change', drain=drain, env=env2)
 
-        gscript.run_command('r.viewshed', input=real_elev, output='transfer_viewshed', observer_elevation=45,
+        gscript.run_command('r.viewshed', input=real_elev, output='transfer_viewshed', observer_elevation=67,
                             coordinates=[x, y], flags='b', env=env2)
         gscript.write_command('r.colors', map='transfer_viewshed', rules='-', stdin='0 black', env=env2)
 
         env3 = get_environment(raster='transfer_road')
         gscript.mapcalc('visible_road = if(transfer_viewshed == 1 && ! isnull(transfer_road), 1, null())', env=env3)
-        road_full = float(gscript.parse_command('r.univar', map='transfer_road', flags='g', env=env3)['n'])
+        #road_full = float(gscript.parse_command('r.univar', map='transfer_road', flags='g', env=env3)['n'])
+        road_full = 500  # number of road cells
         try:
             road_v = float(gscript.parse_command('r.univar', map='visible_road', flags='g', env=env3)['n'])
         except KeyError:
@@ -67,10 +69,80 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
     eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
 
     # copy results
-    postfix = datetime.now().strftime('%H_%M_%S')
-    prefix = 'transfer'
-    gscript.run_command('g.copy', vector=['change', '{}_change_{}'.format(prefix, postfix)], env=env)
+    if point:
+        postfix = datetime.now().strftime('%H_%M_%S')
+        prefix = 'transfer1'
+        gscript.run_command('g.copy', vector=['change', '{}_change_{}'.format(prefix, postfix)],
+                            raster=['visible_road', '{}_visible_road_{}'.format(prefix, postfix)], env=env)
+        gscript.run_command('g.copy', raster=['slope_dir', '{}_slope_dir_{}'.format(prefix, postfix)], env=env)
+        gscript.run_command('g.copy', raster=[drain, '{}_line_{}'.format(prefix, postfix)], env=env)
+
 
 def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask, logDir, env):
-    # TODO
-    return
+    gisenv = gscript.gisenv()
+    logFile = os.path.join(logDir, 'log_{}_transfer2.csv'.format(gisenv['LOCATION_NAME']))
+    scoreFile = os.path.join(logDir, 'score_{}.csv'.format(gisenv['LOCATION_NAME']))
+
+    slopes = gscript.list_grouped(type='raster', pattern="transfer2_slope_dir_*_*_*")[gisenv['MAPSET']]
+    roads = gscript.list_grouped(type='raster', pattern="transfer2_visible_road_*_*_*")[gisenv['MAPSET']]
+    points = gscript.list_grouped(type='vector', pattern="transfer2_change_*_*_*")[gisenv['MAPSET']]
+    lines = gscript.list_grouped(type='raster', pattern="transfer2_line_*_*_*")[gisenv['MAPSET']]
+    times = [each.split('_')[-3:] for each in slopes]
+    visible_road = []
+    outside_of_buffer = []
+    slope_sum = []
+    slope_mean = []
+    slope_max = []
+    lines = []
+
+    with open(logFile, 'w') as f:
+        f.write('time,visible_road,outside_buffer,slope_mean,slope_sum,length,point_count\n')
+        for i in range(len(slopes)):
+            # visible road
+            env2 = get_environment(raster=roads[i])
+            try:
+                road_v = float(gscript.parse_command('r.univar', map=roads[i], flags='g', env=env2)['n'])
+            except KeyError:
+                road_v = 0
+            v_road_perc = road_v / 500.0
+            visible_road.append(v_road_perc)
+            # outside of buffer
+            px, py, pc = gscript.read_command('v.out.ascii', input=points[i], type='point', format='point', env=env).strip().split('|')
+            px, py = float(px), float(py)
+            query = gscript.vector_what(map='transfer_streams_buffer', coord=(px, py))
+            found = False
+            for each in query:
+                if 'Category' in each:
+                    found = True
+            outside_of_buffer.append(found)
+            # slope
+            env3 = get_environment(raster=slopes[i])
+            data_slopes = gscript.parse_command('r.univar', map=slopes[i], flags='g', env=env3)
+            slope_sum.append(float(data_slopes['sum']))
+            slope_mean.append(float(data_slopes['mean']))
+            slope_max.append(float(data_slopes['max']))
+            # length
+            data_lines = gscript.parse_command('r.univar', map=lines[i], flags='g', env=env3)
+            rinfo = gscript.raster_info(lines[i])
+            length = data_lines['n'] * (rinfo['nsres'] + rinfo['ewres']) / 2.
+            lines.append(length)
+            # time
+            time = times[i]
+            f.write('{time},{v_road},{outside_of_buffer},{sl_mean},{sl_sum},{sl_max},{length}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]),
+                    v_road=v_road_perc,
+                    outside_of_buffer=found,
+                    sl_mean=data_slopes['mean'],
+                    sl_sum=data_slopes['sum'],
+                    sl_max=data_slopes['max'],
+                    length=length))
+
+
+    with open(scoreFile, 'a') as f:
+        # take means?
+        f.write("transfer 1: visible road: {}\n".format(visible_road[-1]))
+        f.write("transfer 1: outside of buffer: {}\n".format(outside_of_buffer[-1]))
+        f.write("transfer 1: sum slope: {}\n".format(slope_sum[-1]))
+        f.write("transfer 1: max slope: {}\n".format(slope_max[-1]))
+        f.write("transfer 1: length line: {}\n".format(lines[-1]))
+        f.write("transfer 1: filtered scans: {}\n".format(filterResults))
+        f.write("transfer 1: time: {}\n".format(timeToFinish))
