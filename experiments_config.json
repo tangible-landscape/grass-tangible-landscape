@@ -73,7 +73,7 @@
       "base": "drain_dem",
       "calibrate": true,
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1},
+      "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 1},
       "analyses": "experiment_drain.py", 
       "filter" : {"threshold": 750, "debug": false},
       "slides": {"switch": [1, 2, 3], "file": "drain.html"},
@@ -83,7 +83,7 @@
       "layers": [
         [
           "d.rast", 
-          "map=scan"
+          "map=flow_flow"
         ],
         [
           "d.vect",
@@ -101,14 +101,15 @@
         ],
         [
           "d.vect", "map=flow_target",
-          "color=red", "fill_color=red", "width=5", "size=20", "icon=basic/x"
+          "color=red", "fill_color=red", "width=5", "size=20", "icon=basic/circle"
         ]
       ], 
       "base": "flow_dem",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1},
+      "calibrate": true,
+      "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 3},
       "analyses": "experiment_flow.py", 
-      "filter" : {"threshold": 700, "debug": true},
+      "filter" : {"threshold": 200, "debug": true},
       "slides": {"switch": [1, 2, 3], "file": "channel.html"},
       "title": "Task 2: Channel"
     }, 
@@ -135,7 +136,7 @@
       "base": "cutfill1_dem1",
       "time_limit": 600, 
       "analyses": "", 
-      "scanning_params": {"smooth": 10, "numscans": 1},
+      "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 1},
       "filter" : {"threshold": 30, "debug": true},
       "slides": {"switch": [1, 2, 3], "file": "cutfill_A.html"},
       "title": "Task 3a: Cut and Fill"
@@ -167,7 +168,7 @@
       ], 
       "base": "cutfill2_dem2",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1},
+      "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 1},
       "analyses": "experiment_cutfill2.py", 
       "filter" : {"threshold": 100, "debug": true},
       "slides": {"switch": [1, 2, 3], "file": "cutfill_B.html"},
@@ -200,7 +201,7 @@
       ], 
       "base": "trails1_dem",
       "layers_opacity": [1.0, 0.5, 0.5, 1.0, 1.0],
-      "scanning_params": {"smooth": 8, "numscans": 2},
+      "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "time_limit": 600, 
       "calibrate": true,
       "profile": {"size": [600, 200], "position": [2700, 900], "limitx": [0, 3000], "limity": [1000, 1350], "ticks": 50, "raster": "scan_saved"},
@@ -236,7 +237,7 @@
       ], 
       "base": "trails2_dem",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 8, "numscans": 2},
+      "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "calibrate": true,
       "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 3000], "limity": [1200, 1500], "ticks": 50, "raster": "scan_saved"},
       "analyses": "experiment_trailsB.py", 
@@ -291,7 +292,7 @@
       "layers_opacity": [1.0, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
       "base": "transfer_dem",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1},
+      "scanning_params": {"smooth": 10, "numscans": 1}, "zexag": 1,
       "calibrate": true,
       "display": {"size": [200, 500], "position": [2700, 300], "fontsize": 18, "average": 3, "maximum": 100, "formatting_string": "visible road:\n {} %"},
       "analyses": "experiment_transferA.py", 
@@ -326,7 +327,7 @@
       ], 
       "base": "transfer_dem",
       "time_limit": 600,
-      "scanning_params": {"smooth": 8, "numscans": 2},
+      "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "display": {"size": [100, 500], "position": [2700, 300], "fontsize": 18, "average": 3, "maximum": 100, "formatting_string": "{}"},
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},
