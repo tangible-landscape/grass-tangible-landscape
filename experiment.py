@@ -12,6 +12,7 @@ import imp
 import datetime
 import json
 import time
+import traceback
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
@@ -403,7 +404,7 @@ class ExperimentPanel(wx.Panel):
                                              " logDir=self.configuration['logDir'],"
                                              " env=env)")
             except (CalledModuleError, StandardError, ScriptError) as e:
-                print e
+                traceback.print_exc()
         wx.EndBusyCursor()
         if self.handsoff:
             ll = self.giface.GetLayerList()
