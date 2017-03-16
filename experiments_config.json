@@ -117,27 +117,27 @@
       "layers": [
         [
           "d.rast", 
-          "map=cutfill1_dem1"
-        ], 
-        [
-          "d.vect", 
-          "map=cutfill1_dem1_contours_5",
-          "width=3"
-        ],
-        [
-          "d.vect", 
-          "map=cutfill1_dem1_contours_05"
+          "map=cutfill2_dem2"
         ],
         [
           "d.rast", 
-          "map=cutfill1_diff"
+          "map=cutfill2_diff"
+        ],
+        [
+          "d.vect", 
+          "map=cutfill2_dem2_contours_5",
+          "width=2"
+        ],
+        [
+          "d.vect", 
+          "map=cutfill2_dem2_contours_05", "color=77:77:77"
         ]
       ], 
-      "base": "cutfill1_dem1",
+      "base": "cutfill2_dem2",
       "time_limit": 600, 
-      "analyses": "", 
-      "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 1},
-      "filter" : {"threshold": 30, "debug": true},
+      "analyses": "experiment_cutfill2.py", 
+      "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
+      "filter" : {"threshold": 500, "debug": true},
       "slides": {"switch": [1, 2, 3], "file": "cutfill_A.html"},
       "title": "Task 3a: Cut and Fill"
     }, 
@@ -145,32 +145,24 @@
       "layers": [
         [
           "d.rast", 
-          "map=cutfill2_dem2"
+          "map=cutfill1_dem2"
         ], 
         [
-          "d.rast", 
-          "map=cutfill2_diff"
+            "d.vect", 
+            "map=cutfill1_dem2_contours_5",
+            "width=3"
         ],
         [
             "d.vect", 
-            "map=cutfill2_dem2_contours_5",
-            "width=2"
-        ],
-        [
-            "d.vect", 
-            "map=cutfill2_dem2_contours_05", "color=77:77:77"
-        ],
-        [
-           "d.legend",
-           "-tb", "raster=cutfill2_diff",
-           "range=-20,20", "border_color=none"
+            "map=cutfill1_dem2_contours_05", "color=77:77:77"
         ]
       ], 
-      "base": "cutfill2_dem2",
+      "base": "cutfill1_dem1",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 1},
-      "analyses": "experiment_cutfill2.py", 
-      "filter" : {"threshold": 100, "debug": true},
+      "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
+      "analyses": "experiment_cutfill1.py", 
+      "display": {"size": [150, 500], "position": [2700, 300], "fontsize": 18, "average": 2, "maximum": 1000, "formatting_string": "{}"},
+      "filter" : {"threshold": 500, "debug": true},
       "slides": {"switch": [1, 2, 3], "file": "cutfill_B.html"},
       "title": "Task 3b: Cut and Fill"
     },
