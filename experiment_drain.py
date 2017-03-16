@@ -69,6 +69,15 @@ def post_drain(real_elev, scanned_elev, filterResults, timeToFinish, subTask, lo
             f.write('{time},{d},{hd},{sub}\n'.format(time='{}:{}:{}'.format(time[0], time[1], time[2]), d=dist, hd=height_diff, sub=subTask))
 
     with open(scoreFile, 'a') as f:
+        # test if participant did anything
+        if len(points) == 0:
+            f.write("drain: inside watershed: \n")
+            f.write("drain: horizontal distance: \n")
+            f.write("drain: vertical distance: \n")
+            f.write("drain: filtered scans: {}\n".format(filterResults))
+            f.write("drain: time since start: {}\n".format(timeToFinish))
+            return
+
         # test whether point is inside buffered watershed
         found = False
         query = gscript.vector_what(map='drain_basins_buffered', coord=(px, py))
