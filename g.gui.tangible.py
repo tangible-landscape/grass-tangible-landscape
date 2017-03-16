@@ -518,6 +518,9 @@ class TangibleLandscapePlugin(wx.Dialog):
     def Start(self):
         self.Scan(continuous=True)
         self.status.SetLabel("Real-time scanning is running now.")
+
+        if self.observer:
+            return
         gisenv = gscript.gisenv()
         mapsetPath = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
         path1 = os.path.join(mapsetPath, 'fcell')
@@ -529,6 +532,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         paths = [path1, path2]
         handlers = [RasterChangeHandler(self.runImport, self.scan),
                     DrawingChangeHandler(self.runImportDrawing, self.settings['tangible']['drawing']['name'])]
+
         self.observer = Observer()
         for path, handler in zip(paths, handlers):
             self.observer.schedule(handler, path)
@@ -547,6 +551,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                 except TypeError:  # throws error on mac
                     pass
                 self.observer.join()
+                self.observer = None
         self.timer.Stop()
         self.status.SetLabel("Real-time scanning stopped.")
         self.pause = False
