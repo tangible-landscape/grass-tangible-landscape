@@ -252,6 +252,10 @@
           "map=transfer_dem"
         ], 
         [
+          "d.vect", "map=transfer_streams_buffer",
+          "color=none", "fill_color=124:164:255", "width=3"
+        ],
+        [
           "d.vect", 
           "map=transfer_contours_5"
         ],
@@ -289,14 +293,14 @@
             "map=transfer_intersection", "icon=basic/marker", "size=20", "color=black", "fill_color=black"
         ]
       ], 
-      "layers_opacity": [1.0, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+      "layers_opacity": [1.0, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
       "base": "transfer_dem",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1}, "zexag": 1,
+      "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "calibrate": true,
       "display": {"size": [200, 500], "position": [2700, 300], "fontsize": 18, "average": 3, "maximum": 100, "formatting_string": "visible road:\n {} %"},
       "analyses": "experiment_transferA.py", 
-      "filter" : {"threshold": 200, "debug": true},
+      "filter" : {"threshold": 150, "debug": true},
       "slides": {"switch": [1, 2, 3], "file": "transfer_A.html"},
       "title": "Transfer task A"
     },
