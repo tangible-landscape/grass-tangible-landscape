@@ -22,7 +22,7 @@ def run_flow(real_elev, scanned_elev, eventHandler, env, **kwargs):
     gscript.run_command('r.sim.water', elevation=scanned_elev, dx='dx', dy='dy', rain_value=300,
                         depth='flow_flow', niterations=6, env=env)
     gscript.write_command('r.colors', map='flow_flow', rules='-',
-                          stdin='0.001 156:255:2\n0.05 0:255:255\n0.1 0:127:255\n0.5 0:0:255\n10 0:0:0', env=env)
+                          stdin='0.001 120:200:0\n0.05 0:255:255\n0.1 0:127:255\n0.5 0:0:255\n10 0:0:0', env=env)
     # copy scan
     postfix = datetime.now().strftime('%H_%M_%S')
     prefix = 'flow'
