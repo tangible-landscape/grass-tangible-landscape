@@ -3,7 +3,7 @@
   "logDir": "/tmp/",
   "slides":
     {
-        "dir": "/home/tangible/Rogers_experiment/experiment_slides/",
+        "dir": "/home/tangible/Rogers_experiment/experiment_slides2/",
         "position": [2000, 300]
     },
   "handsoff": [
@@ -16,6 +16,37 @@
   "duration_handsoff": 5000,
   "duration_handsoff_after": 5000,
   "tasks": [
+    {
+      "layers": [
+        [
+          "d.rast", 
+          "map=freeplay_scan"
+        ],
+        [
+          "d.vect", 
+          "map=freeplay_contours"
+        ],
+        [
+          "d.vect", 
+          "map=freeplay_profile", "width=5"
+        ],
+        [
+          "d.vect", 
+          "map=freeplay_AB", "fill_color=red", "icon=basic/circle",
+          "size=15", "attribute_column=label", "label_size=20",
+          "xref=center", "yref=top"
+        ]
+      ], 
+      "base": "cutfill1_dem1",
+      "time_limit": 300, 
+      "scanning_params": {"smooth": 12, "numscans": 1, "zexag": 1},
+      "analyses": "experiment_freeplay.py", 
+      "filter" : {"threshold": 200, "debug": true},
+      "slides": {"switch": [144], "file": "freeplay.html"},
+      "profile": {"size": [300, 150], "position": [3050, 810],
+                  "limitx": [0, 350], "limity": [90, 120], "ticks": 5, "raster": "freeplay_scan"},
+      "title": "Task 0: Freeplay"
+    },
     {
       "layers": [
         [
@@ -40,35 +71,42 @@
      "layers_opacity": [1.0, 0.5, 0.5, 1.0],
       "sublayers": [
         ["d.vect", "map=drain_targets", "cats=1",
-         "color=blue", "fill_color=blue", "width=5", "size=20", "icon=extra/ring"],
+         "color=blue", "fill_color=blue", "width=5", "size=15", "icon=extra/ring"],
         ["d.vect", "map=drain_targets", "cats=2",
-         "color=blue", "fill_color=blue", "width=5", "size=20", "icon=extra/ring"],
+         "color=blue", "fill_color=blue", "width=5", "size=15", "icon=extra/ring"],
         ["d.vect", "map=drain_targets", "cats=3",
-         "color=blue", "fill_color=blue", "width=5", "size=20", "icon=extra/ring"],
+         "color=blue", "fill_color=blue", "width=5", "size=15", "icon=extra/ring"],
         ["d.vect", "map=drain_targets", "cats=4",
-         "color=blue", "fill_color=blue", "width=5", "size=20", "icon=extra/ring"],
+         "color=blue", "fill_color=blue", "width=5", "size=15", "icon=extra/ring"],
         ["d.vect", "map=drain_targets", "cats=5",
-         "color=blue", "fill_color=blue", "width=5", "size=20", "icon=extra/ring"],
+         "color=blue", "fill_color=blue", "width=5", "size=15", "icon=extra/ring"],
         ["d.vect", "map=drain_targets", "cats=6",
-         "color=blue", "fill_color=blue", "width=5", "size=20", "icon=extra/ring"],
+         "color=blue", "fill_color=blue", "width=5", "size=15", "icon=extra/ring"],
         ["d.vect", "map=drain_targets", "cats=7",
-         "color=blue", "fill_color=blue", "width=5", "size=20", "icon=extra/ring"]
+         "color=blue", "fill_color=blue", "width=5", "size=15", "icon=extra/ring"]
       ],
       "solutions": [
         ["d.vect", "map=drain_solutions", "cats=1",
-         "color=green", "fill_color=green", "width=5", "size=20", "icon=extra/ring"],
+         "color=green", "fill_color=green", "width=1", "size=12", "icon=basic/circle",
+         "attribute_column=label", "label_color=black", "label_size=17", "font=\"Liberation Sans:Bold\""],
         ["d.vect", "map=drain_solutions", "cats=2",
-         "color=green", "fill_color=green", "width=5", "size=20", "icon=extra/ring"],
+         "color=green", "fill_color=green", "width=1", "size=12", "icon=basic/circle",
+         "attribute_column=label", "label_color=black", "label_size=17", "font=\"Liberation Sans:Bold\""],
         ["d.vect", "map=drain_solutions", "cats=3",
-         "color=green", "fill_color=green", "width=5", "size=30", "icon=extra/ring"],
+         "color=green", "fill_color=green", "width=1", "size=12", "icon=basic/circle",
+         "attribute_column=label", "label_color=black", "label_size=17", "font=\"Liberation Sans:Bold\""],
         ["d.vect", "map=drain_solutions", "cats=4",
-         "color=green", "fill_color=green", "width=5", "size=20", "icon=extra/ring"],
+         "color=green", "fill_color=green", "width=1", "size=12", "icon=basic/circle",
+         "attribute_column=label", "label_color=black", "label_size=17", "font=\"Liberation Sans:Bold\""],
         ["d.vect", "map=drain_solutions", "cats=5",
-         "color=green", "fill_color=green", "width=5", "size=20", "icon=extra/ring"],
+         "color=green", "fill_color=green", "width=1", "size=12", "icon=basic/circle",
+         "attribute_column=label", "label_color=black", "label_size=17", "font=\"Liberation Sans:Bold\""],
         ["d.vect", "map=drain_solutions", "cats=6",
-         "color=green", "fill_color=green", "width=5", "size=20", "icon=extra/ring"],
+         "color=green", "fill_color=green", "width=1", "size=12", "icon=basic/circle",
+         "attribute_column=label", "label_color=black", "label_size=17", "font=\"Liberation Sans:Bold\""],
         ["d.vect", "map=drain_solutions", "cats=7",
-         "color=green", "fill_color=green", "width=5", "size=20", "icon=basic/ring"]
+         "color=green", "fill_color=green", "width=1", "size=12", "icon=basic/circle",
+         "attribute_column=label", "label_color=black", "label_size=17", "font=\"Liberation Sans:Bold\""]
       ],
       "base": "drain_dem",
       "calibrate": true,
@@ -76,7 +114,7 @@
       "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 1},
       "analyses": "experiment_drain.py", 
       "filter" : {"threshold": 750, "debug": false},
-      "slides": {"switch": [1, 2, 3], "file": "drain.html"},
+      "slides": {"switch": [30, 118, 148], "file": "drain.html"},
       "title": "Task 1: Drain"
     }, 
     {
@@ -101,7 +139,7 @@
         ],
         [
           "d.vect", "map=flow_target",
-          "color=red", "fill_color=red", "width=5", "size=20", "icon=basic/circle"
+          "color=red", "fill_color=red", "width=5", "size=15", "icon=basic/circle"
         ]
       ], 
       "base": "flow_dem",
@@ -110,7 +148,7 @@
       "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 3},
       "analyses": "experiment_flow.py", 
       "filter" : {"threshold": 200, "debug": true},
-      "slides": {"switch": [1, 2, 3], "file": "channel.html"},
+      "slides": {"switch": [30, 122, 152], "file": "channel.html"},
       "title": "Task 2: Channel"
     }, 
     {
@@ -138,7 +176,7 @@
       "analyses": "experiment_cutfill2.py", 
       "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
       "filter" : {"threshold": 500, "debug": true},
-      "slides": {"switch": [1, 2, 3], "file": "cutfill_A.html"},
+      "slides": {"switch": [30, 131, 161], "file": "cutfill_A.html"},
       "title": "Task 3a: Cut and Fill"
     }, 
     {
@@ -155,6 +193,10 @@
         [
             "d.vect", 
             "map=cutfill1_dem2_contours_05", "color=77:77:77"
+        ],
+        [
+            "d.vect",
+            "map=cutfill1_boundaries", "color=red", "fill_color=none", "width=3"
         ]
       ], 
       "base": "cutfill1_dem1",
@@ -163,7 +205,7 @@
       "analyses": "experiment_cutfill1.py", 
       "display": {"size": [150, 500], "position": [2700, 300], "fontsize": 18, "average": 2, "maximum": 1000, "formatting_string": "{}"},
       "filter" : {"threshold": 500, "debug": true},
-      "slides": {"switch": [1, 2, 3], "file": "cutfill_B.html"},
+      "slides": {"switch": [30, 139, 169], "file": "cutfill_B.html"},
       "title": "Task 3b: Cut and Fill"
     },
     {
@@ -183,7 +225,7 @@
           ],
           [
             "d.vect",
-            "map=trails1_points", "width=4", "size=20",
+            "map=trails1_points", "width=4", "size=15", "color=red", "fill_color=red",
             "attribute_column=label", "label_size=25", "xref=right", "yref=top"
           ],
           [
@@ -199,7 +241,7 @@
       "profile": {"size": [600, 200], "position": [2700, 900], "limitx": [0, 3000], "limity": [1000, 1350], "ticks": 50, "raster": "scan_saved"},
       "analyses": "experiment_trailsA.py", 
       "filter" : {"threshold": 650, "debug": true},
-      "slides": {"switch": [1, 2, 3], "file": "trails_A.html"},
+      "slides": {"switch": [30, 119, 149], "file": "trails_A.html"},
       "title": "Task 4a: Trails"
     },
     {
@@ -231,10 +273,11 @@
       "time_limit": 600, 
       "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "calibrate": true,
-      "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 3000], "limity": [1200, 1500], "ticks": 50, "raster": "scan_saved"},
+      "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 4000],
+                  "limity": [1350, 2000], "ticks": 100, "raster": "scan_saved"},
       "analyses": "experiment_trailsB.py", 
-      "filter" : {"threshold": 1000, "debug": true},
-      "slides": {"switch": [1, 2, 3], "file": "trails_B.html"},
+      "filter" : {"threshold": 600, "debug": true},
+      "slides": {"switch": [30, 119, 149], "file": "trails_B.html"},
       "title": "Task 4b: Trails"
     },
     {
@@ -282,7 +325,8 @@
         ],
         [
             "d.vect",
-            "map=transfer_intersection", "icon=basic/marker", "size=20", "color=black", "fill_color=black"
+            "map=transfer_intersection", "icon=basic/circle", "size=15", "fill_color=white",
+            "color=black", "width=4"
         ]
       ], 
       "layers_opacity": [1.0, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
@@ -290,10 +334,11 @@
       "time_limit": 600, 
       "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "calibrate": true,
-      "display": {"size": [200, 500], "position": [2700, 300], "fontsize": 18, "average": 3, "maximum": 100, "formatting_string": "visible road:\n {} %"},
+      "display": {"size": [130, 350], "position": [2700, 300], "fontsize": 12,
+                  "average": 3, "maximum": 100, "formatting_string": "visible road:\n {} %"},
       "analyses": "experiment_transferA.py", 
       "filter" : {"threshold": 150, "debug": true},
-      "slides": {"switch": [1, 2, 3], "file": "transfer_A.html"},
+      "slides": {"switch": [30, 128, 158], "file": "transfer_A.html"},
       "title": "Transfer task A"
     },
     {
@@ -324,10 +369,11 @@
       "base": "transfer_dem",
       "time_limit": 600,
       "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
-      "display": {"size": [100, 500], "position": [2700, 300], "fontsize": 18, "average": 3, "maximum": 100, "formatting_string": "{}"},
+      "display": {"size": [130, 350], "position": [2700, 300], "fontsize": 12,
+                  "average": 3, "maximum": 100, "formatting_string": "{}"},
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},
-      "slides": {"switch": [1, 2, 3], "file": "transfer_B.html"},
+      "slides": {"switch": [30, 128, 158], "file": "transfer_B.html"},
       "title": "Transfer task B"
     }
   ]
