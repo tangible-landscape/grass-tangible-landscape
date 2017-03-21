@@ -8,7 +8,7 @@
     },
   "handsoff": [
                 "d.text", 
-                "at=10,45",
+                "at=6,45",
                 "size=20",
                 "color=red",
                 "text='HANDS OFF'"
@@ -39,12 +39,12 @@
       ], 
       "base": "cutfill1_dem1",
       "time_limit": 300, 
-      "scanning_params": {"smooth": 12, "numscans": 1, "zexag": 1},
+      "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
       "analyses": "experiment_freeplay.py", 
       "filter" : {"threshold": 200, "debug": true},
       "slides": {"switch": [144], "file": "freeplay.html"},
-      "profile": {"size": [300, 150], "position": [3050, 810],
-                  "limitx": [0, 350], "limity": [90, 120], "ticks": 5, "raster": "freeplay_scan"},
+      "profile": {"size": [400, 140], "position": [4272, 630],
+                  "limitx": [0, 350], "limity": [90, 150], "ticks": 10, "raster": "freeplay_scan"},
       "title": "Task 0: Freeplay"
     },
     {
@@ -111,7 +111,7 @@
       "base": "drain_dem",
       "calibrate": true,
       "time_limit": 600, 
-      "scanning_params": {"smooth": 10, "numscans": 1, "zexag": 1},
+      "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "analyses": "experiment_drain.py", 
       "filter" : {"threshold": 750, "debug": false},
       "slides": {"switch": [30, 118, 148], "file": "drain.html"},
@@ -203,7 +203,7 @@
       "time_limit": 600, 
       "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
       "analyses": "experiment_cutfill1.py", 
-      "display": {"size": [150, 500], "position": [2700, 300], "fontsize": 18, "average": 2, "maximum": 1000, "formatting_string": "{}"},
+      "display": {"size": [150, 500], "position": [4003, 239], "fontsize": 18, "average": 2, "maximum": 1000, "formatting_string": "{}"},
       "filter" : {"threshold": 500, "debug": true},
       "slides": {"switch": [30, 139, 169], "file": "cutfill_B.html"},
       "title": "Task 3b: Cut and Fill"
@@ -238,7 +238,7 @@
       "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "time_limit": 600, 
       "calibrate": true,
-      "profile": {"size": [600, 200], "position": [2700, 900], "limitx": [0, 3000], "limity": [1000, 1350], "ticks": 50, "raster": "scan_saved"},
+      "profile": {"size": [400, 140], "position": [4272, 630], "limitx": [0, 3000], "limity": [1000, 1350], "ticks": 50, "raster": "scan_saved"},
       "analyses": "experiment_trailsA.py", 
       "filter" : {"threshold": 650, "debug": true},
       "slides": {"switch": [30, 119, 149], "file": "trails_A.html"},
@@ -260,21 +260,21 @@
           "width=3"
         ],
         [
-          "d.vect",
-          "map=trails2_points", "width=4", "size=20",
-          "attribute_column=label", "label_size=25", "xref=right", "yref=top"
-        ],
-        [
           "d.rast", 
           "map=trails2_slopedir"
+        ],
+        [
+          "d.vect",
+          "map=trails2_points", "width=4", "size=15", "color=red", "fill_color=red", "icon=basic/circle",
+          "attribute_column=label", "label_size=25", "xref=right", "yref=top"
         ]
       ], 
       "base": "trails2_dem",
       "time_limit": 600, 
-      "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
+      "scanning_params": {"smooth": 8, "numscans": 3, "zexag": 1},
       "calibrate": true,
-      "profile": {"size": [800, 200], "position": [900, 800], "limitx": [0, 4000],
-                  "limity": [1350, 2000], "ticks": 100, "raster": "scan_saved"},
+      "profile": {"size": [400, 170], "position": [4272, 630], "limitx": [0, 4000],
+                  "limity": [1300, 1750], "ticks": 100, "raster": "scan_saved"},
       "analyses": "experiment_trailsB.py", 
       "filter" : {"threshold": 600, "debug": true},
       "slides": {"switch": [30, 119, 149], "file": "trails_B.html"},
@@ -334,10 +334,12 @@
       "time_limit": 600, 
       "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
       "calibrate": true,
-      "display": {"size": [130, 350], "position": [2700, 300], "fontsize": 12,
+      "display": {"size": [130, 350], "position": [4003, 239], "fontsize": 12,
                   "average": 3, "maximum": 100, "formatting_string": "visible road:\n {} %"},
       "analyses": "experiment_transferA.py", 
       "filter" : {"threshold": 150, "debug": true},
+      "profile": {"size": [400, 140], "position": [4272, 630], "limitx": [0, 4000],
+                  "limity": [1350, 2000], "ticks": 100, "raster": "scan_saved"},
       "slides": {"switch": [30, 128, 158], "file": "transfer_A.html"},
       "title": "Transfer task A"
     },
@@ -369,7 +371,7 @@
       "base": "transfer_dem",
       "time_limit": 600,
       "scanning_params": {"smooth": 8, "numscans": 2, "zexag": 1},
-      "display": {"size": [130, 350], "position": [2700, 300], "fontsize": 12,
+      "display": {"size": [130, 350], "position": [4003, 239], "fontsize": 12,
                   "average": 3, "maximum": 100, "formatting_string": "{}"},
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},

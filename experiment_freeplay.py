@@ -14,7 +14,7 @@ from experiment import updateProfile
 
 def run_freeplay(real_elev, scanned_elev, eventHandler, env, **kwargs):
     gscript.run_command('g.copy', raster=[scanned_elev, 'freeplay_scan'], env=env)
-    gscript.run_command('r.contour', input=scanned_elev, output='freeplay_contours', step=5, flags='t', env=env)
+    gscript.run_command('r.contour', input=scanned_elev, output='freeplay_contours', step=3, flags='t', env=env)
 
     event = updateProfile(points=[(640026, 223986), (640334, 223986)])
     eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)

@@ -29,7 +29,7 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     before = 'scan_saved'
     #env_crop = get_environment(raster=real_elev, n='n-100', s='s+100', e='e-100', w='w+100')
     analyses.change_detection(before=before, after=scanned_elev,
-                              change='change', height_threshold=[60, 335], cells_threshold=[3, 100], add=True, max_detected=10, debug=True, env=env)
+                              change='change', height_threshold=[40, 335], cells_threshold=[3, 100], add=True, max_detected=10, debug=True, env=env)
     points = {}
     # start and end
     data = gscript.read_command('v.out.ascii', input='trails2_points', type='point', format='point', env=env).strip()
@@ -94,7 +94,7 @@ def run_trails(real_elev, scanned_elev, eventHandler, env, **kwargs):
     gscript.mapcalc("slope_dir = abs(atan(tan({slope}) * cos({aspect} - {line_dir})))".format(slope='saved_slope', aspect='saved_aspect',
                     line_dir='line_dir'), env=env2)
     # set new color table
-    colors = ['0 green', '5 green', '5 yellow', '12 yellow', '12 red', '90 red']
+    colors = ['0 green', '7 green', '7 yellow', '15 yellow', '15 red', '90 red']
     gscript.write_command('r.colors', map='slope_dir', rules='-', stdin='\n'.join(colors), env=env2)
     # increase thickness
     gscript.run_command('r.grow', input='slope_dir', radius=2.1, output=resulting, env=env2)
