@@ -56,7 +56,7 @@ def post_drain(real_elev, scanned_elev, filterResults, timeToFinish, subTask, lo
     mode = 'w' if subTask == 0 else 'a'
     with open(logFile, mode) as f:
         if subTask == 0:
-            f.write('time,distance,subTask\n')
+            f.write('time,distance,vertical_distance,subTask\n')
         for i in range(len(points)):
             px, py, pc = gscript.read_command('v.out.ascii', input=points[i], type='point', format='point', env=env).strip().split('|')
             px, py = float(px), float(py)

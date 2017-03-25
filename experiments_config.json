@@ -42,9 +42,9 @@
       "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
       "analyses": "experiment_freeplay.py", 
       "filter" : {"threshold": 200, "debug": true},
-      "slides": {"switch": [144], "file": "freeplay.html"},
-      "profile": {"size": [400, 140], "position": [4272, 630],
-                  "limitx": [0, 350], "limity": [90, 150], "ticks": 10, "raster": "freeplay_scan"},
+      "slides": {"switch": [93, 174], "file": "freeplay.html"},
+      "profile": {"size": [400, 160], "position": [4272, 630],
+                  "limitx": [0, 350], "limity": [90, 190], "ticks": 10, "raster": "freeplay_scan"},
       "title": "Task 0: Freeplay"
     },
     {
@@ -176,7 +176,7 @@
       "analyses": "experiment_cutfill2.py", 
       "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
       "filter" : {"threshold": 500, "debug": true},
-      "slides": {"switch": [30, 131, 161], "file": "cutfill_A.html"},
+      "slides": {"switch": [30, 156, 186], "file": "cutfill_A.html"},
       "title": "Task 3a: Cut and Fill"
     }, 
     {
@@ -203,9 +203,9 @@
       "time_limit": 600, 
       "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
       "analyses": "experiment_cutfill1.py", 
-      "display": {"size": [150, 500], "position": [4003, 239], "fontsize": 18, "average": 2, "maximum": 1000, "formatting_string": "{}"},
-      "filter" : {"threshold": 500, "debug": true},
-      "slides": {"switch": [30, 139, 169], "file": "cutfill_B.html"},
+      "display": {"size": [150, 500], "position": [3980, 239], "fontsize": 18, "average": 2, "maximum": 1000, "formatting_string": "{}"},
+      "filter" : {"threshold": 80, "debug": true},
+      "slides": {"switch": [30, 175, 205], "file": "cutfill_B.html"},
       "title": "Task 3b: Cut and Fill"
     },
     {
@@ -273,12 +273,12 @@
       "time_limit": 600, 
       "scanning_params": {"smooth": 8, "numscans": 3, "zexag": 1},
       "calibrate": true,
-      "profile": {"size": [400, 170], "position": [4272, 630], "limitx": [0, 4000],
+      "profile": {"size": [400, 160], "position": [4272, 630], "limitx": [0, 4000],
                   "limity": [1300, 1750], "ticks": 100, "raster": "scan_saved"},
       "analyses": "experiment_trailsB.py", 
       "filter" : {"threshold": 600, "debug": true},
       "slides": {"switch": [30, 119, 149], "file": "trails_B.html"},
-      "title": "Task 4b: Trails"
+      "title": "Task 4: Trails"
     },
     {
       "layers": [
@@ -340,7 +340,7 @@
       "filter" : {"threshold": 150, "debug": true},
       "profile": {"size": [400, 140], "position": [4272, 630], "limitx": [0, 4000],
                   "limity": [1350, 2000], "ticks": 100, "raster": "scan_saved"},
-      "slides": {"switch": [30, 128, 158], "file": "transfer_A.html"},
+      "slides": {"switch": [30, 165, 195], "file": "transfer_A.html"},
       "title": "Transfer task A"
     },
     {
@@ -375,7 +375,7 @@
                   "average": 3, "maximum": 100, "formatting_string": "{}"},
       "analyses": "experiment_transferB.py", 
       "filter" : {"threshold": 200, "debug": true},
-      "slides": {"switch": [30, 128, 158], "file": "transfer_B.html"},
+      "slides": {"switch": [30, 108, 138], "file": "transfer_B.html"},
       "title": "Transfer task B"
     }
   ]

@@ -77,5 +77,5 @@ def post_flow(real_elev, scanned_elev, filterResults, timeToFinish, logDir, env,
         f.write("flow: water sum mfd: {}\n".format(float(sum_flowacc)))
         f.write("flow: water edge sum sfd: {}\n".format(float(sum_sfd_edge)))
         f.write("flow: water edge sum mfd: {}\n".format(float(sum_mfd_edge)))
-        f.write("filtered scans: {}\n".format(filterResults))
-        f.write("time: {}\n".format(timeToFinish))
+        f.write("flow: filtered scans: {}\n".format(filterResults))
+        f.write("flow: time: {}\n".format(timeToFinish))
