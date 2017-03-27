@@ -19,7 +19,7 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
     env2 = get_environment(raster=real_elev)
     before = 'scan_saved'
     analyses.change_detection(before=before, after=scanned_elev,
-                              change='change', height_threshold=[18, 50], cells_threshold=[3, 100], add=True, max_detected=1, debug=True, env=env)
+                              change='change', height_threshold=[12, 80], cells_threshold=[3, 35], add=True, max_detected=1, debug=True, env=env)
     point = gscript.read_command('v.out.ascii', input='change',
                                  type='point', format='point', env=env).strip()
 
@@ -58,15 +58,24 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
         except KeyError:
             road_v = 0
         event = updateDisplay(value=int(100 * road_v / road_full))
+
+        with VectorTopo(conn, mode='r') as v:
+            try:
+                line = v.read(1)
+                event2 = updateProfile(points=[(line[0].x, line[0].y), (line[-1].x, line[-1].y)])
+            except IndexError:
+                 event2 = updateProfile(points=[])
     else:
         gscript.run_command('v.edit', map=conn, tool='create', env=env)
         gscript.run_command('v.edit', map=drain, tool='create', env=env)
         gscript.mapcalc('{} = null()'.format(resulting), env=env)
         gscript.mapcalc('{} = null()'.format('transfer_viewshed'), env=env)
         event = updateDisplay(value=None)
+        event2 = updateProfile(points=[])
 
     # update viewshed score
     eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event)
+    eventHandler.postEvent(receiver=eventHandler.experiment_panel, event=event2)
 
     # copy results
     if point:

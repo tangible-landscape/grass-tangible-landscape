@@ -24,7 +24,7 @@ def run_cutfill(real_elev, scanned_elev, eventHandler, env, **kwargs):
     coeff = gscript.parse_command('r.regression.line', mapx=scanned_elev, mapy=masked, flags='g', env=env)
     gscript.mapcalc(exp="{diff} = ({a} + {b} * {scan}) - {before}".format(diff=resulting, before=before_resampled, scan=scanned_elev,
                                                                           a=coeff['a'], b=coeff['b']), env=env)
-    threshold = 1
+    threshold = 1.5
     gscript.mapcalc(exp="abs_diff = if({diff} >= {thr}, {diff}, if({diff} <= -{thr}, abs({diff}), null()) )".format(diff=resulting, thr=threshold), env=env)
 
     abs_sum = float(gscript.parse_command('r.univar', map='abs_diff', flags='g', env=env)['sum'])
@@ -51,7 +51,7 @@ def post_cutfill(real_elev, scanned_elev, filterResults, timeToFinish, subTask, 
     with open(logFile, 'w') as f:
         f.write('time,volume_positive,volume_negative\n')
         # if we need to speed up processing:
-        last = 1000
+        last = 100
         for i in range(len(scans)):
             time = times[i]
             if i > len(scans) - last:

@@ -25,13 +25,13 @@ def run_cutfill(real_elev, scanned_elev, eventHandler, env, **kwargs):
                                                                           a=coeff['a'], b=coeff['b']), env=env)
 
     colors = ['100 black',
-              '30 black',
-              '10 red',
+              '20 black',
+              '7 red',
               '1 white',
               '0 white',
               '-1 white',
-              '-10 blue',
-              '-30 black',
+              '-7 blue',
+              '-20 black',
               '-100 black',
               'nv black']
     gscript.write_command('r.colors', map=resulting, rules='-', stdin='\n'.join(colors), env=env)
@@ -56,7 +56,7 @@ def post_cutfill(real_elev, scanned_elev, filterResults, timeToFinish, subTask, 
     with open(logFile, 'w') as f:
         f.write('time,volume_positive,volume_negative\n')
         # if we need to speed up processing:
-        last = 1000
+        last = 100
         for i in range(len(scans)):
             time = times[i]
             if i > len(scans) - last:
