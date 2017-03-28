@@ -51,7 +51,7 @@ from grass.exceptions import CalledModuleError
 #    trim to avoid detecting differences on the edge
 #    env = get_environment(rast=scanned_elev, n='n-20', s='s+20', e='e-20', w='w+20')
 #    analyses.change_detection(before='scan_saved', after=scanned_elev,
-#                              change='change', height_threshold=[10, 30], cells_threshold=[7, 100], add=True, max_detected=6, env=env)
+#                              change='change', height_threshold=[10, 30], cells_threshold=[7, 100], add=True, max_detected=6, debug=False, env=env)
 #                              
 #def run_trail(real_elev, scanned_elev, env, **kwargs):
 #    analyses.trails_combinations(real_elev,friction='friction', walk_coeff=[0.72, 6.0, 1.9998, -1.9998],

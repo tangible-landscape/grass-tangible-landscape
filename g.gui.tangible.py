@@ -287,6 +287,12 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.observer = None
         self.timer = wx.Timer(self)
         self.changedInput = False
+        self.filter = {'filter': False,
+                       'counter': 0,
+                       'threshold': 0.1,
+                       'debug': False}
+        # to be able to add params to runAnalyses from outside
+        self.additionalParams4Analyses = {}
 
         self.notebook = wx.Notebook(self)
         scanning_panel = ScanningPanel(self.notebook, self.giface, self.settings['tangible'])
@@ -481,7 +487,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.process.wait()
         self.process = None
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
         self.status.SetLabel("Done.")
         self.OnUpdate(None)
 
@@ -509,16 +515,21 @@ class TangibleLandscapePlugin(wx.Dialog):
     def Start(self):
         self.Scan(continuous=True)
         self.status.SetLabel("Real-time scanning is running now.")
+
+        if self.observer:
+            return
         gisenv = gscript.gisenv()
         mapsetPath = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
         path1 = os.path.join(mapsetPath, 'fcell')
+        if not os.path.exists(path1):
+            os.mkdir(os.path.join(mapsetPath, 'fcell'))
         path2 = os.path.join(mapsetPath, 'vector')
-        if not os.path.exists(path1) or not os.path.exists(path2):  # this happens in new mapset
-            paths = [mapsetPath, mapsetPath]
-        else:
-            paths = [path1, path2]
+        if not os.path.exists(path2):
+            os.mkdir(os.path.join(mapsetPath, 'vector'))
+        paths = [path1, path2]
         handlers = [RasterChangeHandler(self.runImport, self.scan),
                     DrawingChangeHandler(self.runImportDrawing, self.settings['tangible']['drawing']['name'])]
+
         self.observer = Observer()
         for path, handler in zip(paths, handlers):
             self.observer.schedule(handler, path)
@@ -537,6 +548,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                 except TypeError:  # throws error on mac
                     pass
                 self.observer.join()
+                self.observer = None
         self.timer.Stop()
         self.status.SetLabel("Real-time scanning stopped.")
         self.pause = False
@@ -554,19 +566,21 @@ class TangibleLandscapePlugin(wx.Dialog):
 
     def runImport(self):
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter,
+                     **self.additionalParams4Analyses)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
     def runImportDrawing(self):
         self.drawing_panel.appendVector()
         run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self)
+                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter,
+                     **self.additionalParams4Analyses)
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
 
-    def postEvent(self, event):
-        wx.PostEvent(self, event)
+    def postEvent(self, receiver, event):
+        wx.PostEvent(receiver, event)
 
     def OnAddLayers(self, event):
         ll = self.giface.GetLayerList()

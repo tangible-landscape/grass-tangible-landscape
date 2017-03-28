@@ -11,8 +11,9 @@ import os
 import uuid
 import shutil
 import imp
+import traceback
 
-from grass.script import core as gcore
+import grass.script as gscript
 from grass.exceptions import CalledModuleError, ScriptError
 
 import wx
@@ -37,17 +38,17 @@ def get_environment(**kwargs):
     env['GRASS_OVERWRITE'] = '1'
     env['GRASS_VERBOSE'] = '0'
     env['GRASS_MESSAGE_FORMAT'] = 'standard'
-    env['GRASS_REGION'] = gcore.region_env(**kwargs)
+    env['GRASS_REGION'] = gscript.region_env(**kwargs)
     return env
 
 
 def remove_vector(name, deleteTable=False):
     """Helper function to workaround problem with deleting vectors"""
-    gisenv = gcore.gisenv()
+    gisenv = gscript.gisenv()
     path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', name)
     if deleteTable:
         try:
-            gcore.run_command('db.droptable', table=name, flags='f')
+            gscript.run_command('db.droptable', table=name, flags='f')
         except CalledModuleError:
             pass
     if os.path.exists(path_to_vector):
@@ -57,12 +58,24 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
-def run_analyses(settings, analysesFile, update, giface, eventHandler, **kwargs):
+def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilter, **kwargs):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
     scan_params = settings['tangible']['scan']
-    gcore.run_command('g.copy', raster=[scan_params['scan_name'] + 'tmp', scan_params['scan_name']], overwrite=True, quiet=True)
+    if scanFilter['filter']:
+        info = gscript.raster_info(scan_params['scan_name'] + 'tmp')
+        if scanFilter['debug']:
+            print info['max'] - info['min']
+        threshold = scanFilter['threshold']
+        if info['max'] - info['min'] > threshold:
+            scanFilter['counter'] += 1
+            return
+    try:
+        gscript.run_command('g.copy', raster=[scan_params['scan_name'] + 'tmp', scan_params['scan_name']], overwrite=True, quiet=True)
+    except CalledModuleError:
+        print 'error copying scanned data from temporary name'
+        return
     env = get_environment(rast=scan_params['scan_name'])
     if not analysesFile or not os.path.exists(analysesFile):
         return
@@ -99,7 +112,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, **kwargs)
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
             except (CalledModuleError, StandardError, ScriptError) as e:
-                print e
+                print traceback.print_exc()
     else:
         functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
         for func in functions:
@@ -110,4 +123,4 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, **kwargs)
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
             except (CalledModuleError, StandardError, ScriptError) as e:
-                print e
+                print traceback.print_exc()
