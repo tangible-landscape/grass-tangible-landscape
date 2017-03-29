@@ -362,6 +362,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(EVT_CHECK_LAYERS, self.OnCheckLayers)
 
         self.pause = None
+        self.resume_once = None
 
     def OnHelp(self, event):
         """Show help"""
@@ -458,6 +459,10 @@ class TangibleLandscapePlugin(wx.Dialog):
         params['zexag'] = self.scan['zexag']
         params['numscan'] = self.scan['numscans']
         if self.process and self.process.poll() is None:  # still running
+            if self.resume_once is True:
+                params['resume_once'] = ''
+                self.resume_once = None
+
             if self.pause is True:
                 params['pause'] = ''
             elif self.pause is False:
@@ -482,14 +487,19 @@ class TangibleLandscapePlugin(wx.Dialog):
         return self.process
 
     def ScanOnce(self, event):
-        self.Scan(continuous=False)
-        self.status.SetLabel("Importing scan...")
-        self.process.wait()
-        self.process = None
-        run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
-                     giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
-        self.status.SetLabel("Done.")
-        self.OnUpdate(None)
+        # if already running, resume scanning one time
+        if self.process and self.process.poll() is None:  # still running
+            self.resume_once = True
+            self.changedInput = True
+        else:
+            self.Scan(continuous=False)
+            self.status.SetLabel("Importing scan...")
+            self.process.wait()
+            self.process = None
+            run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
+                         giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
+            self.status.SetLabel("Done.")
+            self.OnUpdate(None)
 
     def RestartIfNotRunning(self, event):
         """Mechanism to restart scanning if process ends or
