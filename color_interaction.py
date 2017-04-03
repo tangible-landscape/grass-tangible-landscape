@@ -12,6 +12,7 @@ import wx
 from gui_core.gselect import Select
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
+from grass.exceptions import CalledModuleError
 
 from tangible_utils import get_environment
 
@@ -27,6 +28,8 @@ class ColorInteractionPanel(wx.Panel):
         self.filtered_classification = 'fclassification'
         self.reject = 'reject'
         self.output = 'objects'
+
+        self.hasSuperpixels = gscript.find_program('i.superpixels.slic', '--help')
 
         self.env = None
         self.giface = giface
@@ -97,6 +100,11 @@ class ColorInteractionPanel(wx.Panel):
             each.Enable(self.ifColor.IsChecked())
 
     def _defineEnvironment(self):
+        try:
+            gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group, env=self.env)
+        except CalledModuleError:
+            gscript.run_command('i.group', group=self.group, subgroup=self.group,
+                                input=[self.group + '_' + ext for ext in 'r', 'g', 'b'], env=self.env)
         maps = gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group).strip()
         if maps:
             self.env = get_environment(raster=maps.splitlines()[0])
@@ -144,11 +152,17 @@ class ColorInteractionPanel(wx.Panel):
                             subgroup=self.group, signaturefile=self.signature, env=self.env, overwrite=True)  # we need here overwrite=True
 
     def Analyze(self):
-        gscript.run_command('i.segment', group=self.group, output=self.segment, threshold=0.3, minsize=50, env=self.env)
-        gscript.run_command('r.clump', input=self.segment, output=self.segment_clump, env=self.env)
+        if self.hasSuperpixels:
+            gscript.run_command('i.superpixels.slic', group=self.group, output=self.segment, compactness=2,
+                                minsize=50, env=self.env)
+        else:
+            gscript.run_command('i.segment', group=self.group, output=self.segment, threshold=0.3, minsize=50, env=self.env)
+            gscript.run_command('r.clump', input=self.segment, output=self.segment_clump, env=self.env)
+
         gscript.run_command('i.smap', group=self.group, subgroup=self.group, signaturefile=self.signature,
                             output=self.classification, goodness=self.reject, env=self.env)
         percentile = float(gscript.parse_command('r.univar', flags='ge', map=self.reject, env=self.env)['percentile_90'])
         gscript.mapcalc('{new} = if({classif} < {thres}, {classif}, null())'.format(new=self.filtered_classification,
                                                                                     classif=self.classification, thres=percentile), env=self.env)
-        gscript.run_command('r.stats.quantile', base=self.segment_clump, cover=self.filtered_classification, output=self.output, env=self.env)
+        segments = self.segment if self.hasSuperpixels else self.segment_clump
+        gscript.run_command('r.stats.quantile', base=segments, cover=self.filtered_classification, output=self.output, env=self.env)
