@@ -22,7 +22,7 @@ from grass.pydispatch.signal import Signal
 
 from tangible_utils import get_environment
 from experiment_profile import ProfileFrame
-from experiment_display import DisplayFrame
+from experiment_display import DisplayFrame, MultipleDisplayFrame
 from experiment_slides import Slides
 
 updateProfile, EVT_UPDATE_PROFILE = wx.lib.newevent.NewEvent()
@@ -227,7 +227,7 @@ class ExperimentPanel(wx.Panel):
 
     def OnStart(self, event):
         self._loadConfiguration(None)
-        if self.configuration['slides']:
+        if 'slides' in self.configuration and self.configuration['slides']:
             self._startSlides()
         else:
             # if no slides, start right away
@@ -267,7 +267,10 @@ class ExperimentPanel(wx.Panel):
         self.scaniface.filter['counter'] = 0
         self.scaniface.filter['threshold'] = self.tasks[self.current]['filter']['threshold']
         self.scaniface.filter['debug'] = self.tasks[self.current]['filter']['debug']
-        self._startScanning()
+        if 'single_scan' in self.tasks[self.current] and self.tasks[self.current]['single_scan']:
+            self._stopScanning()
+        else:
+            self._startScanning()
 
         # profile
         if 'profile' in self.tasks[self.current]:
@@ -433,11 +436,17 @@ class ExperimentPanel(wx.Panel):
         self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['profile']['raster'], env=env)
 
     def StartDisplay(self):
+        multiple = False if 'multiple' not in self.tasks[self.current]['display']['multiple'] else self.tasks[self.current]['display']['multiple']
+        title = None if 'title' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['title']
         fontsize = self.tasks[self.current]['display']['fontsize']
         average = self.tasks[self.current]['display']['average']
         maximum = self.tasks[self.current]['display']['maximum']
         formatting_string = self.tasks[self.current]['display']['formatting_string']
-        self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum, formatting_string=formatting_string)
+        if multiple:
+            self.displayFrame = MultipleDisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum,
+                                                     title=title, formatting_string=formatting_string)
+        else:
+            self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum, formatting_string=formatting_string)
         pos = self.tasks[self.current]['display']['position']
         size = self.tasks[self.current]['display']['size']
         self.displayFrame.SetPosition(pos)
