@@ -29,6 +29,7 @@ from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS
 from drawing import DrawingPanel
 from export import ExportPanel
 from color_interaction import ColorInteractionPanel
+from experiment import ExperimentPanel
 
 
 class AnalysesPanel(wx.Panel):
@@ -309,6 +310,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.drawing_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
         self.color_panel = ColorInteractionPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
         self.notebook.AddPage(self.color_panel, "Color")
+        self.experiment_panel = ExperimentPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
+        self.notebook.AddPage(self.experiment_panel, "Experiment")
         
 
         btnStart = wx.Button(self, label="Start")
