@@ -122,6 +122,7 @@ class ExperimentPanel(wx.Panel):
 
         self._init()
 
+
     def _init(self):
         if self.configFile:
             try:
@@ -280,8 +281,11 @@ class ExperimentPanel(wx.Panel):
         self.endTime = 0
         self.timer.Start(100)
 
-#    def OnPause(self, event):
-#        pass
+        # focus the window to be able to receive signals
+        wx.CallLater(2000, self._focus)
+
+    def _focus(self):
+        self.GetTopLevelParent().Raise()
 
     def _closeAdditionalWindows(self):
         if self.slides:
