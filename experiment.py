@@ -422,12 +422,12 @@ class ExperimentPanel(wx.Panel):
         self.profileFrame = ProfileFrame(self)
         pos = self.tasks[self.current]['profile']['position']
         size = self.tasks[self.current]['profile']['size']
-        self.profileFrame.SetPosition(pos)
-        self.profileFrame.SetSize(size)
         self.profileFrame.set_ticks(self.tasks[self.current]['profile']['ticks'])
         self.profileFrame.set_xlim(self.tasks[self.current]['profile']['limitx'])
         self.profileFrame.set_ylim(self.tasks[self.current]['profile']['limity'])
         self.profileFrame.Show()
+        self.profileFrame.SetPosition(pos)
+        self.profileFrame.SetSize(size)
 
     def OnProfileUpdate(self, event):
         # event can be received after frame is destroyed

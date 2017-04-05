@@ -21,7 +21,7 @@ import wx
 
 class ProfileFrame(wx.Frame):
     def __init__(self, parent):
-        wx.Frame.__init__(self, parent)
+        wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.figure = Figure()
         self.axes = self.figure.add_subplot(111)
         self.canvas = FigureCanvas(self, -1, self.figure)
