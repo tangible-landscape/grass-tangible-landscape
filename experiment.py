@@ -72,9 +72,11 @@ class ExperimentPanel(wx.Panel):
         self.buttonBack.Bind(wx.EVT_BUTTON, self.OnBack)
         self.buttonForward.Bind(wx.EVT_BUTTON, self.OnForward)
         self.buttonStart = wx.Button(self, label='Start task')
+        self.buttonAlignModel = wx.ToggleButton(self, size=(150, -1), label='Align model')
         self.buttonCalibrate = wx.Button(self, size=(150, -1), label='Calibrate')
         self.buttonStop = wx.Button(self, label='End task')
         self.buttonStart.Bind(wx.EVT_BUTTON, self.OnStart)
+        self.buttonAlignModel.Bind(wx.EVT_TOGGLEBUTTON, self.OnAlignModel)
         self.buttonCalibrate.Bind(wx.EVT_BUTTON, self.OnCalibrate)
         self.buttonStop.Bind(wx.EVT_BUTTON, self.OnStop)
         self.timeText = wx.StaticText(self, label='00:00', style=wx.ALIGN_CENTRE)
@@ -100,6 +102,7 @@ class ExperimentPanel(wx.Panel):
         sizer.Add(self.buttonForward, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.buttonAlignModel, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.buttonCalibrate, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -198,6 +201,15 @@ class ExperimentPanel(wx.Panel):
         self.buttonCalibrate.SetLabel("Calibrate")
         self._stopScanning()
 
+    def OnAlignModel(self, event):
+        if self.buttonAlignModel.GetValue():
+            self.LoadLayers()
+            self.buttonAlignModel.SetLabel("Aligning model...")
+        else:
+            self._removeAllLayers()
+            self.buttonAlignModel.SetLabel("Align model")
+        
+        
     def OnBack(self, event):
         if not self._checkChangeTask():
             return
