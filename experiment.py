@@ -425,9 +425,10 @@ class ExperimentPanel(wx.Panel):
         self.profileFrame.set_ticks(self.tasks[self.current]['profile']['ticks'])
         self.profileFrame.set_xlim(self.tasks[self.current]['profile']['limitx'])
         self.profileFrame.set_ylim(self.tasks[self.current]['profile']['limity'])
+
+        self.profileFrame.SetSize(size)
         self.profileFrame.Show()
         self.profileFrame.SetPosition(pos)
-        self.profileFrame.SetSize(size)
 
     def OnProfileUpdate(self, event):
         # event can be received after frame is destroyed
@@ -444,8 +445,8 @@ class ExperimentPanel(wx.Panel):
         self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum, formatting_string=formatting_string)
         pos = self.tasks[self.current]['display']['position']
         size = self.tasks[self.current]['display']['size']
-        self.displayFrame.SetPosition(pos)
         self.displayFrame.SetSize(size)
+        self.displayFrame.SetPosition(pos)
         self.displayFrame.Show()
 
     def OnDisplayUpdate(self, event):

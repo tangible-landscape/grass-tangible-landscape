@@ -19,7 +19,7 @@ def run_road(real_elev, scanned_elev, eventHandler, env, **kwargs):
     env2 = get_environment(raster=real_elev)
     before = 'scan_saved'
     analyses.change_detection(before=before, after=scanned_elev,
-                              change='change', height_threshold=[12, 80], cells_threshold=[3, 35], add=True, max_detected=1, debug=True, env=env)
+                              change='change', height_threshold=[12, 80], cells_threshold=[3, 70], add=True, max_detected=1, debug=True, env=env)
     point = gscript.read_command('v.out.ascii', input='change',
                                  type='point', format='point', env=env).strip()
 
@@ -119,7 +119,7 @@ def post_transfer(real_elev, scanned_elev, filterResults, timeToFinish, subTask,
             px, py = float(px), float(py)
             query = gscript.vector_what(map='transfer_streams_buffer', coord=(px, py))
             found = False
-            print query
+
             for each in query:
                 if 'Category' in each:
                     found = True
