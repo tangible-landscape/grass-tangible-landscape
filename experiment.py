@@ -145,10 +145,13 @@ class ExperimentPanel(wx.Panel):
 
     def _bindUserStop(self):
         userStopId = wx.NewId()
-        accel_tbl = wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_F5, userStopId )])
+        userScanOnceId = wx.NewId()
+        accel_tbl = wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_F5, userStopId ),
+                                         (wx.ACCEL_NORMAL, wx.WXK_NUMPAD_ENTER, userScanOnceId)])
         # TL
         topParent = wx.GetTopLevelParent(self)
         topParent.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+        topParent.Bind(wx.EVT_MENU, self.OnScanOnce, id=userScanOnceId)
         topParent.SetAcceleratorTable(accel_tbl)
         # Map displays
         for mapw in self.giface.GetAllMapDisplays():
@@ -436,7 +439,7 @@ class ExperimentPanel(wx.Panel):
         self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['profile']['raster'], env=env)
 
     def StartDisplay(self):
-        multiple = False if 'multiple' not in self.tasks[self.current]['display']['multiple'] else self.tasks[self.current]['display']['multiple']
+        multiple = False if 'multiple' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['multiple']
         title = None if 'title' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['title']
         fontsize = self.tasks[self.current]['display']['fontsize']
         average = self.tasks[self.current]['display']['average']
@@ -446,7 +449,7 @@ class ExperimentPanel(wx.Panel):
             self.displayFrame = MultipleDisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum,
                                                      title=title, formatting_string=formatting_string)
         else:
-            self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum, formatting_string=formatting_string)
+            self.displayFrame = DisplayFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
         pos = self.tasks[self.current]['display']['position']
         size = self.tasks[self.current]['display']['size']
         self.displayFrame.SetPosition(pos)
@@ -541,3 +544,7 @@ class ExperimentPanel(wx.Panel):
             self.OnSubtask(None)
         else:
             self.OnStop(None)
+
+    def OnScanOnce(self, event):
+        self.scaniface.resume_once = True
+        self.scaniface.changedInput = True
