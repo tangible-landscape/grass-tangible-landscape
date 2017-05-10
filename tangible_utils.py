@@ -8,7 +8,6 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import os
-import uuid
 import shutil
 import imp
 import traceback
