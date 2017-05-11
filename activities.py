@@ -198,6 +198,7 @@ class ActivitiesPanel(wx.Panel):
                 self.configuration = json.load(f)
                 self.tasks = self.configuration['tasks']
                 self.title.SetLabel(self.tasks[self.current]['title'])
+            self._bindUserStop()
         else:
             self.settings['activities']['config'] = ''
             self._enableGUI(False)
