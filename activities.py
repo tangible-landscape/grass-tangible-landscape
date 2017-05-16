@@ -23,7 +23,8 @@ from grass.pydispatch.signal import Signal
 from tangible_utils import get_environment
 from activities_profile import ProfileFrame
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
-from activities_slides import Slides
+
+# lazy importing activities_slides
 
 updateProfile, EVT_UPDATE_PROFILE = wx.lib.newevent.NewEvent()
 updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
@@ -270,6 +271,9 @@ class ActivitiesPanel(wx.Panel):
             self._startTask()
 
     def _startSlides(self):
+        # lazy import
+        from activities_slides import Slides
+
         self.slides = Slides(self)
         self.slides.SetPosition(self.configuration['slides']['position'])
         self.slides.LoadURL('file://' + os.path.join(self.configuration['slides']['dir'], self.tasks[self.current]['slides']['file']))
