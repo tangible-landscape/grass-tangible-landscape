@@ -131,7 +131,6 @@ class ScanningPanel(wx.Panel):
             self.trim[each] = wx.TextCtrl(self, size=(40, -1))
         self.trim_tolerance = wx.TextCtrl(self)
         self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
-        self.equalize = wx.CheckBox(self, label="Use equalized color table for scan")
 
         self.elevInput.SetValue(self.scan['elevation'])
         self.regionInput.SetValue(self.scan['region'])
@@ -141,7 +140,6 @@ class ScanningPanel(wx.Panel):
         self.interpolate.SetValue(self.scan['interpolate'])
         for i, each in enumerate('nsewtb'):
             self.trim[each].SetValue(self.scan['trim_nsewtb'].split(',')[i])
-        self.equalize.SetValue(self.scan['equalize'])
         self.smooth.SetValue(str(self.scan['smooth']))
         self.resolution.SetValue(str(self.scan['resolution']))
         self.trim_tolerance.SetValue(str(self.scan['trim_tolerance']))
@@ -202,9 +200,6 @@ class ScanningPanel(wx.Panel):
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
         hSizer.Add(self.interpolate, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
         mainSizer.Add(hSizer, flag=wx.EXPAND)
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(self.equalize, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
-        mainSizer.Add(hSizer, flag=wx.EXPAND)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -222,7 +217,6 @@ class ScanningPanel(wx.Panel):
         self.numscans.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
         self.numscans.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.interpolate.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
-        self.equalize.Bind(wx.EVT_CHECKBOX, self.OnModelProperties)
         self.smooth.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.resolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
@@ -236,7 +230,6 @@ class ScanningPanel(wx.Panel):
         self.scan['rotation_angle'] = self.rotate.GetValue()
         self.scan['numscans'] = self.numscans.GetValue()
         self.scan['interpolate'] = self.interpolate.IsChecked()
-        self.scan['equalize'] = self.equalize.IsChecked()
         self.scan['smooth'] = self.smooth.GetValue()
         self.scan['resolution'] = self.resolution.GetValue()
         self.scan['trim_tolerance'] = self.trim_tolerance.GetValue()
@@ -274,8 +267,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                                                   'zexag': 1., 'smooth': 7, 'numscans': 1,
                                                   'rotation_angle': 180, 'resolution': 2,
                                                   'trim_nsewtb': '30,30,30,30,60,100',
-                                                  'interpolate': False, 'trim_tolerance': 0.7,
-                                                  'equalize': False
+                                                  'interpolate': False, 'trim_tolerance': 0.7
                                                   }
                                          }
         self.scan = self.settings['tangible']['scan']
@@ -424,8 +416,6 @@ class TangibleLandscapePlugin(wx.Dialog):
         params['flags'] = ''
         if continuous:
             params['flags'] += 'l'
-        if self.scan['equalize'] and 'output' in params:
-            params['flags'] += 'e'
         if not editMode and not params['flags']:
             del params['flags']
 
