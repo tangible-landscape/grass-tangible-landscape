@@ -6,7 +6,7 @@ Dependencies:
 -------------
 
 -   GRASS GIS 7.2
--   Python package [watchdog](https://pypi.python.org/pypi/watchdog),
+-   Python package [watchdog](https://pypi.python.org/pypi/watchdog), optionally [matplotlib](https://matplotlib.org/),
     install for example using pip
 -   GRASS GIS addon
     [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
