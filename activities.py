@@ -21,7 +21,11 @@ from grass.exceptions import CalledModuleError, ScriptError
 from grass.pydispatch.signal import Signal
 
 from tangible_utils import get_environment
-from activities_profile import ProfileFrame
+try:
+    from activities_profile import ProfileFrame
+except ImportError:
+    ProfileFrame = None
+
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 # lazy importing activities_slides
@@ -460,6 +464,9 @@ class ActivitiesPanel(wx.Panel):
             onDone()
 
     def StartProfile(self):
+        if not ProfileFrame:
+            print 'WARNING: DEM profile is not available, requires matplotlib library'
+            return
         self.profileFrame = ProfileFrame(self)
         pos = self.tasks[self.current]['profile']['position']
         size = self.tasks[self.current]['profile']['size']
