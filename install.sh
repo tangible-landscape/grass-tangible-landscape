@@ -3,6 +3,7 @@
 LIBFREENECT2_RELEASE=0.2.0
 PCL_RELEASE=1.8.0
 NCORES=`nproc --all`
+CDIR=`pwd`
 
 # package dependencies
 sudo apt-get update && apt-get install -y \
@@ -103,3 +104,16 @@ cd grass-tangible-landscape
 make MODULE_TOPDIR=../grass72_release
 make install MODULE_TOPDIR=../grass72_release
 cd ..
+
+# set up GRASS GIS icon in dash
+sudo cat << EOF > /usr/share/applications/grass.desktop
+[Desktop Entry]
+Version=1.0
+Name=GRASS GIS
+Comment=Start GRASS GIS
+Exec=${CDIR}/grass72_release/bin.x86_64-pc-linux-gnu/grass72
+Icon=${CDIR}/grass72_release/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
+Terminal=true
+Type=Application
+Categories=GIS;Application;
+EOF
