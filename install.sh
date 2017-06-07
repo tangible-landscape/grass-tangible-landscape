@@ -6,7 +6,7 @@ NCORES=`nproc --all`
 CDIR=`pwd`
 
 # package dependencies
-sudo apt-get update && apt-get install -y \
+sudo apt-get update && sudo apt-get install -y \
    build-essential cmake pkg-config git wget\
    libusb-1.0-0-dev libturbojpeg libjpeg-turbo8-dev libglfw3-dev \
    libboost-all-dev libeigen3-dev libflann-dev libopencv-dev \
@@ -106,7 +106,7 @@ make install MODULE_TOPDIR=../grass72_release
 cd ..
 
 # set up GRASS GIS icon in dash
-sudo cat << EOF > /usr/share/applications/grass.desktop
+cat << EOF > /tmp/grass.desktop
 [Desktop Entry]
 Version=1.0
 Name=GRASS GIS
@@ -117,3 +117,4 @@ Terminal=true
 Type=Application
 Categories=GIS;Application;
 EOF
+sudo mv /tmp/grass.desktop /usr/share/applications/grass.desktop
