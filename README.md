@@ -20,11 +20,15 @@ This option is available only for Ubuntu 16.04, for other distributions please m
 
     mkdir tangiblelandscape && cd tangiblelandscape
     
-2. Download [install.sh](install.sh) to that folder and run it:
+2. Download [install.sh](https://raw.githubusercontent.com/tangible-landscape/grass-tangible-landscape/master/install.sh) to that folder and run it:
 
-    sh install.sh
+       sh install.sh
     
     It will ask you for administrator password. You need to be online to download all dependencies. After finishing the process, log out and log in.
+    
+3. Find GRASS GIS in Dash and start it. Create a new GRASS Location or use an existing one, and when GRASS Layer Manager opens, go to tab Console and type:
+
+       g.gui.tangible
 
 Manual installation:
 -------------
