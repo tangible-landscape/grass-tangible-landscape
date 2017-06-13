@@ -13,7 +13,7 @@ Dependencies:
 
 Installation using install script:
 ----------------------------------
-This option is available only for Ubuntu 16.04, for other distributions please modify the script accordingly.
+This option is available only for Ubuntu 16.04 (tested for 17.04 as well), for other distributions please modify the script accordingly.
 
 
 1. Make a folder where all the dependencies will be compiled:
