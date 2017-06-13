@@ -25,11 +25,10 @@ sudo apt-get update && sudo apt-get install -y \
    libcairo2 libcairo2-dev \
    sqlite3 libsqlite3-dev \
    libpq-dev \
-   libreadline6 libreadline6-dev libfreetype6-dev \
+   libreadline-dev libfreetype6-dev \
    libfftw3-3 libfftw3-dev \
    libboost-thread-dev libboost-program-options-dev liblas-c-dev \
    resolvconf \
-   libjasper-dev \
    subversion \
    libav-tools libavutil-dev ffmpeg2theora \
    libffmpegthumbnailer-dev \
