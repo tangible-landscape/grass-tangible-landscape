@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 LIBFREENECT2_RELEASE=0.2.0
 PCL_RELEASE=1.8.0
 NCORES=`nproc --all`
