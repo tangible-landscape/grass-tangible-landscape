@@ -75,6 +75,12 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     except CalledModuleError:
         print 'error copying scanned data from temporary name'
         return
+    # workaround weird georeferencing
+    # filters cases when extent and elev values are in inconsistent state
+    # probably it reads it before the header is written
+    info = gscript.raster_info(scan_params['scan_name'])
+    if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
+        return
     env = get_environment(rast=scan_params['scan_name'])
     if not analysesFile or not os.path.exists(analysesFile):
         return
