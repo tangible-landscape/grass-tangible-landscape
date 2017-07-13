@@ -142,6 +142,7 @@ class ActivitiesPanel(wx.Panel):
             self.buttonBack.Enable(False)
             self.buttonForward.Enable(True)
             self.timeText.SetLabel('00:00')
+            self.slidesStatus.Show(bool('slides' in self.configuration and self.configuration['slides']))
         else:
             self._enableGUI(False)
         if self.configFile:
@@ -207,6 +208,9 @@ class ActivitiesPanel(wx.Panel):
         else:
             self.settings['activities']['config'] = ''
             self._enableGUI(False)
+
+        self.slidesStatus.Show(bool('slides' in self.configuration and self.configuration['slides']))
+        self.Layout()
 
     def OnCalibrate(self, event):
         self._loadConfiguration(None)

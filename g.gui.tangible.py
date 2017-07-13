@@ -47,7 +47,7 @@ class AnalysesPanel(wx.Panel):
         else:
             path = initDir = ""
 
-        topoBox = wx.StaticBox(self, label='  Topography analyses ')
+        topoBox = wx.StaticBox(self, label='  Topographic analyses ')
         topoSizer = wx.StaticBoxSizer(topoBox, wx.VERTICAL)
         self.contoursSelect = Select(self, size=(-1, -1), type='vector')
         self.contoursStepTextCtrl = wx.TextCtrl(self, size=(40, -1))
