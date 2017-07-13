@@ -655,7 +655,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                 params['pause'] = ''
             elif self.pause is False:
                 params['resume'] = ''
-        print params
+
         return params
 
     def IsScanning(self):
