@@ -448,3 +448,33 @@ def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env):
         coords_list.extend(coords.split(',')[:2])
     gcore.run_command('r3.borehole', overwrite=True, input=voxel, output=new,
                       coordinates=','.join(coords_list), size=size, offset_size=offset, axes=axes, unit=unit, env=env)
+
+
+def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSuperPixels=True, env=None):
+    segment = 'tmp_segment'
+    segment_clump = 'tmp_segment_clump'
+    # we expect this name of signature
+    signature = 'signature'
+    classification = 'tmp_classification'
+    filtered_classification = 'tmp_filtered_classification'
+    reject = 'tmp_reject'
+    tmp_new = 'tmp_' + new
+    if useSuperPixels:
+        try:
+            gcore.run_command('i.superpixels.slic', group=group, output=segment, compactness=compactness,
+                              minsize=minsize, env=env)
+        except CalledModuleError, e:
+            print 'i.superpixels.slic failed'
+            print e
+    else:
+        gcore.run_command('i.segment', group=group, output=segment, threshold=threshold, minsize=minsize, env=env)
+        gcore.run_command('r.clump', input=segment, output=segment_clump, env=env)
+
+    gcore.run_command('i.smap', group=group, subgroup=group, signaturefile=signature,
+                      output=classification, goodness=reject, env=env)
+    percentile = float(gcore.parse_command('r.univar', flags='ge', map=reject, env=env)['percentile_90'])
+    grast.mapcalc('{new} = if({classif} < {thres}, {classif}, null())'.format(new=filtered_classification,
+                                                                              classif=classification, thres=percentile), env=env)
+    segments = segment if useSuperPixels else segment_clump
+    gcore.run_command('r.stats.quantile', base=segments, cover=filtered_classification, output=tmp_new, env=env)
+    grast.mapcalc('{new} = int({old})'.format(new=new, old=tmp_new), env=env)

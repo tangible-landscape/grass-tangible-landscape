@@ -101,6 +101,11 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     except StandardError as e:
         print e
         return
+    # color output
+    color = None
+    if settings['tangible']['output']['color']:
+        color = settings['tangible']['output']['color_name']
+
     # drawing needs different parameters
     # functions postprocessing drawing results start with 'drawing'
     # functions postprocessing scanning results start with 'run'
@@ -125,6 +130,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
             try:
                 exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
                                             " scanned_elev=scan_name,"
+                                            " scanned_color=color,"
                                             " zexag=scan_params['zexag'],"
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")

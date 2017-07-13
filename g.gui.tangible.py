@@ -81,6 +81,8 @@ class AnalysesPanel(wx.Panel):
         self.trainingAreas.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
         calibrateBtn = wx.Button(self, label="Calibrate")
         calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
+        addLayerBtn = wx.Button(self, label="Show layer")
+        addLayerBtn.Bind(wx.EVT_BUTTON, self._addCalibLayer)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(wx.StaticText(self, label="Contour map name:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
@@ -104,6 +106,7 @@ class AnalysesPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(wx.StaticText(self, label="Raster with training areas:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
         sizer.Add(self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(addLayerBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
         sizer.Add(calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
         colorSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(colorSizer, flag=wx.EXPAND | wx.ALL, border=5)
@@ -191,14 +194,15 @@ class AnalysesPanel(wx.Panel):
 
     def _defineEnvironment(self):
         self.env = None
-        try:
-            gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group, quiet=True, env=self.env)
-        except CalledModuleError:
-            gscript.run_command('i.group', group=self.group, subgroup=self.group,
-                                input=[self.group + '_' + ext for ext in 'r', 'g', 'b'], quiet=True, env=self.env)
         maps = gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group, quiet=True).strip()
         if maps:
             self.env = get_environment(raster=maps.splitlines()[0])
+
+    def _addCalibLayer(self, event):
+        ll = self.giface.GetLayerList()
+        raster = self.trainingAreas.GetValue()
+        cmd = ['d.rast', 'map=' + raster]
+        ll.AddLayer('raster', name=raster, checked=True, cmd=cmd)
 
 
 class ScanningPanel(wx.Panel):
@@ -389,7 +393,7 @@ class ScanningPanel(wx.Panel):
         self.scan['interpolate'] = self.interpolate.IsChecked()
         self.scan['smooth'] = self.smooth.GetValue()
         self.scan['resolution'] = self.resolution.GetValue()
-        self.scan['trim_tolerance'] = self.trim_tolerance.GetValue()
+        self.scan['trim_tolerance'] = float(self.trim_tolerance.GetValue())
 
         try:
             self.scan['zexag'] = float(self.zexag.GetValue())
@@ -607,6 +611,7 @@ class TangibleLandscapePlugin(wx.Dialog):
             params['region'] = self.scan['region']
         if self.scan['trim_tolerance']:
             params['trim_tolerance'] = self.scan['trim_tolerance']
+
         # flags
         params['flags'] = ''
         if continuous:
