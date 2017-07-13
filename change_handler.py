@@ -10,7 +10,7 @@ class RasterChangeHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         super(RasterChangeHandler, self).on_created(event)
-        if os.path.basename(event.src_path) == self.data['scan_name'] + 'tmp':
+        if os.path.basename(event.src_path) == self.data['scan'] + 'tmp':
             self.callback()
 
 

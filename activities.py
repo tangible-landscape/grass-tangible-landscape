@@ -211,7 +211,7 @@ class ActivitiesPanel(wx.Panel):
     def OnCalibrate(self, event):
         self._loadConfiguration(None)
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
-        self.settings['scan']['scan_name'] = 'scan_saved'
+        self.settings['output']['scan'] = 'scan_saved'
         self.settings['analyses']['file'] = ''
         if 'scanning_params' in self.tasks[self.current]:
             for each in self.tasks[self.current]['scanning_params'].keys():
@@ -302,7 +302,7 @@ class ActivitiesPanel(wx.Panel):
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
-        self.settings['scan']['scan_name'] = 'scan'
+        self.settings['output']['scan'] = 'scan'
         if 'scanning_params' in self.tasks[self.current]:
             for each in self.tasks[self.current]['scanning_params'].keys():
                 self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
@@ -427,7 +427,7 @@ class ActivitiesPanel(wx.Panel):
     def PostProcessing(self, onDone=None):
         wx.BeginBusyCursor()
         wx.SafeYield()
-        env = get_environment(rast=self.settings['scan']['scan_name'])
+        env = get_environment(rast=self.settings['output']['scan'])
         try:
             postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
         except StandardError as e:
@@ -446,7 +446,7 @@ class ActivitiesPanel(wx.Panel):
         for func in functions:
             try:
                 exec('postprocess.' + func + "(real_elev=self.settings['scan']['elevation'],"
-                                             " scanned_elev=self.settings['scan']['scan_name'],"
+                                             " scanned_elev=self.settings['output']['scan'],"
                                              " filterResults=self.scaniface.filter['counter'],"
                                              " timeToFinish=self.endTime,"
                                              " subTask=self.currentSubtask,"

@@ -62,8 +62,9 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     The Python file is reloaded every time"""
 
     scan_params = settings['tangible']['scan']
+    scan_name = settings['tangible']['output']['scan']
     if scanFilter['filter']:
-        info = gscript.raster_info(scan_params['scan_name'] + 'tmp')
+        info = gscript.raster_info(scan_name + 'tmp')
         if scanFilter['debug']:
             print info['max'] - info['min']
         threshold = scanFilter['threshold']
@@ -71,17 +72,17 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
             scanFilter['counter'] += 1
             return
     try:
-        gscript.run_command('g.copy', raster=[scan_params['scan_name'] + 'tmp', scan_params['scan_name']], overwrite=True, quiet=True)
+        gscript.run_command('g.copy', raster=[scan_name + 'tmp', scan_name], overwrite=True, quiet=True)
     except CalledModuleError:
         print 'error copying scanned data from temporary name'
         return
     # workaround weird georeferencing
     # filters cases when extent and elev values are in inconsistent state
     # probably it reads it before the header is written
-    info = gscript.raster_info(scan_params['scan_name'])
+    info = gscript.raster_info(scan_name)
     if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
         return
-    env = get_environment(rast=scan_params['scan_name'])
+    env = get_environment(rast=scan_name)
     if not analysesFile or not os.path.exists(analysesFile):
         return
     # run analyses
@@ -109,7 +110,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         for func in functions:
             try:
                 exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
-                                            " scanned_elev=scan_params['scan_name'],"
+                                            " scanned_elev=scan_name,"
                                             " zexag=scan_params['zexag'],"
                                             " draw_vector=settings['tangible']['drawing']['name'],"
                                             " draw_vector_append=settings['tangible']['drawing']['append'],"
@@ -123,7 +124,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         for func in functions:
             try:
                 exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
-                                            " scanned_elev=scan_params['scan_name'],"
+                                            " scanned_elev=scan_name,"
                                             " zexag=scan_params['zexag'],"
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
