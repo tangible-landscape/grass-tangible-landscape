@@ -62,8 +62,8 @@ class ProfileFrame(wx.Frame):
         self.elevations = []
         for line in data.splitlines():
             dist, elev = line.strip().split()
-            self.distances.append(dist)
-            self.elevations.append(elev)
+            self.distances.append(float(dist))
+            self.elevations.append(float(elev))
 
         d_start = 0
         self.point_distances = [d_start]
