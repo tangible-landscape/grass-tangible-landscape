@@ -25,7 +25,7 @@ def _removeShapefile(path, pattern):
 
 def blender_send_file(name, path, text=''):
     """Save file with given name to path, can contain text"""
-    if not os.path.exists(path):
+    if not (path and os.path.exists(path)):
         print 'Blender path does not exist:\n{p}'.format(p=path)
         return
     with open(os.path.join(path, name), 'w') as f:
@@ -35,13 +35,12 @@ def blender_send_file(name, path, text=''):
 
 def blender_export_DEM(raster, path, name=None, tmp_path='/tmp', time_suffix=True, env=None):
     """Export raster DEM under  certain name to be used by Blender"""
+    if not (path and os.path.exists(path)):
+        print 'Blender path does not exist:\n{p}'.format(p=path)
+        return
     local = True
     if 'server=' in path:
         local = False
-
-    if not os.path.exists(path):
-        print 'Blender path does not exist:\n{p}'.format(p=path)
-        return
 
     if time_suffix:
         time = datetime.now()
@@ -71,13 +70,13 @@ def blender_export_DEM(raster, path, name=None, tmp_path='/tmp', time_suffix=Tru
 
 def blender_export_vector(vector, path, vtype, name=None, z=False, tmp_path='/tmp', time_suffix=False, env=None):
     """Export Shapfile of any vector type (point, line, area)"""
+    if not (path and os.path.exists(path)):
+        print 'Blender path does not exist:\n{p}'.format(p=path)
+        return
+
     local = True
     if 'server=' in path:
         local = False
-
-    if not os.path.exists(path):
-        print 'Blender path does not exist:\n{p}'.format(p=path)
-        return
 
     if time_suffix:
         time = datetime.now()
