@@ -105,7 +105,10 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     color = None
     if settings['tangible']['output']['color']:
         color = settings['tangible']['output']['color_name']
-
+    # blender path
+    blender_path = None
+    if settings['tangible']['output']['blender']:
+        blender_path = settings['tangible']['output']['blender_path']
     # drawing needs different parameters
     # functions postprocessing drawing results start with 'drawing'
     # functions postprocessing scanning results start with 'run'
@@ -116,6 +119,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
             try:
                 exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
                                             " scanned_elev=scan_name,"
+                                            " blender_path=blender_path,"
                                             " zexag=scan_params['zexag'],"
                                             " draw_vector=settings['tangible']['drawing']['name'],"
                                             " draw_vector_append=settings['tangible']['drawing']['append'],"
@@ -131,6 +135,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
                 exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
                                             " scanned_elev=scan_name,"
                                             " scanned_color=color,"
+                                            " blender_path=blender_path,"
                                             " zexag=scan_params['zexag'],"
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
