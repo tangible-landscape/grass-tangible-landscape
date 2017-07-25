@@ -10,9 +10,10 @@ This program is free software under the GNU General Public License
 import os
 import wx
 import wx.lib.filebrowsebutton as filebrowse
-
 from gui_core.gselect import Select
 from grass.pydispatch.signal import Signal
+
+from tangible_utils import get_show_layer_icon
 
 
 class OutputPanel(wx.Panel):
@@ -41,6 +42,9 @@ class OutputPanel(wx.Panel):
         self.scan_name = wx.TextCtrl(self)
         self.scan_name.SetValue(self.settings['output']['scan'])
         self.scan_name.Bind(wx.EVT_TEXT, self.OnChange)
+        bmp = get_show_layer_icon()
+        self.addScan = wx.BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8))
+        self.addScan.Bind(wx.EVT_BUTTON, lambda evt: self._addLayer('scan'))
 
         # color
         self.ifColor = wx.CheckBox(self, label=_("Save color rasters (with postfixes _r, _g, _b):"))
@@ -49,6 +53,9 @@ class OutputPanel(wx.Panel):
         self.exportColor = Select(self, size=(-1, -1), type='raster')
         self.exportColor.SetValue(self.settings['output']['color_name'])
         self.exportColor.Bind(wx.EVT_TEXT, self.OnChange)
+        bmp = get_show_layer_icon()
+        self.addColor = wx.BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8))
+        self.addColor.Bind(wx.EVT_BUTTON, lambda evt: self._addLayer('color'))
         # Blender
         self.ifBlender = wx.CheckBox(self, label='')
         self.ifBlender.SetValue(self.settings['output']['blender'])
@@ -74,10 +81,12 @@ class OutputPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(wx.StaticText(self, label="Name of scanned raster:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.scan_name, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer.Add(self.addScan, proportion=0, flag=wx.EXPAND | wx.RIGHT | wx.TOP | wx.BOTTOM, border=5)
         mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.ifColor, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         sizer.Add(self.exportColor, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.addColor, proportion=0, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.ifBlender, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL | wx.LEFT, border=3)
@@ -99,3 +108,18 @@ class OutputPanel(wx.Panel):
         self.settings['output']['PLY'] = self.ifPLY.IsChecked()
         self.settings['output']['PLY_file'] = self.exportPLY.GetValue()
         self.settingsChanged.emit()
+
+    def _addLayer(self, ltype):
+        ll = self.giface.GetLayerList()
+        if ltype == 'scan':
+            raster = self.scan_name.GetValue()
+            if not raster:
+                return
+            cmd = ['d.rast', 'map=' + raster]
+            ll.AddLayer('raster', name=raster, checked=True, cmd=cmd)
+        elif ltype == 'color':
+            name = self.exportColor.GetValue()
+            if not name:
+                return
+            cmd = ['d.rgb', 'red={m}'.format(m=name + '_r'), 'green={m}'.format(m=name + '_g'), 'blue={m}'.format(m=name + '_b'), '-n']
+            ll.AddLayer('rgb', name=name, checked=True, cmd=cmd)

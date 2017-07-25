@@ -30,6 +30,7 @@ from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS
 from drawing import DrawingPanel
 from export import OutputPanel
 from activities import ActivitiesPanel
+from tangible_utils import get_show_layer_icon
 
 
 class AnalysesPanel(wx.Panel):
@@ -56,6 +57,11 @@ class AnalysesPanel(wx.Panel):
         if 'contours' in self.settings['analyses'] and self.settings['analyses']['contours']:
             self.contoursStepTextCtrl.SetValue(str(self.settings['analyses']['contours_step']))
             self.contoursSelect.SetValue(self.settings['analyses']['contours'])
+
+        bmp = get_show_layer_icon()
+        self.addContours = wx.BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8))
+        self.addContours.Bind(wx.EVT_BUTTON, self._addContourLayer)
+
         self.contoursSelect.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
         self.contoursStepTextCtrl.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
 
@@ -81,12 +87,16 @@ class AnalysesPanel(wx.Panel):
         self.trainingAreas.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
         calibrateBtn = wx.Button(self, label="Calibrate")
         calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
-        addLayerBtn = wx.Button(self, label="Show layer")
+
+        bmp = get_show_layer_icon()
+        addLayerBtn = wx.BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth()+12, bmp.GetHeight()+8))
+        addLayerBtn.SetToolTipString("Add layer to display")
         addLayerBtn.Bind(wx.EVT_BUTTON, self._addCalibLayer)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(wx.StaticText(self, label="Contour map name:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
-        sizer.Add(self.contoursSelect, proportion=4, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(self.contoursSelect, proportion=4, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.addContours, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
         sizer.Add(wx.StaticText(self, label="Interval:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
         sizer.Add(self.contoursStepTextCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         topoSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
@@ -105,8 +115,8 @@ class AnalysesPanel(wx.Panel):
         # color training
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(wx.StaticText(self, label="Raster with training areas:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
-        sizer.Add(self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(addLayerBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=1)
+        sizer.Add(addLayerBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
         colorSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(colorSizer, flag=wx.EXPAND | wx.ALL, border=5)
@@ -201,8 +211,18 @@ class AnalysesPanel(wx.Panel):
     def _addCalibLayer(self, event):
         ll = self.giface.GetLayerList()
         raster = self.trainingAreas.GetValue()
+        if not raster:
+            return
         cmd = ['d.rast', 'map=' + raster]
         ll.AddLayer('raster', name=raster, checked=True, cmd=cmd)
+
+    def _addContourLayer(self, event):
+        ll = self.giface.GetLayerList()
+        vector = self.contoursSelect.GetValue()
+        if not vector:
+            return
+        cmd = ['d.vect', 'map=' + vector]
+        ll.AddLayer('vector', name=vector, checked=True, cmd=cmd)
 
 
 class ScanningPanel(wx.Panel):

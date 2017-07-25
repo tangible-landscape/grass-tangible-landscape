@@ -11,6 +11,8 @@ import os
 import shutil
 import imp
 import traceback
+import StringIO
+import base64
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError, ScriptError
@@ -22,6 +24,31 @@ addLayers, EVT_ADD_LAYERS = wx.lib.newevent.NewEvent()
 removeLayers, EVT_REMOVE_LAYERS = wx.lib.newevent.NewEvent()
 checkLayers, EVT_CHECK_LAYERS = wx.lib.newevent.NewEvent()
 
+
+def get_show_layer_icon():
+    SHOW_LAYER_ICON = """iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQI
+    CAgIfAhkiAAAAAlwSFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXB
+    lLm9yZ5vuPBoAAAAYdEVYdEF1dGhvcgBSb2JlcnQgU3pjemVwYW5la19WsQgAAAAndEVYdERlc2
+    NyaXB0aW9uAGh0dHA6Ly9yb2JlcnQuc3pjemVwYW5lay5wbJBZSGAAAAAYdEVYdENyZWF0aW9uI
+    FRpbWUAMjAwOC0xMi0xMlguO78AAABSdEVYdENvcHlyaWdodABDQyBBdHRyaWJ1dGlvbi1TaGFy
+    ZUFsaWtlIGh0dHA6Ly9jcmVhdGl2ZWNvbW1vbnMub3JnL2xpY2Vuc2VzL2J5LXNhLzMuMC9eg1q
+    8AAADaUlEQVRIie2VX0xbVRzHv+e2vf23tvyxCFXblD8WbCFqcUJTzMrszLKMxCxA9MEMghozM8
+    MDvGCikT0YfVg0ZDExc4tZYgIRE2UOxgKRJaSwZk7oBJy0WDBAgXKh3tveyu3xQduEUWaMmcbE7
+    +P55vw+5/s99+QSSinup5j7Ov2fAMjvZRJCGPuTtcUy2U4FwNgopQyhNEYYxFKUiZEUjREZXb01
+    OXl73xl338ETT9Uekgit/8OUCEhQYugM5TWzer0o8TzRpRSiTs4wupREdERGTZSSSkIIZRh8dtP
+    n+34PoKmpSTYXXDhFGeYBgtQ3UzdujNC/ePsej0cejfEvU6AwX6ftHh0d3dmVwOFy5QXGx6MAYP
+    V4VIWS5CwqNB2BXP0gVHkFKo1yOzw7eZ5bWZkIBALJ/UA1NTV6n8+3nbWi6urqIpu9suexCtvjB
+    6udRQ+brep3P5/HMXcpft5MYnkzDiS4+K+x1cj22sJsaObbT2lsrTd92mzKAJ5raKh/2um88Epb
+    q1mr0QAALg7P404UOFyZD51iB329fVhcjsB68Dg0BiNEMQlu5lqIC/vPDPT3f5INwKRjOcorPmg
+    //XpmOACEIzzUKha3wgJCc9MwyH7B8g8TCE1+BQBQKlkYS2utHe1v9Lz40smrLpdLnRUgCArZAd
+    0B5X4xBVHCF4NjGB4ZzepXORzq7rfffLaswn7N4XLlZa3o+ebmt7o6O7pKiq2KtJmuSK1iIWytZ
+    U6eriieSKIsDzjpLQEA8DyPjz4+P8dtbS1tbGwu+X3jr2ZesoLSM++d/XBoZTUipdca6ywQOA4A
+    oDEYYfe2wu5thcZg/D0Zx6GxzrIrjdFozBHFpDaeSKwolUq66yvyeDxyk9ny5elTrx1+tKyUBYC
+    p4CYuDAehycmBWsUCAOKJJASOQ4u3GFXFuQCA+WBIPNtzbuy76am2gN8f3lNRZoEQcqL5he5n3K
+    6W5sYTJpZlwSd20Hf9J4QjPADAXKBFY50FWpUclFJcvjK0PjA4eLH30qXOux/oHkBa9UeP2h4qM
+    r1TbrM5vfWHSizmR8CybMbfiEYxcGVocToQuL0cibz/dX//SLY5+wLSKne7dZbc3Aa93uA26PUm
+    Sqkk8AIfF8U7S8Efz/n9/vV77f9TwN/Vf/+H8z/g3wf8BtScfGRhgC1qAAAAAElFTkSuQmCC"""
+    return wx.BitmapFromImage(wx.ImageFromStream(StringIO.StringIO(base64.b64decode(SHOW_LAYER_ICON))))
 
 def get_environment(**kwargs):
     """!Returns environment for running modules.
