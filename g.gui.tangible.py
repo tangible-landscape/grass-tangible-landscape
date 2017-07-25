@@ -724,6 +724,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                 except TypeError:  # throws error on mac
                     pass
                 self.observer.join()
+                self.observer = None
             self.Start()
         if self.changedInput:
             self.changedInput = False
