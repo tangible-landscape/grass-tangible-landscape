@@ -19,13 +19,35 @@ from grass.exceptions import CalledModuleError
 from tangible_utils import get_environment, remove_vector
 
 
-def difference(real_elev, scanned_elev, new, env):
-    """!Computes difference of original and scanned (scan - orig)."""
+def difference_scaled(real_elev, scanned_elev, new, env):
+    """!Computes difference of original and scanned (scan - orig).
+    Uses regression for automatic scaling"""
     regression='regression'
     regression_params = gcore.parse_command('r.regression.line', flags='g', mapx=scanned_elev, mapy=real_elev, env=env)
     gcore.run_command('r.mapcalc', expression='{regression} = {a} + {b} * {before}'.format(a=regression_params['a'], b=regression_params['b'], before=scanned_elev, regression=regression), env=env)
     gcore.run_command('r.mapcalc', expression='{difference} = {regression} - {after}'.format(regression=regression, after=real_elev, difference=new), env=env)
     gcore.run_command('r.colors', map=new, color='differences', env=env)
+
+
+def difference(real_elev, scanned_elev, new, color_coeff=1, env=None):
+    """!Computes difference of original and scanned (scan - orig).
+    color_coeff modifies the intensity of the color, values > 1 mean the difference
+    shows only bigger changes, values < 1 highlight smaller changes (and noise)"""
+    tmp = 'tmp_resampled'
+    gcore.run_command('r.resamp.interp', input=real_elev, output=tmp,
+                      method='bilinear', env=env)
+    gcore.run_command('r.mapcalc',
+                      expression='{diff} = {scan} - {real}'.format(diff=new, real=tmp,
+                                                                   scan=scanned_elev), env=env)
+    info = grast.raster_info(real_elev)
+    range = info['max'] - info['min']
+    percentages = [-1000, -100, -50, -5, 5, 50, 100, 1000]
+    colors = ['black', 'black', 'blue', 'white', 'white', 'red', 'black', 'black']
+    rules = []
+    for p, c in zip(percentages, colors):
+        p = range / 100. * p * color_coeff
+        rules.append('{p} {c}'.format(p=p, c=c))
+    gcore.write_command('r.colors', map=new, rules='-', stdin='\n'.join(rules), env=env)
 
 
 def match_scan(base, scan, matched, env):

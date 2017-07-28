@@ -14,7 +14,8 @@ from grass.exceptions import CalledModuleError
 
 
 #def run_difference(real_elev, scanned_elev, env, **kwargs):
-#    analyses.difference(real_elev=real_elev, scanned_elev=scanned_elev, env=env, new='diff')
+#    analyses.difference(real_elev=real_elev, scanned_elev=scanned_elev,
+#                         env=env, new='diff', color_coeff=1)
 #    
 #
 #def run_contours(scanned_elev, env, **kwargs):
