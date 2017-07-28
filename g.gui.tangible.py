@@ -309,7 +309,7 @@ class ScanningPanel(wx.Panel):
         #
         # rotation
         hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Rotation angle:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=3)
+        hSizer.Add(wx.StaticText(self, label="Rotation angle:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         hSizer.Add(self.rotate, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         geomSizer.Add(hSizer, flag=wx.EXPAND)
         # trimming
