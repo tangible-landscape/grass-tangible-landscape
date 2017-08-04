@@ -413,7 +413,8 @@ class ScanningPanel(wx.Panel):
         self.scan['interpolate'] = self.interpolate.IsChecked()
         self.scan['smooth'] = self.smooth.GetValue()
         self.scan['resolution'] = self.resolution.GetValue()
-        self.scan['trim_tolerance'] = float(self.trim_tolerance.GetValue())
+        trim_tol = self.trim_tolerance.GetValue()
+        self.scan['trim_tolerance'] = float(trim_tol) if trim_tol else trim_tol
 
         try:
             self.scan['zexag'] = float(self.zexag.GetValue())
