@@ -369,7 +369,7 @@ class ActivitiesPanel(wx.Panel):
         if 'duration_handsoff' in self.configuration:
             t = self.configuration['duration_handsoff']
         else:
-            t = 0
+            t = 1
         wx.CallLater(t, self._stop)
 
     def _stop(self):
@@ -378,7 +378,7 @@ class ActivitiesPanel(wx.Panel):
         if 'duration_handsoff_after' in self.configuration:
             t = self.configuration['duration_handsoff_after']
         else:
-            t = 0
+            t = 1
         wx.CallLater(t, self.PostProcessing)
 
     def OnTimer(self, event):
