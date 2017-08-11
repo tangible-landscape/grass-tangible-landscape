@@ -91,7 +91,11 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     scan_params = settings['tangible']['scan']
     scan_name = settings['tangible']['output']['scan']
     if scanFilter['filter']:
-        info = gscript.raster_info(scan_name + 'tmp')
+        try:
+            info = gscript.raster_info(scan_name + 'tmp')
+        except CalledModuleError:
+            print 'error in r.info'
+            return
         if scanFilter['debug']:
             print info['max'] - info['min']
         threshold = scanFilter['threshold']
@@ -106,7 +110,11 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     # workaround weird georeferencing
     # filters cases when extent and elev values are in inconsistent state
     # probably it reads it before the header is written
-    info = gscript.raster_info(scan_name)
+    try:
+        info = gscript.raster_info(scan_name)
+    except CalledModuleError:
+        print 'error in r.info'
+        return
     if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
         return
     env = get_environment(rast=scan_name)
