@@ -11,14 +11,14 @@ import grass.script as gscript
 
 HOST = ''   # Symbolic name, meaning all available interfaces
 PORT = 8889  # Arbitrary non-privileged port
-PORT_C = 8000
+#PORT_C = 8000
 
 TMP_DIR = '/tmp/'
 
 PROCESS = None
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s_c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#s_c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 print 'Sockets created'
 
 # Bind socket to local host and port
@@ -29,17 +29,17 @@ except socket.error as msg:
     sys.exit()
 
 # Bind socket to local host and port
-try:
-    s_c.bind((HOST, PORT_C))
-except socket.error as msg:
-    print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-    sys.exit()
+#try:
+#    s_c.bind((HOST, PORT_C))
+#except socket.error as msg:
+#    print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+#    sys.exit()
 
 print 'Sockets bind complete'
 
 # Start listening on socket
 s.listen(10)
-s_c.listen(10)
+#s_c.listen(10)
 print 'Socket now listening'
 connections = {}
 
@@ -88,8 +88,8 @@ def clientGUI(conn, connections, event):
                 f.write(data)
             f.close()
             conn.sendall('{} received: {} bytes'.format(path, os.path.getsize('/tmp/test_file.py')))
-            if 'computation' in connections:
-                connections['computation'].sendall('load:{}'.format(path))
+#            if 'computation' in connections:
+#                connections['computation'].sendall('load:{}'.format(path))
         if message[0] == 'serverfile':
             fsize, path = int(message[1]), message[2]
             with open(path, 'rb') as f:
@@ -106,27 +106,27 @@ def clientGUI(conn, connections, event):
                     for each in message[2].split('|'):
                         key, val = each.split('=')
                         params[key] = val
-                if 'computation' not in connections:
-                    run_model(params)
-            elif message[1] == 'end':
-                print "server: get stop from GUI"
-                if 'computation' in connections:
-                    print "server: send stop from GUI to OSD"
-                    connections['computation'].sendall('cmd:stop')
-                    global PROCESS
-                    PROCESS.wait()
-                    PROCESS = None
-                    connections['computation'].close()
-                    del connections['computation']
-            elif message[1] == 'play':
-                if 'computation' in connections:
-                    connections['computation'].sendall('cmd:play')
-            elif message[1] == 'pause':
-                if 'computation' in connections:
-                    connections['computation'].sendall('cmd:pause')
-            elif message[1] == 'stepf':
-                if 'computation' in connections:
-                    connections['computation'].sendall('cmd:step')
+#                if 'computation' not in connections:
+                run_model(params)
+#            elif message[1] == 'end':
+#                print "server: get stop from GUI"
+#                if 'computation' in connections:
+#                    print "server: send stop from GUI to OSD"
+#                    connections['computation'].sendall('cmd:stop')
+#                    global PROCESS
+#                    PROCESS.wait()
+#                    PROCESS = None
+#                    connections['computation'].close()
+#                    del connections['computation']
+#            elif message[1] == 'play':
+#                if 'computation' in connections:
+#                    connections['computation'].sendall('cmd:play')
+#            elif message[1] == 'pause':
+#                if 'computation' in connections:
+#                    connections['computation'].sendall('cmd:pause')
+#            elif message[1] == 'stepf':
+#                if 'computation' in connections:
+#                    connections['computation'].sendall('cmd:step')
 
         # client closed
         if not data:
@@ -169,7 +169,8 @@ def clientComputation(conn, connections, event):
 
 event = Event()
 while True:
-    read, write, error = select.select([s, s_c], [s, s_c], [])
+#    read, write, error = select.select([s, s_c], [s, s_c], [])
+    read, write, error = select.select([s,], [s,], [])
     for r in read:
         conn, addr = r.accept()
         if r == s:
@@ -179,6 +180,6 @@ while True:
 #                                 keyfile="/etc/ssl/private/server.key")
             connections['GUI'] = conn
             start_new_thread(clientGUI, (conn, connections, event))
-        else:
-            connections['computation'] = conn
-            start_new_thread(clientComputation, (conn, connections, event))
+#        else:
+#            connections['computation'] = conn
+#            start_new_thread(clientComputation, (conn, connections, event))
