@@ -6,12 +6,31 @@ Dependencies:
 -------------
 
 -   GRASS GIS 7.2
--   Python package [watchdog](https://pypi.python.org/pypi/watchdog),
+-   Python package [watchdog](https://pypi.python.org/pypi/watchdog), optionally [matplotlib](https://matplotlib.org/),
     install for example using pip
 -   GRASS GIS addon
     [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
 
-Installation:
+Installation using install script:
+----------------------------------
+This option is available only for Ubuntu 16.04 (tested for 17.04 as well), for other distributions please modify the script accordingly.
+
+
+1. Make a folder where all the dependencies will be compiled:
+
+    mkdir tangiblelandscape && cd tangiblelandscape
+    
+2. Download [install.sh](https://raw.githubusercontent.com/tangible-landscape/grass-tangible-landscape/master/install.sh) to that folder and run it:
+
+       sh install.sh
+    
+    It will ask you for administrator password. You need to be online to download all dependencies. After finishing the process, log out and log in.
+    
+3. Find GRASS GIS in Dash and start it. Create a new GRASS Location or use an existing one, and when GRASS Layer Manager opens, go to tab Console and type:
+
+       g.gui.tangible
+
+Manual installation:
 -------------
 
 1.  Install GRASS GIS 7.2. You need to compile it yourself, because 7.2 is not released yet. For GRASS GIS compilation, see instructions for [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect).

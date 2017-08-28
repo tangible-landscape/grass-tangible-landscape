@@ -19,13 +19,35 @@ from grass.exceptions import CalledModuleError
 from tangible_utils import get_environment, remove_vector
 
 
-def difference(real_elev, scanned_elev, new, env):
-    """!Computes difference of original and scanned (scan - orig)."""
+def difference_scaled(real_elev, scanned_elev, new, env):
+    """!Computes difference of original and scanned (scan - orig).
+    Uses regression for automatic scaling"""
     regression='regression'
     regression_params = gcore.parse_command('r.regression.line', flags='g', mapx=scanned_elev, mapy=real_elev, env=env)
     gcore.run_command('r.mapcalc', expression='{regression} = {a} + {b} * {before}'.format(a=regression_params['a'], b=regression_params['b'], before=scanned_elev, regression=regression), env=env)
     gcore.run_command('r.mapcalc', expression='{difference} = {regression} - {after}'.format(regression=regression, after=real_elev, difference=new), env=env)
     gcore.run_command('r.colors', map=new, color='differences', env=env)
+
+
+def difference(real_elev, scanned_elev, new, color_coeff=1, env=None):
+    """!Computes difference of original and scanned (scan - orig).
+    color_coeff modifies the intensity of the color, values > 1 mean the difference
+    shows only bigger changes, values < 1 highlight smaller changes (and noise)"""
+    tmp = 'tmp_resampled'
+    gcore.run_command('r.resamp.interp', input=real_elev, output=tmp,
+                      method='bilinear', env=env)
+    gcore.run_command('r.mapcalc',
+                      expression='{diff} = {scan} - {real}'.format(diff=new, real=tmp,
+                                                                   scan=scanned_elev), env=env)
+    info = grast.raster_info(real_elev)
+    range = info['max'] - info['min']
+    percentages = [-1000, -100, -50, -5, 5, 50, 100, 1000]
+    colors = ['black', 'black', 'blue', 'white', 'white', 'red', 'black', 'black']
+    rules = []
+    for p, c in zip(percentages, colors):
+        p = range / 100. * p * color_coeff
+        rules.append('{p} {c}'.format(p=p, c=c))
+    gcore.write_command('r.colors', map=new, rules='-', stdin='\n'.join(rules), env=env)
 
 
 def match_scan(base, scan, matched, env):
@@ -219,7 +241,7 @@ def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
     gcore.run_command('g.remove', type='raster', pattern="*tmp_get_marker", flags='f')
 
 
-def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, env):
+def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, debug, env):
     diff_thr = 'diff_thr_' + str(uuid.uuid4()).replace('-', '')
     diff_thr_clump = 'diff_thr_clump_' + str(uuid.uuid4()).replace('-', '')
     regressed = 'regressed_' + str(uuid.uuid4()).replace('-', '')
@@ -240,6 +262,8 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
 
         gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
         stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split(os.linesep)
+        if debug:
+            print 'DEBUG: {}'.format(stats)
         if len(stats) > 0 and stats[0]:
             cats = []
             found = 0
@@ -446,3 +470,33 @@ def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env):
         coords_list.extend(coords.split(',')[:2])
     gcore.run_command('r3.borehole', overwrite=True, input=voxel, output=new,
                       coordinates=','.join(coords_list), size=size, offset_size=offset, axes=axes, unit=unit, env=env)
+
+
+def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSuperPixels=True, env=None):
+    segment = 'tmp_segment'
+    segment_clump = 'tmp_segment_clump'
+    # we expect this name of signature
+    signature = 'signature'
+    classification = 'tmp_classification'
+    filtered_classification = 'tmp_filtered_classification'
+    reject = 'tmp_reject'
+    tmp_new = 'tmp_' + new
+    if useSuperPixels:
+        try:
+            gcore.run_command('i.superpixels.slic', group=group, output=segment, compactness=compactness,
+                              minsize=minsize, env=env)
+        except CalledModuleError, e:
+            print 'i.superpixels.slic failed'
+            print e
+    else:
+        gcore.run_command('i.segment', group=group, output=segment, threshold=threshold, minsize=minsize, env=env)
+        gcore.run_command('r.clump', input=segment, output=segment_clump, env=env)
+
+    gcore.run_command('i.smap', group=group, subgroup=group, signaturefile=signature,
+                      output=classification, goodness=reject, env=env)
+    percentile = float(gcore.parse_command('r.univar', flags='ge', map=reject, env=env)['percentile_90'])
+    grast.mapcalc('{new} = if({classif} < {thres}, {classif}, null())'.format(new=filtered_classification,
+                                                                              classif=classification, thres=percentile), env=env)
+    segments = segment if useSuperPixels else segment_clump
+    gcore.run_command('r.stats.quantile', base=segments, cover=filtered_classification, output=tmp_new, env=env)
+    grast.mapcalc('{new} = int({old})'.format(new=new, old=tmp_new), env=env)

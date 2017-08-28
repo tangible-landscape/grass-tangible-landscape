@@ -14,7 +14,8 @@ from grass.exceptions import CalledModuleError
 
 
 #def run_difference(real_elev, scanned_elev, env, **kwargs):
-#    analyses.difference(real_elev=real_elev, scanned_elev=scanned_elev, env=env, new='diff')
+#    analyses.difference(real_elev=real_elev, scanned_elev=scanned_elev,
+#                         env=env, new='diff', color_coeff=1)
 #    
 #
 #def run_contours(scanned_elev, env, **kwargs):
@@ -51,7 +52,7 @@ from grass.exceptions import CalledModuleError
 #    trim to avoid detecting differences on the edge
 #    env = get_environment(rast=scanned_elev, n='n-20', s='s+20', e='e-20', w='w+20')
 #    analyses.change_detection(before='scan_saved', after=scanned_elev,
-#                              change='change', height_threshold=[10, 30], cells_threshold=[7, 100], add=True, max_detected=6, env=env)
+#                              change='change', height_threshold=[10, 30], cells_threshold=[7, 100], add=True, max_detected=6, debug=False, env=env)
 #                              
 #def run_trail(real_elev, scanned_elev, env, **kwargs):
 #    analyses.trails_combinations(real_elev,friction='friction', walk_coeff=[0.72, 6.0, 1.9998, -1.9998],
@@ -63,8 +64,7 @@ from grass.exceptions import CalledModuleError
 #def run_viewshed(real_elev, scanned_elev, env, **kwargs):
 #    analyses.viewshed(real_elev, output='viewshed', obs_elev=1.75, vector='change', visible_color='green', invisible_color='red', env=env)
 
-#def run_subsurface(scanned_elev, env, **kwargs):
-#    voxel = 'interp_no_terrain_2002_08_25@soils_base_data'
-#    env = get_environment(rast3d=voxel, nsres=3, ewres=3)
-#    analyses.cross_section(scanned_elev=scanned_elev, voxel=voxel, new='cross', env=env)
-#    analyses.contours(scanned_elev=scanned_elev, new='contours_scanned', step=5., maxlevel=0, env=env)
+#def run_colors(scanned_elev, scanned_color, env, **kwargs):
+#    if scanned_color:
+#        # need training phase, see Analyses tab
+#        analyses.classify_colors(new='patches', group=scanned_color, compactness=2, threshold=0.3, minsize=10, useSuperPixels=False, env=env)
