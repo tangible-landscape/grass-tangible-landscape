@@ -9,6 +9,8 @@ import select
 
 import grass.script as gscript
 
+from tangible_utils import get_environment
+
 HOST = ''   # Symbolic name, meaning all available interfaces
 PORT = 8889  # Arbitrary non-privileged port
 #PORT_C = 8000
@@ -44,31 +46,57 @@ print 'Socket now listening'
 connections = {}
 
 
-def run_model(settings):
-    model = 'sod-cpp'
+def run_baseline(region):
+    model = 'sod-cpp-master'
     params = {}
-    params['umca'] = 'UMCA_den_100m@PERMANENT'
-    params['oaks'] = 'OAKS_den_100m@PERMANENT'
+    params['output'] = 'baseline'
+    params['species'] = 'UMCA_den_100m@PERMANENT'
     params['lvtree'] = 'TPH_den_100m@PERMANENT'
-    params['ioaks'] = 'init_2000_cnt@PERMANENT'
+    params['infected'] = 'init_2000_cnt@PERMANENT'
+    params['wind'] = 'NE'
+    params['start_time'] = 2000
+    params['end_time'] = 2010
+    params['random_seed'] = 42
+#    params['ip_address'] = 'localhost'
+#    params['port'] = 8000
+    params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
+    params['runs'] = 10
+    params['nprocs'] = 5
+    env = get_environment(**region)
+    gscript.run_command(model, overwrite=True, env=env, **params)
+
+    return params['output']
+
+
+def run_model(settings):
+    model = 'sod-cpp-master'
+    params = {}
+    params['infected'] = 'init_2000_cnt@PERMANENT'
     params['output_series'] = 'output'
     params['wind'] = 'NE'
     params['start_time'] = 2000
     params['end_time'] = 2010
     params['random_seed'] = 42
-    params['ip_address'] = 'localhost'
-    params['port'] = 8000
+#    params['ip_address'] = 'localhost'
+#    params['port'] = 8000
     params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
     params.update(settings)
-    print params
-    global PROCESS
-    PROCESS = gscript.start_command(model, overwrite=True, **params)
+    name = settings['output_series']
+    gscript.run_command(model, overwrite=True, **params)
+    names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
+    gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
+                        title='SOD', description='SOD', overwrite=True)
+    gscript.run_command('t.register', input=name, maps=names.split(','), start=2000, unit='years', increment=1, overwrite=True)
+
+    return name
+    
 
 
 def clientGUI(conn, connections, event):
     # Sending message to connected client
     conn.sendall('Welcome to the server.\n')
-
+    # have file list to be sent one after the other
+    fileQueue = []
     # infinite loop so that function do not terminate and thread do not end.
     while True:
         # receiving from client
@@ -91,6 +119,7 @@ def clientGUI(conn, connections, event):
 #            if 'computation' in connections:
 #                connections['computation'].sendall('load:{}'.format(path))
         if message[0] == 'serverfile':
+            print 'receive back'
             fsize, path = int(message[1]), message[2]
             with open(path, 'rb') as f:
                 data = f.read()
@@ -107,7 +136,27 @@ def clientGUI(conn, connections, event):
                         key, val = each.split('=')
                         params[key] = val
 #                if 'computation' not in connections:
-                run_model(params)
+                name = run_model(params)
+                # series
+                pack_path = TMP_DIR + params['output_series']
+                gscript.run_command('t.rast.export', input=name, output=pack_path, format='pack', quiet=True, overwrite=True)
+
+                if 'GUI' in connections:
+                    connections['GUI'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+                
+                
+                    #connections['GUI'].sendall('info:last:' + names[-1])
+            elif message[1] == 'baseline':
+                 if len(message) == 3:  # additional parameters
+                    region = {}
+                    for each in message[2].split(','):
+                        key, val = each.split('=')
+                        region[key] = float(val)
+                    name = run_baseline(region)
+                    pack_path = TMP_DIR + name + '.pack'
+                    gscript.run_command('r.pack', input=name, output=pack_path, overwrite=True)
+                    if 'GUI' in connections:
+                        connections['GUI'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
 #            elif message[1] == 'end':
 #                print "server: get stop from GUI"
 #                if 'computation' in connections:

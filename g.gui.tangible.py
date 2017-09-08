@@ -29,9 +29,9 @@ from tangible_utils import get_environment, run_analyses, updateGUIEvt, EVT_UPDA
 from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS
 from drawing import DrawingPanel
 
+from export import OutputPanel
 from SOD_gui import SODPanel
 
-from export import OutputPanel
 from activities import ActivitiesPanel
 from tangible_utils import get_show_layer_icon
 

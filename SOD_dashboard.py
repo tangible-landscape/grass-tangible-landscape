@@ -8,27 +8,37 @@ Created on Wed Aug 23 09:29:18 2017
 import json
 import requests
 
-barline_baseline = '/home/anna/dev/TangibleLandscapeDashboard-MongoDB/public/app/data/barLine/barchart_baseline.json'
-barline_data = '/home/anna/dev/TangibleLandscapeDashboard-MongoDB/public/app/data/barLine/barchart_data.json'
-
 
 class DashBoardRequests:
     def __init__(self):
         self.locationId = 1
-        self.root = 'http://localhost:3000'
+        self.root = None
         self.bardataId = None
         self.barBaselineId = None
         self.radardataIds = {}
         self.radarBaselineId = None
 
+    def set_root_URL(self, url):
+        self.root = url
+
     def get_events(self):
         """[{"_id":1000,"name":"MyNewEvent","locationId":"1","__v":0}]"""
         res = requests.get(self.root + '/event/location/{lid}'.format(lid=self.locationId))
         res.raise_for_status()
-        events = {}
+        eventNames = []
+        eventIds = []
         for each in res.json():
-            events[each['_id']] = each['name']
-        return events
+            eventIds.append(int(each['_id']))
+            eventNames.append(each['name'])
+        return eventIds, eventNames
+
+    def get_current_event(self):
+        """Should be run only when we have selected player"""
+        res = requests.get(self.root + '/current')
+        if res.status_code == 404:
+            return None
+        data = res.json()
+        return int(data[0]['eventId'])
 
     def get_players(self, eventId):
         res = requests.get(self.root + '/play/{eid}'.format(eid=eventId))
@@ -41,29 +51,40 @@ class DashBoardRequests:
                 playerIds.append(int(each['playerId']))
         return playerIds, playerNames
 
+    def get_current_player(self):
+        res = requests.get(self.root + '/current')
+        if res.status_code == 404:
+            return None, None
+        data = res.json()
+        return int(data[0]['playerId']), data[0]['playerName']
+
     def get_data_barJson(self, eventId):
-        res = requests.get(self.root + '/charts/bar/', params={'locationId': self.locationId, 'eventId': eventId})
-        res.raise_for_status()
-        return res.json()
+        try:
+            res = requests.get(self.root + '/charts/bar/', params={'locationId': self.locationId, 'eventId': eventId})
+            res.raise_for_status()
+            return res.json()
+        except requests.exceptions.HTTPError:
+            return None
 
     def get_data_barId(self, eventId):
         res = requests.get(self.root + '/charts/barId', params={"locationId": self.locationId, "eventId": eventId})
         res.raise_for_status()
-        self.bardataId = res.json()['_id']
+        self.bardataId = res.json()[0]['_id']
         return self.bardataId
 
     def get_data_radarJson(self, eventId, playerId):
-        res = requests.get(self.root + '/charts/radar/', params={'locationId': self.locationId,
-                                                                 'eventId': eventId, "playerId": playerId})
-        res.raise_for_status()
-        print res.json()
-        return res.json()
+        try:
+            res = requests.get(self.root + '/charts/radar', params={"locationId": self.locationId, "eventId": eventId, "playerId": playerId})
+            res.raise_for_status()
+            return res.json()
+        except requests.exceptions.HTTPError:
+            return None
 
     def get_data_radarId(self, eventId, playerId):
         res = requests.get(self.root + '/charts/radarId', params={"locationId": self.locationId,
                                                                   "eventId": eventId, "playerId": playerId})
         res.raise_for_status()
-        self.radardataIds[playerId] = res.json()['_id']
+        self.radardataIds[playerId] = res.json()[0]['_id']
         return self.radardataIds[playerId]
 
     # data bar
@@ -72,8 +93,6 @@ class DashBoardRequests:
             self._delete_data_bar(self.bardataId)
         else:
             try:
-                # temporary:
-                self.get_data_barJson(eventId)
                 self.bardataId = self.get_data_barId(eventId)
                 self._delete_data_bar(self.bardataId)
             except requests.exceptions.HTTPError:
@@ -92,10 +111,28 @@ class DashBoardRequests:
         res.raise_for_status()
 
     # baseline bar
+    def get_baseline_barJson(self):
+        try:
+            res = requests.get(self.root + '/charts/barBaseline', params={"locationId": self.locationId})
+            res.raise_for_status()
+            return res.json()
+        except requests.exceptions.HTTPError:
+            print 'error'
+            return None
+
+    def get_baseline_barId(self):
+        res = requests.get(self.root + '/charts/barBaselineId', params={"locationId": self.locationId})
+        res.raise_for_status()
+        print res.json()
+        self.barBaselineId = res.json()['_id']
+        return res.json()
+
     def post_baseline_bar(self, jsonfile):
-        if self.barBaselineId:
+        try:
             self._delete_baseline_bar()
-        self.barBaselineId = self._post_baseline_bar(jsonfile)
+        except requests.exceptions.HTTPError:
+            pass
+        self._post_baseline_bar(jsonfile)
 
     def _post_baseline_bar(self, jsonfile):
         post_data = {'file': open(jsonfile, 'rb')}
@@ -106,14 +143,12 @@ class DashBoardRequests:
         res = requests.delete(self.root + '/charts/barBaseline/', params={'locationId': self.locationId})
         res.raise_for_status()
 
-    # radar data
+    # radar data            
     def post_data_radar(self, jsonfile, eventId, playerId):
         if playerId in self.radardataIds:
             self._delete_data_radar(self.radardataIds[playerId])
         else:
             try:
-                # temporary:
-                self.get_data_radarJson(eventId, playerId)
                 self.radardataIds[playerId] = self.get_data_radarId(eventId, playerId)
                 self._delete_data_radar(self.radardataIds[playerId])
             except requests.exceptions.HTTPError:
@@ -133,15 +168,32 @@ class DashBoardRequests:
         res.raise_for_status()
 
     # radar baseline
+    def get_baseline_radarJson(self):
+        try:
+            res = requests.get(self.root + '/charts/radarBaseline', params={"locationId": self.locationId})
+            res.raise_for_status()
+            return res.json()
+        except requests.exceptions.HTTPError:
+            return None
+
     def post_baseline_radar(self, jsonfile):
-        if self.radarBaselineId:
+        try:
             self._delete_baseline_radar()
-        self.radarBaselineId = self._post_baseline_radar(jsonfile)
+        except requests.exceptions.HTTPError:
+            pass
+
+        self._post_baseline_radar(jsonfile)
 
     def _post_baseline_radar(self, jsonfile):
         post_data = {'file': open(jsonfile, 'rb')}
         res = requests.post(self.root + '/charts/radarBaseline', files=post_data, data={"locationId": self.locationId})
         res.raise_for_status()
+
+    def get_baseline_radarId(self):
+        res = requests.get(self.root + '/charts/radarBaselineId', params={"locationId": self.locationId})
+        res.raise_for_status()
+        self.radarBaselineId = res.json()['_id']
+        return res.json()
 
     def _delete_baseline_radar(self):
         res = requests.delete(self.root + '/charts/radarBaseline/', params={'locationId': self.locationId})
@@ -149,7 +201,9 @@ class DashBoardRequests:
 
 
 class RadarData:
-    def __init__(self, filePath, baseline):
+    def __init__(self, filePath, baseline=None):
+        if not baseline:
+            baseline = [0, 0, 0, 0, 0, 0]
         self._filePath = filePath
         self.attempts = ["First", "Second", "Third", "Fourth", "Fifth"]
         self._template = \
@@ -185,6 +239,18 @@ class RadarData:
         self._data = jsonString
         self.save()
 
+    def getBaselineValues(self):
+        radar = []
+        for each in self._data[0]['tableRows']:
+            radar.append(each['value'])
+        return radar
+
+    def getBaselineScaledValues(self):
+        radar = []
+        for each in self._data[0]['data']:
+            radar.append(each['value'])
+        return radar
+
     def save(self):
         with open(self._filePath, 'w') as f:
             f.write(json.dumps(self._data, indent=4))
@@ -198,20 +264,32 @@ class RadarData:
             if tmp > att_indx:
                 att_indx = tmp
         att_indx += 1
-        values = radarValues.copy()
-        values.update(tableValues)
+
+        scaled = {'sndo': radarValues[0], 'spdo': radarValues[1], 'sia': radarValues[2],
+                  'sms': radarValues[3], 'sat': radarValues[4], 'sppo': radarValues[5]}
+        table = {'ndo': tableValues[0], 'pdo': tableValues[1], 'ia': tableValues[2],
+                 'ms': tableValues[3], 'at': tableValues[4], 'ppo': tableValues[5]}
+        scaled.update(table)
         data = self._template.format(attempt='"{a}"'.format(a=self.attempts[att_indx]),
-                                     baseline='false', **values)
+                                     baseline='false', **scaled)
         self._data.append(json.loads(data))
         self.save()
 
-    def removeLast(self):
-        if len(self._data) > 1:        
-            self._data.pop()
-        self.save()
+    def removeAttempt(self, attempt):
+        i = -1
+        for each in self._data:
+            i += 1
+            if each['attempt'] == attempt:
+                break
+        if i >= 0:
+            del self._data[i]
+            self.save()
+
 
 class BarData:
-    def __init__(self, filePath, baseline):
+    def __init__(self, filePath, baseline=None):
+        if not baseline:
+            baseline = [0, 0, 0, 0, 0, 0]
         self._filePath = filePath
         self._data = \
         [
@@ -268,6 +346,12 @@ class BarData:
         self._data = jsonString
         self.save()
 
+    def getBaseline(self):
+        baseline = []
+        for each in self._data:
+            baseline.append(each['values'][0]['value'])
+        return baseline
+
     def addRecord(self, values, player):
         for i, value in enumerate(values):
             self._addRecord(i, value, player)
@@ -299,10 +383,19 @@ class BarData:
         self._data[which]['values'].append(dictionary)
         self.save()
 
-    def removeLast(self):
+    def getAllAttempts(self, playerName):
+        attempts = []
+        for each in self._data[0]['values']:
+            if playerName == each['playerName']:
+                attempts.append(int(each['attempt']))
+        return attempts
+
+    def removeAttempt(self, playerName, attempt):
         for each in self._data:
-            if each['values'][-1]['playerName'] != 'Baseline':
-                each['values'].pop()
+            for item in each['values']:
+                if each['values'][item]['playerName'] == playerName and each['values'][item]['attempt'] == attempt:
+                    del each['values'][item]
+                    break
         self.save()
 
 
