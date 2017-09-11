@@ -47,8 +47,8 @@ class SODPanel(wx.Panel):
         self.timer = wx.Timer(self)
         self.speed = 1000  # 1 second per year
         self.resultsToDisplay = Queue.Queue()
-        self.players = None
-        self.events = None
+        self.playerByIds = self.playersByName = None
+        self.eventsByIds = self.eventsByName = None
         self.configFile = ''
         self.configuration = {}
         self.current = 0
@@ -90,12 +90,10 @@ class SODPanel(wx.Panel):
         stopTreatmentButton = wx.Button(self, label="Stop")
 
         runBtn = wx.Button(self, label="Run")
-#        runBtn = wx.Button(self, label="Run")
         stopBtn = wx.Button(self, label="Stop")
 
         btnConnect.Bind(wx.EVT_BUTTON, lambda evt: self._connect())
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
-#        runBtn.Bind(wx.EVT_BUTTON, lambda evt: self._run())
         stopBtn.Bind(wx.EVT_BUTTON, lambda evt: self._stop())
         baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self._computeBaseline())
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
@@ -149,7 +147,6 @@ class SODPanel(wx.Panel):
             try:
                 with open(self.configFile, 'r') as f:
                     self.configuration = json.load(f)
-                    print self.configuration
                     # this should reset the analysis file only when configuration is successfully loaded
                     self.settings['analyses']['file'] = ''
             except IOError:
@@ -193,22 +190,23 @@ class SODPanel(wx.Panel):
             if not urlD.startswith('http'):
                 urlD = 'http://' + urlD
             self.dashboard.set_root_URL(urlD)
-            self.events = self.dashboard.get_events()
-            self.eventsCtrl.SetItems(self.events[1])
+            self.eventsByIds = dict(zip(*self.dashboard.get_events()))
+            self.eventsByName = dict(reversed(item) for item in self.eventsByIds.items())
+            self.eventsCtrl.SetItems(self.eventsByIds.values())
             self.eventsCtrl.SetSelection(0)
-            self.players = self.dashboard.get_players(self.events[0][0])
-            self.playersCtrl.SetItems(self.players[1])
+            self.playersByIds = dict(zip(*self.dashboard.get_players(self.eventsByName[self.eventsCtrl.GetStringSelection()])))
+            self.playersByName = dict(reversed(item) for item in self.playersByIds.items())
+            self.playersCtrl.SetItems(self.playersByIds.values())
             self.playersCtrl.SetSelection(0)
 
     def _onEventChanged(self, event):
-        print 'onEventChanged'
-        selected = self.eventsCtrl.GetSelection()
-        self.players = self.dashboard.get_players(self.events[0][selected])
-        self.playersCtrl.SetItems(self.players[1])
+        selectedEventName = self.eventsCtrl.GetStringSelection()
+        self.playersByIds = dict(zip(*self.dashboard.get_players(self.eventsByName[selectedEventName])))
+        self.playersByName = dict(reversed(item) for item in self.playersByIds.items())
+        self.playersCtrl.SetItems(self.playersByIds.values())
         self.playersCtrl.SetSelection(0)
 
     def _onPlayerChanged(self, event):
-        print 'onPlayerChanged'
         selectedPlayer = self.playersCtrl.GetStringSelection()
         attempts = []
         if self.bar:
@@ -218,16 +216,21 @@ class SODPanel(wx.Panel):
             self.attemptCtrl.SetStringSelection(str(max(attempts)))
 
     def DeleteAttempt(self):
+        event = self.eventsCtrl.GetStringSelection()
         selectedPlayer = self.playersCtrl.GetStringSelection()
         attempt = self.attemptCtrl.GetStringSelection()
         if attempt != wx.NOT_FOUND:
-            print 'deleting ' + str(int(attempt)) + ' attempt'
             if self.bar:
-                self.bar.removeAttempt(selectedPlayer, attempt)
-            
-        # TODO: finish this
-         
-         
+                self.bar.removeAttempt(selectedPlayer, int(attempt))
+                jsonfile = os.path.join(self.configuration['logDir'], 'bar.json')
+                self.dashboard.post_data_bar(jsonfile=jsonfile, eventId=self.eventsByName[event])
+            if self.radar:
+                self.radar[selectedPlayer].removeAttempt(int(attempt))
+                jsonfile = os.path.join(self.configuration['logDir'], 'radar_{}.json'.format(selectedPlayer))
+                self.dashboard.post_data_radar(jsonfile, self.eventsByName[event], self.playersByName[selectedPlayer])
+
+            self._onPlayerChanged(event=None)
+
     def _loadConfiguration(self, event):
         self.configFile = self.configFileCtrl.GetValue().strip()
         if self.configFile:
@@ -281,15 +284,14 @@ class SODPanel(wx.Panel):
                 else:
                     gscript.run_command('t.rast.import', input=new_path, output=os.path.basename(path) + '_imported', quiet=True, overwrite=True)
                     maps = gscript.read_command('t.rast.list', method='comma', input=os.path.basename(path) + '_imported').strip()
-                    print maps
                     for each in maps.split(','):
                         resultsToDisplay.put(each)
                     evt = ProcessForDashboardEvent(result=each)
-                    wx.PostEvent(self, evt)    
-                    
-                    
-                
-                
+                    wx.PostEvent(self, evt)
+
+
+
+
                 ##########
             elif message[0] == 'info':
                 if message[1] == 'last':
@@ -305,6 +307,8 @@ class SODPanel(wx.Panel):
             dlg.ShowModal()
             dlg.Destroy()
             return
+
+        self.infoBar.ShowMessage("Processing...")
         # grab a new raster of conditions
         # process new input layer
         treatment = 'treatment'
@@ -318,16 +322,16 @@ class SODPanel(wx.Panel):
         gscript.mapcalc("{st} = if(isnull({tr}), {sp}, 0)".format(tr=treatment, sp=species, st=species_treated), env=env)
         # remove from all trees
         gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatment, at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
-        
+
         # get current player and attempt
         eventId = self.dashboard.get_current_event()
         playerId, playerName = self.dashboard.get_current_player()
         if not playerName:
             print 'no player selected'
             return
-        idx = self.players[0].index(playerId)
-        self.playersCtrl.SetSelection(idx)
-        self.eventsCtrl.SetSelection(self.events[0].index(eventId))
+
+        self.playersCtrl.SetStringSelection(playerName)
+        self.eventsCtrl.SetStringSelection(self.eventsByIds[eventId])
         attempts = []
         if self.bar:
             attempts = self.bar.getAllAttempts(playerName)
@@ -400,19 +404,20 @@ class SODPanel(wx.Panel):
             self.bar = BarData(filePath=path)
             self.bar.setDataFromJson(json)
 
-        for playerId, playerName in zip(self.players[0], self.players[1]):
+            playerName = self.playersCtrl.GetStringSelection()
+            if playerName != wx.NOT_FOUND:
+                attempts = self.bar.getAllAttempts(playerName)
+                if attempts:
+                    self.attemptCtrl.SetItems([str(a) for a in attempts])
+                    self.attemptCtrl.SetStringSelection(str(max(attempts)))
+
+        for playerId, playerName in self.playersByIds.iteritems():
             json = self.dashboard.get_data_radarJson(eventId, playerId)
             if json:
                 path = os.path.join(self.configuration['logDir'], 'radar_{}.json'.format(playerName))
                 self.radar[playerName] = RadarData(filePath=path)
                 self.radar[playerName].setDataFromJson(json)
 
-        playerName = self.playersCtrl.GetStringSelection()
-        if playerName != wx.NOT_FOUND:
-            attempts = self.bar.getAllAttempts(playerName)
-            if attempts:
-                self.attemptCtrl.SetItems([str(a) for a in attempts])
-                self.attemptCtrl.SetStringSelection(str(max(attempts)))
 
     def _processBaseline(self, event):
         self.infoBar.ShowMessage("Processing baseline...")
@@ -446,10 +451,8 @@ class SODPanel(wx.Panel):
         self.infoBar.Dismiss()
 
     def _processForDashboard(self, event):
-        print 'processing: ' + event.result
-        print gscript.list_grouped(type='raster')
-        playerId = self.players[0][self.players[1].index(self.playersCtrl.GetStringSelection())]
         playerName = self.playersCtrl.GetStringSelection()
+        playerId = self.playersByName[playerName]
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         info = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
@@ -482,6 +485,7 @@ class SODPanel(wx.Panel):
             self.bar = BarData(filePath=path, baseline=self.baselineValues)
         self.bar.addRecord(record, playerName)
         self.dashboard.post_data_bar(jsonfile=path, eventId=self.dashboard.get_current_event())
+        self.infoBar.Dismiss()
 
     def OnClose(self, event):
         # timer stop

@@ -117,13 +117,11 @@ class DashBoardRequests:
             res.raise_for_status()
             return res.json()
         except requests.exceptions.HTTPError:
-            print 'error'
             return None
 
     def get_baseline_barId(self):
         res = requests.get(self.root + '/charts/barBaselineId', params={"locationId": self.locationId})
         res.raise_for_status()
-        print res.json()
         self.barBaselineId = res.json()['_id']
         return res.json()
 
@@ -143,7 +141,7 @@ class DashBoardRequests:
         res = requests.delete(self.root + '/charts/barBaseline/', params={'locationId': self.locationId})
         res.raise_for_status()
 
-    # radar data            
+    # radar data
     def post_data_radar(self, jsonfile, eventId, playerId):
         if playerId in self.radardataIds:
             self._delete_data_radar(self.radardataIds[playerId])
@@ -211,20 +209,20 @@ class RadarData:
             "attempt": {attempt},
             "baseline": {baseline},
             "data": [
-                {{"axis": "Number of Dead Oaks", "value": {sndo} }},
-                {{"axis": "Percentage of Dead Oaks", "value": {spdo} }},
+                {{"axis": "Number of Dead Tanoaks", "value": {sndo} }},
+                {{"axis": "Percentage of Dead Tanoaks", "value": {spdo} }},
                 {{"axis": "Infected Area (ha)", "value": {sia} }},
                 {{"axis": "Money Spent", "value": {sms} }},
                 {{"axis": "Area Treated", "value": {sat} }},
-                {{"axis": "Price per Oak", "value": {sppo} }}
+                {{"axis": "Price per Saved Tanoak", "value": {sppo} }}
             ],
             "tableRows": [
-                {{"column": "Number of Dead Oaks", "value": {ndo} }},
-                {{"column": "Percentage of Dead Oaks", "value": {pdo} }},
+                {{"column": "Number of Dead Tanoaks", "value": {ndo} }},
+                {{"column": "Percentage of Dead Tanoaks", "value": {pdo} }},
                 {{"column": "Infected Area (ha)", "value": {ia} }},
                 {{"column": "Money Spent", "value": {ms} }},
                 {{"column": "Area Treated", "value": {at} }},
-                {{"column": "Price per Oak", "value": {ppo} }}
+                {{"column": "Price per Saved Tanoak", "value": {ppo} }}
             ]
         }}"""
         scaled = {'sndo': 10, 'spdo': 10, 'sia': 10, 'sms': 0, 'sat': 0, 'sppo': 0}
@@ -277,11 +275,13 @@ class RadarData:
 
     def removeAttempt(self, attempt):
         i = -1
+        found = False
         for each in self._data:
             i += 1
-            if each['attempt'] == attempt:
+            if each['attempt'] == self.attempts[attempt - 1]:
+                found = True
                 break
-        if i >= 0:
+        if found:
             del self._data[i]
             self.save()
 
@@ -294,14 +294,14 @@ class BarData:
         self._data = \
         [
             {
-                "axis": "Number of Dead Oaks",
+                "axis": "Number of Dead Tanoaks",
                 "options": False,
                 "values": [
                     {"value": baseline[0], "playerName": "Baseline", "attempt": ""}
                 ]
             },
             {
-                "axis": "Percentage of Dead Oaks",
+                "axis": "Percentage of Dead Tanoaks",
                 "options": False,
                 "values": [
                     {"value": baseline[1], "playerName": "Baseline", "attempt": ""}
@@ -329,7 +329,7 @@ class BarData:
                 ]
             },
             {
-                "axis": "Price per Oak",
+                "axis": "Price per Saved Tanoak",
                 "options": {"negative": True},
                 "values": [
                     {"value": baseline[5], "playerName": "Baseline", "attempt": ""}
@@ -392,9 +392,9 @@ class BarData:
 
     def removeAttempt(self, playerName, attempt):
         for each in self._data:
-            for item in each['values']:
-                if each['values'][item]['playerName'] == playerName and each['values'][item]['attempt'] == attempt:
-                    del each['values'][item]
+            for i, item in enumerate(each['values']):
+                if item['playerName'] == playerName and item['attempt'] == attempt:
+                    del each['values'][i]
                     break
         self.save()
 
@@ -430,12 +430,12 @@ def main():
 
     bar.addRecord((500, 2, 3000, 100, 10, 100), playerNames[1])
     dashboard.post_data_bar(fp, eid)
-    
+
 #    fp = '/tmp/SOD_{evt}_baseline.json'.format(evt=eventIds[eid])
 #    baseline = (10000, 5.898, 3417, 0, 0, 0)
 #    radar = RadarData(filePath=fp, baseline=baseline)
 #    dashboard.post_baseline_radar(fp)
-    
+
     for each in playerIds:
         fp = '/tmp/SOD_{evt}_{pl}.json'.format(evt=eventIds[eid], pl=each)
         radar = RadarData(filePath=fp, baseline=baseline)
@@ -458,10 +458,10 @@ def main():
     radarValues = {'sndo': 1, 'spdo': 3, 'sia': 10, 'sms': 2, 'sat': 3, 'sppo': 1}
     radar.addRecord(radarValues, tableValues, baseline=False)
     dashboard.post_data_radar(fp, eventId=eid, playerId=1)
-  
+
     radarValues = {'sndo': 9, 'spdo': 3, 'sia': 10, 'sms': 7, 'sat': 3, 'sppo': 6}
     radar.addRecord(radarValues, tableValues, baseline=False)
-    dashboard.post_data_radar(fp, eventId=eid, playerId=1)  
+    dashboard.post_data_radar(fp, eventId=eid, playerId=1)
     radar.removeLast()
     dashboard.post_data_radar(fp, eventId=eid, playerId=1)
     #bar.removeLast()
