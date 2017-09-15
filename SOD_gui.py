@@ -24,10 +24,13 @@ from grass.pydispatch.signal import Signal
 from tangible_utils import addLayers, get_environment
 
 from SOD_dashboard import DashBoardRequests, RadarData, BarData
+from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 
 ProcessForDashboardEvent, EVT_PROCESS_NEW_EVENT = wx.lib.newevent.NewEvent()
 ProcessBaseline, EVT_PROCESS_BASELINE_NEW_EVENT = wx.lib.newevent.NewEvent()
+updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
+
 TMP_DIR = '/tmp/test_SOD/'
 
 
@@ -59,8 +62,13 @@ class SODPanel(wx.Panel):
         self.barBaseline = None
         self.bar = None
         self.radar = {}
-        
+
+        self.profileFrame = self.dashboardFrame = None
+
         self.maxTrees = 0  # how many max trees in cells we have for setting right color table
+        self.treated_area = 0
+        self.money_spent = 0
+        self.price_per_m2 = 1.24
 
         if 'SOD' not in self.settings:
             self.settings['SOD'] = {}
@@ -156,6 +164,8 @@ class SODPanel(wx.Panel):
 
         self._bindButtons()
 
+        self.Bind(EVT_UPDATE_DISPLAY, self.OnDisplayUpdate)
+
     def _connect(self):
         self._connectDashboard()
         self._connectSteering()
@@ -216,6 +226,11 @@ class SODPanel(wx.Panel):
         self.attemptCtrl.SetItems([str(a) for a in attempts])
         if attempts:
             self.attemptCtrl.SetStringSelection(str(max(attempts)))
+
+    def OnDisplayUpdate(self, event):
+        if not self.dashboardFrame:
+            return
+        self.dashboardFrame.show_value(event.value)
 
     def DeleteAttempt(self):
         event = self.eventsCtrl.GetStringSelection()
@@ -310,22 +325,33 @@ class SODPanel(wx.Panel):
         self.infoBar.ShowMessage("Processing...")
         # grab a new raster of conditions
         # process new input layer
-        treatment = 'treatment'
+        treatments = self.configuration['SOD']['treatments']
+        treatments_resampled = treatments + '_resampled'
         studyArea = self.studySelect.GetValue()
-        env = get_environment(raster=studyArea)
         species = self.configuration['SOD']['species']
         species_treated = self.configuration['SOD']['species_treated']
         all_trees = self.configuration['SOD']['all_trees']
         all_trees_treated = self.configuration['SOD']['all_trees_treated']
+        env = get_environment(raster=studyArea, align=species)
 
         # get max trees possible infected (actually 90prct)
         if not self.maxTrees:
             univar = gscript.parse_command('r.univar', map=species, flags='eg', env=env)
             self.maxTrees = float(univar['percentile_90'])
 
-        gscript.mapcalc("{st} = if(isnull({tr}), {sp}, 0)".format(tr=treatment, sp=species, st=species_treated), env=env)
+
+        gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
+        maxvalue = gscript.raster_info(treatments_resampled)['max']
+        univar = float(gscript.parse_command('r.univar', flags='g', map=treatments_resampled, env=env))
+        self.treated_area = (univar['sum'] / maxvalue) * 10000
+        self.money_spent = self.treated_area * self.price_per_m2
+        gscript.mapcalc("{s} = {l} - {l} * ({t} / {m})".format(s=species_treated, t=treatments_resampled, m=maxvalue, l='lide_den_int'), env=env)
+
+
+
+        #gscript.mapcalc("{st} = if(isnull({tr}), {sp}, 0)".format(tr=treatment, sp=species, st=species_treated), env=env)
         # remove from all trees
-        gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatment, at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
+        #gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatment, at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
 
         # get current player and attempt
         eventId = self.dashboard.get_current_event()
@@ -477,8 +503,8 @@ class SODPanel(wx.Panel):
             infected_cells = int(info['n']) - int(cnts)
         else:
             infected_cells = int(info['n'])
-        money = 0
-        treated = 0
+        money = self.money_spent
+        treated = self.treated_area
         price_per_tree = 0
 
         record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
@@ -525,7 +551,7 @@ class SODPanel(wx.Panel):
         self.scaniface.pause = False
         self.scaniface.changedInput = True
 
-    def StartTreatment(self, event):
+    def StartTreatment(self):
         self.scaniface.additionalParams4Analyses = {}
         self.LoadLayers()
         treatmentRaster = self.treatmentSelect.GetValue()
@@ -533,32 +559,32 @@ class SODPanel(wx.Panel):
             self.giface.GetMapWindow().ZoomToMap(layers=[treatmentRaster])
             self.settings['scan']['elevation'] = treatmentRaster
         else:
-            self.settings['scan']['elevation'] = self.tasks[self.current]['base']
+            self.settings['scan']['elevation'] = self.configuration['tasks'][self.current]['base']
 
-        self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
+        self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
-        if 'scanning_params' in self.tasks[self.current]:
-            for each in self.tasks[self.current]['scanning_params'].keys():
-                self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
+        if 'scanning_params' in self.configuration['tasks'][self.current]:
+            for each in self.configuration['tasks'][self.current]['scanning_params'].keys():
+                self.settings['scan'][each] = self.configuration['tasks'][self.current]['scanning_params'][each]
         # resume scanning
-        if 'filter' in self.tasks[self.current]:
+        if 'filter' in self.configuration['tasks'][self.current]:
             self.scaniface.filter['filter'] = True
             self.scaniface.filter['counter'] = 0
-            self.scaniface.filter['threshold'] = self.tasks[self.current]['filter']['threshold']
-            self.scaniface.filter['debug'] = self.tasks[self.current]['filter']['debug']
-        if 'single_scan' in self.tasks[self.current] and self.tasks[self.current]['single_scan']:
+            self.scaniface.filter['threshold'] = self.configuration['tasks'][self.current]['filter']['threshold']
+            self.scaniface.filter['debug'] = self.configuration['tasks'][self.current]['filter']['debug']
+        if 'single_scan' in self.configuration['tasks'][self.current] and self.configuration['tasks'][self.current]['single_scan']:
             self._stopScanning()
         else:
             self._startScanning()
         # profile
-        if 'profile' in self.tasks[self.current]:
+        if 'profile' in self.configuration['tasks'][self.current]:
             self.StartProfile()
         # display
-        if 'display' in self.tasks[self.current]:
+        if 'display' in self.configuration['tasks'][self.current]:
             self.StartDisplay()
 
-    def StopTreatment(self, event):
-        def _closeAdditionalWindows(self):
+    def StopTreatment(self):
+        def _closeAdditionalWindows():
             if self.profileFrame:
                 self.profileFrame.Close()
                 self.profileFrame = None
@@ -566,13 +592,13 @@ class SODPanel(wx.Panel):
                 self.dashboardFrame.Destroy()
                 self.dashboardFrame = None
 
-        def _removeAllLayers(self):
+        def _removeAllLayers():
             ll = self.giface.GetLayerList()
             for l in reversed(ll):
                 ll.DeleteLayer(l)
 
-        self._closeAdditionalWindows()
-        self._removeAllLayers()
+        _closeAdditionalWindows()
+        _removeAllLayers()
         self.settings['analyses']['file'] = ''
         self._stopScanning()
 
@@ -598,10 +624,10 @@ class SODPanel(wx.Panel):
     def LoadLayers(self, zoomToLayers=True):
         ll = self.giface.GetLayerList()
         zoom = []
-        for i, cmd in enumerate(self.tasks[self.current]['layers']):
+        for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
             opacity = 1.0
-            if "layers_opacity" in self.tasks[self.current]:
-                opacity = float(self.tasks[self.current]['layers_opacity'][i])
+            if "layers_opacity" in self.configuration['tasks'][self.current]:
+                opacity = float(self.configuration['tasks'][self.current]['layers_opacity'][i])
             if cmd[0] == 'd.rast':
                 l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
                                 opacity=opacity, cmd=cmd)
@@ -625,3 +651,21 @@ class SODPanel(wx.Panel):
                  '{} 200:0:0'.format(self.maxTrees),
                  '{} 0:0:0'.format(2 * self.maxTrees)]
         return '\n'.join(color)
+
+    def StartDisplay(self):
+        multiple = False if 'multiple' not in self.configuration['tasks'][self.current]['display'] else self.configuration['tasks'][self.current]['display']['multiple']
+        title = None if 'title' not in self.configuration['tasks'][self.current]['display'] else self.configuration['tasks'][self.current]['display']['title']
+        fontsize = self.configuration['tasks'][self.current]['display']['fontsize']
+        average = self.configuration['tasks'][self.current]['display']['average']
+        maximum = self.configuration['tasks'][self.current]['display']['maximum']
+        formatting_string = self.configuration['tasks'][self.current]['display']['formatting_string']
+        if multiple:
+            self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
+                                                     title=title, formatting_string=formatting_string)
+        else:
+            self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
+        pos = self.configuration['tasks'][self.current]['display']['position']
+        size = self.configuration['tasks'][self.current]['display']['size']
+        self.dashboardFrame.SetSize(size)
+        self.dashboardFrame.Show()
+        self.dashboardFrame.SetPosition(pos)
