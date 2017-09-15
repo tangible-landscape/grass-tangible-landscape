@@ -59,6 +59,8 @@ class SODPanel(wx.Panel):
         self.barBaseline = None
         self.bar = None
         self.radar = {}
+        
+        self.maxTrees = 0  # how many max trees in cells we have for setting right color table
 
         if 'SOD' not in self.settings:
             self.settings['SOD'] = {}
@@ -289,9 +291,6 @@ class SODPanel(wx.Panel):
                     evt = ProcessForDashboardEvent(result=each)
                     wx.PostEvent(self, evt)
 
-
-
-
                 ##########
             elif message[0] == 'info':
                 if message[1] == 'last':
@@ -318,6 +317,11 @@ class SODPanel(wx.Panel):
         species_treated = self.configuration['SOD']['species_treated']
         all_trees = self.configuration['SOD']['all_trees']
         all_trees_treated = self.configuration['SOD']['all_trees_treated']
+
+        # get max trees possible infected (actually 90prct)
+        if not self.maxTrees:
+            univar = gscript.parse_command('r.univar', map=species, flags='eg', env=env)
+            self.maxTrees = float(univar['percentile_90'])
 
         gscript.mapcalc("{st} = if(isnull({tr}), {sp}, 0)".format(tr=treatment, sp=species, st=species_treated), env=env)
         # remove from all trees
@@ -367,6 +371,7 @@ class SODPanel(wx.Panel):
     def _displayResult(self, event):
         if not self.resultsToDisplay.empty():
             name = self.resultsToDisplay.get()
+            gscript.write_command('r.colors', map=name, rules='-', stdin=self.GetInfColorTable(), quiet=True)
             cmd = ['d.rast', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             self.scaniface.postEvent(self.scaniface, evt)
@@ -418,14 +423,19 @@ class SODPanel(wx.Panel):
                 self.radar[playerName] = RadarData(filePath=path)
                 self.radar[playerName].setDataFromJson(json)
 
-
     def _processBaseline(self, event):
         self.infoBar.ShowMessage("Processing baseline...")
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         infoBaseline = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
         all_trees = self.configuration['SOD']['all_trees']
+        species = self.configuration['SOD']['species']
         infoAllTrees = gscript.parse_command('r.univar', map=all_trees, flags='g', env=env)
+        # get max trees possible infected (actually 90prct)
+        if not self.maxTrees:
+            univar = gscript.parse_command('r.univar', map=species, flags='eg', env=env)
+            self.maxTrees = float(univar['percentile_90'])
+
         n_dead = float(infoAllTrees['sum'])
         n_all_trees = float(infoAllTrees['sum'])
         perc_dead = n_dead / n_all_trees
@@ -606,3 +616,12 @@ class SODPanel(wx.Panel):
 
         if zoomToLayers:
             self.giface.GetMapWindow().ZoomToMap(layers=zoom)
+
+    def GetInfColorTable(self):
+        color = ['0 200:200:200',
+                 '{} yellow'.format(0.5 * self.maxTrees),
+                 '{} orange'.format(0.7 * self.maxTrees),
+                 '{} red'.format(0.8 * self.maxTrees),
+                 '{} 200:0:0'.format(self.maxTrees),
+                 '{} 0:0:0'.format(2 * self.maxTrees)]
+        return '\n'.join(color)

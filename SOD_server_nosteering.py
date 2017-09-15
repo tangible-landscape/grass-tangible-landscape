@@ -12,7 +12,7 @@ import grass.script as gscript
 from tangible_utils import get_environment
 
 HOST = ''   # Symbolic name, meaning all available interfaces
-PORT = 8889  # Arbitrary non-privileged port
+PORT = 8888  # Arbitrary non-privileged port
 #PORT_C = 8000
 
 TMP_DIR = '/tmp/'
