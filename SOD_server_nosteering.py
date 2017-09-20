@@ -47,42 +47,48 @@ connections = {}
 
 
 def run_baseline(region):
-    model = 'sod-cpp-master'
+    model = 'sod-cpp'
     params = {}
     params['output'] = 'baseline'
-    params['species'] = 'UMCA_den_100m@PERMANENT'
-    params['lvtree'] = 'TPH_den_100m@PERMANENT'
-    params['infected'] = 'init_2000_cnt@PERMANENT'
-    params['wind'] = 'NE'
+    params['species'] = 'lide_den_int'
+    params['lvtree'] = 'all_den_int'
+    params['infected'] = 'inf_2016'
+    params['wind'] = 'NW'
     params['start_time'] = 2000
     params['end_time'] = 2010
     params['random_seed'] = 42
+    params['spore_rate'] = 1.2
+    params['runs'] = 20
+    params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
-    params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
-    params['runs'] = 10
-    params['nprocs'] = 5
+    #params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
+    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
+    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
     env = get_environment(**region)
+    print 'computing baseline'
     gscript.run_command(model, overwrite=True, env=env, **params)
 
     return params['output']
 
 
 def run_model(settings):
-    model = 'sod-cpp-master'
+    model = 'sod-cpp'
     params = {}
-    params['infected'] = 'init_2000_cnt@PERMANENT'
     params['output_series'] = 'output'
-    params['wind'] = 'NE'
-    params['start_time'] = 2000
-    params['end_time'] = 2010
     params['random_seed'] = 42
+    params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
-    params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
+    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
+    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
+    
+    region = settings.pop('region')
+    region.split(',')
+    env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
     name = settings['output_series']
-    gscript.run_command(model, overwrite=True, **params)
+    gscript.run_command(model, overwrite=True, env=env, **params)
     names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
     gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
                         title='SOD', description='SOD', overwrite=True)
@@ -134,7 +140,10 @@ def clientGUI(conn, connections, event):
                 if len(message) == 3:  # additional parameters
                     for each in message[2].split('|'):
                         key, val = each.split('=')
-                        params[key] = val
+                        try:
+                            params[key] = float(val)
+                        except ValueError:
+                            params[key] = val
 #                if 'computation' not in connections:
                 name = run_model(params)
                 # series
@@ -151,7 +160,10 @@ def clientGUI(conn, connections, event):
                     region = {}
                     for each in message[2].split(','):
                         key, val = each.split('=')
-                        region[key] = float(val)
+                        try:
+                            region[key] = float(val)
+                        except ValueError:
+                            region[key] = val
                     name = run_baseline(region)
                     pack_path = TMP_DIR + name + '.pack'
                     gscript.run_command('r.pack', input=name, output=pack_path, overwrite=True)

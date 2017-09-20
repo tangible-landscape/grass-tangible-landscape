@@ -21,7 +21,7 @@ from gui_core.gselect import Select
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
-from tangible_utils import addLayers, get_environment
+from tangible_utils import addLayers, get_environment, removeLayers
 
 from SOD_dashboard import DashBoardRequests, RadarData, BarData
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
@@ -73,12 +73,15 @@ class SODPanel(wx.Panel):
         if 'SOD' not in self.settings:
             self.settings['SOD'] = {}
             self.settings['SOD']['config'] = ''
+            self.settings['SOD']['urlDashboard'] = ''
+            self.settings['SOD']['urlSteering'] = ''
         else:
             self.configFile = self.settings['SOD']['config']
+            
 
         self.infoBar = wx.InfoBar(self)
-        self.urlDashboard = wx.TextCtrl(self, value="localhost:3000")
-        self.urlSteering = wx.TextCtrl(self, value="localhost:8888")
+        self.urlDashboard = wx.TextCtrl(self, value=self.settings['SOD']['urlDashboard'])
+        self.urlSteering = wx.TextCtrl(self, value=self.settings['SOD']['urlSteering'])
         # config file
         self.configFileCtrl = filebrowse.FileBrowseButton(self, labelText='Configuration:', changeCallback=self._loadConfiguration)
         self.configFileCtrl.SetValue(self.configFile, 0)
@@ -105,7 +108,7 @@ class SODPanel(wx.Panel):
         btnConnect.Bind(wx.EVT_BUTTON, lambda evt: self._connect())
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
         stopBtn.Bind(wx.EVT_BUTTON, lambda evt: self._stop())
-        baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self._computeBaseline())
+        baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self.ComputeBaseline())
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
 
@@ -171,6 +174,7 @@ class SODPanel(wx.Panel):
         self._connectSteering()
         self._loadBaseline()
         self._loadCharts()
+        self._bindButtons()
 
     def _connectSteering(self):
         if self.socket:
@@ -313,7 +317,8 @@ class SODPanel(wx.Panel):
                     evt = ProcessForDashboardEvent(result=name)
                     wx.PostEvent(self, evt)
 
-    def RunSimulation(self):
+    def RunSimulation(self, event=None):
+        print 'run simulation'
         if not self.baselineValues:
             dlg = wx.MessageDialog(self, 'Compute baseline first',
                                    'Missing baseline',
@@ -336,14 +341,14 @@ class SODPanel(wx.Panel):
 
         # get max trees possible infected (actually 90prct)
         if not self.maxTrees:
-            univar = gscript.parse_command('r.univar', map=species, flags='eg', env=env)
-            self.maxTrees = float(univar['percentile_90'])
+            univar = gscript.parse_command('r.univar', map=species, flags='eg', percentile=99, env=env)
+            self.maxTrees = float(univar['percentile_99'])
 
 
         gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
         maxvalue = gscript.raster_info(treatments_resampled)['max']
-        univar = float(gscript.parse_command('r.univar', flags='g', map=treatments_resampled, env=env))
-        self.treated_area = (univar['sum'] / maxvalue) * 10000
+        univar = gscript.parse_command('r.univar', flags='g', map=treatments_resampled, env=env)
+        self.treated_area = (float(univar['sum']) / maxvalue) * 10000
         self.money_spent = self.treated_area * self.price_per_m2
         gscript.mapcalc("{s} = {l} - {l} * ({t} / {m})".format(s=species_treated, t=treatments_resampled, m=maxvalue, l='lide_den_int'), env=env)
 
@@ -376,14 +381,23 @@ class SODPanel(wx.Panel):
 
         postfix = playerName + '_' + new_attempt
         # todo, save treatments
-        gscript.run_command('g.copy', raster=[treatment, treatment + '_' + postfix])
-
+        gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix], env=env)
+        extent = gscript.raster_info(studyArea)
+        region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
+                                              w=extent['west'], e=extent['east'], a=species)
         # run simulation
         message = 'cmd:start'
         message += ':output_series={}'.format(postfix)
+        message += '|region={}'.format(region)
         message += '|output={}'.format(postfix)
         message += '|species={}'.format(species_treated)
         message += '|lvtree={}'.format(all_trees_treated)
+        message += '|start_time={}'.format(all_trees_treated)
+        message += '|end_time={}'.format(self.configuration['SOD']['start_time'])
+        message += '|spore_rate={}'.format(self.configuration['SOD']['end_time'])
+        message += '|wind={}'.format(self.configuration['SOD']['wind'])
+        message += '|infected={}'.format(self.configuration['SOD']['infected'])
+        message += '|runs={}'.format(self.configuration['SOD']['runs'])
         self.timer.Start(self.speed)
         self.socket.sendall(message)
 
@@ -398,15 +412,16 @@ class SODPanel(wx.Panel):
         if not self.resultsToDisplay.empty():
             name = self.resultsToDisplay.get()
             gscript.write_command('r.colors', map=name, rules='-', stdin=self.GetInfColorTable(), quiet=True)
-            cmd = ['d.rast', 'map={}'.format(name)]
+            cmd = ['d.rast','values=0', 'flags=i', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             self.scaniface.postEvent(self.scaniface, evt)
 
-    def _computeBaseline(self):
+    def ComputeBaseline(self):
         self.infoBar.ShowMessage("Computing baseline...")
         studyArea = self.studySelect.GetValue()
         extent = gscript.raster_info(studyArea)
-        region = 'n={n},s={s},w={w},e={e}'.format(n=extent['north'], s=extent['south'], w=extent['west'], e=extent['east'])
+        species = self.configuration['SOD']['species']
+        region = 'n={n},s={s},w={w},e={e},align={a}'.format(n=extent['north'], s=extent['south'], w=extent['west'], e=extent['east'], a=species)
         self.socket.sendall('cmd:baseline:' + region)
 
     def _loadBaseline(self):
@@ -451,6 +466,7 @@ class SODPanel(wx.Panel):
 
     def _processBaseline(self, event):
         self.infoBar.ShowMessage("Processing baseline...")
+        print "processing baseline in GUI"
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         infoBaseline = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
@@ -522,6 +538,16 @@ class SODPanel(wx.Panel):
         self.bar.addRecord(record, playerName)
         self.dashboard.post_data_bar(jsonfile=path, eventId=self.dashboard.get_current_event())
         self.infoBar.Dismiss()
+        #print 'remove layers'
+#        # TODO remove all layers
+#        ll = self.giface.GetLayerList()
+#        for l in reversed(ll):
+#            print dir(l)
+#            if l.maplayer.name.startswith(event.result):
+#                ll.DeleteLayer(l)
+#        ll = self.giface.GetLayerList()
+#        ll.AddLayer('raster', name=event.result, checked=True, cmd=['d.rast', 'map={}'.format(event.result)])
+
 
     def OnClose(self, event):
         # timer stop
@@ -609,16 +635,16 @@ class SODPanel(wx.Panel):
             if 'simulate' in self.configuration['keyboard_events']:
                 simulateId = wx.NewId()
                 items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['simulate'], simulateId))
-                topParent.Bind(wx.EVT_MENU, lambda evt: self.RunSimulation(), id=simulateId)
+                topParent.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
             accel_tbl = wx.AcceleratorTable(items)
             topParent.SetAcceleratorTable(accel_tbl)
             # Map displays
             for mapw in self.giface.GetAllMapDisplays():
-                mapw.Bind(wx.EVT_MENU, lambda evt: self.RunSimulation(), id=simulateId)
+                mapw.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
                 mapw.SetAcceleratorTable(accel_tbl)
             # Layer Manager
             lm = self.giface.lmgr
-            lm.Bind(wx.EVT_MENU, lambda evt: self.RunSimulation(), id=simulateId)
+            lm.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
             lm.SetAcceleratorTable(accel_tbl)
 
     def LoadLayers(self, zoomToLayers=True):
