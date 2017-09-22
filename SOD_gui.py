@@ -13,6 +13,7 @@ import threading
 import Queue
 import requests
 import json
+import re
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
@@ -30,6 +31,7 @@ from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 ProcessForDashboardEvent, EVT_PROCESS_NEW_EVENT = wx.lib.newevent.NewEvent()
 ProcessBaseline, EVT_PROCESS_BASELINE_NEW_EVENT = wx.lib.newevent.NewEvent()
 updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
+updateTimeDisplay, EVT_UPDATE_TIME_DISPLAY = wx.lib.newevent.NewEvent()
 
 TMP_DIR = '/tmp/test_SOD/'
 
@@ -56,6 +58,7 @@ class SODPanel(wx.Panel):
         self.configuration = {}
         self.current = 0
         self.baselineEnv = None
+        self._currentlyRunning = False
 
         self.dashboard = DashBoardRequests()
         self.radarBaseline = None
@@ -63,7 +66,7 @@ class SODPanel(wx.Panel):
         self.bar = None
         self.radar = {}
 
-        self.profileFrame = self.dashboardFrame = None
+        self.profileFrame = self.dashboardFrame = self.timeDisplay = None
 
         self.maxTrees = 0  # how many max trees in cells we have for setting right color table
         self.treated_area = 0
@@ -77,7 +80,7 @@ class SODPanel(wx.Panel):
             self.settings['SOD']['urlSteering'] = ''
         else:
             self.configFile = self.settings['SOD']['config']
-            
+
 
         self.infoBar = wx.InfoBar(self)
         self.urlDashboard = wx.TextCtrl(self, value=self.settings['SOD']['urlDashboard'])
@@ -168,6 +171,7 @@ class SODPanel(wx.Panel):
         self._bindButtons()
 
         self.Bind(EVT_UPDATE_DISPLAY, self.OnDisplayUpdate)
+        self.Bind(EVT_UPDATE_TIME_DISPLAY, self.OnTimeDisplayUpdate)
 
     def _connect(self):
         self._connectDashboard()
@@ -209,11 +213,20 @@ class SODPanel(wx.Panel):
             self.eventsByIds = dict(zip(*self.dashboard.get_events()))
             self.eventsByName = dict(reversed(item) for item in self.eventsByIds.items())
             self.eventsCtrl.SetItems(self.eventsByIds.values())
-            self.eventsCtrl.SetSelection(0)
+            eventId = self.dashboard.get_current_event()
+            if eventId:
+                self.eventsCtrl.SetStringSelection(self.eventsByIds[eventId])
+            else:
+                self.eventsCtrl.SetSelection(0)
             self.playersByIds = dict(zip(*self.dashboard.get_players(self.eventsByName[self.eventsCtrl.GetStringSelection()])))
             self.playersByName = dict(reversed(item) for item in self.playersByIds.items())
             self.playersCtrl.SetItems(self.playersByIds.values())
-            self.playersCtrl.SetSelection(0)
+            playerId, name = self.dashboard.get_current_player()
+            if playerId:
+                self.playersCtrl.SetStringSelection(name)
+            else:
+                self.playersCtrl.SetSelection(0)
+
 
     def _onEventChanged(self, event):
         selectedEventName = self.eventsCtrl.GetStringSelection()
@@ -236,6 +249,12 @@ class SODPanel(wx.Panel):
             return
         self.dashboardFrame.show_value(event.value)
 
+    def OnTimeDisplayUpdate(self, event):
+        if not self.timeDisplay:
+            return
+        self.timeDisplay.Update(event.value)
+
+
     def DeleteAttempt(self):
         event = self.eventsCtrl.GetStringSelection()
         selectedPlayer = self.playersCtrl.GetStringSelection()
@@ -243,11 +262,11 @@ class SODPanel(wx.Panel):
         if attempt != wx.NOT_FOUND:
             if self.bar:
                 self.bar.removeAttempt(selectedPlayer, int(attempt))
-                jsonfile = os.path.join(self.configuration['logDir'], 'bar.json')
+                jsonfile = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=event))
                 self.dashboard.post_data_bar(jsonfile=jsonfile, eventId=self.eventsByName[event])
             if self.radar:
                 self.radar[selectedPlayer].removeAttempt(int(attempt))
-                jsonfile = os.path.join(self.configuration['logDir'], 'radar_{}.json'.format(selectedPlayer))
+                jsonfile = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=selectedPlayer, e=event))
                 self.dashboard.post_data_radar(jsonfile, self.eventsByName[event], self.playersByName[selectedPlayer])
 
             self._onPlayerChanged(event=None)
@@ -317,6 +336,12 @@ class SODPanel(wx.Panel):
                     evt = ProcessForDashboardEvent(result=name)
                     wx.PostEvent(self, evt)
 
+    def RunAnimation(self, event=None):
+        event = self.eventsCtrl.GetStringSelection()
+        name = self.playersCtrl.GetStringSelection()
+        attempt = self.attemptCtrl.GetStringSelection()
+        self.AddLayersAsAnimation(etype='raster', pattern="{n}_{a}_{e}_*".format(n=name, e=event, a=attempt))
+
     def RunSimulation(self, event=None):
         print 'run simulation'
         if not self.baselineValues:
@@ -327,16 +352,24 @@ class SODPanel(wx.Panel):
             dlg.Destroy()
             return
 
+        if self._currentlyRunning:
+            return
+
+        self._currentlyRunning = True
         self.infoBar.ShowMessage("Processing...")
         # grab a new raster of conditions
         # process new input layer
         treatments = self.configuration['SOD']['treatments']
         treatments_resampled = treatments + '_resampled'
         studyArea = self.studySelect.GetValue()
+        if not studyArea:
+            studyArea = self.configuration['tasks'][self.current]['base']
         species = self.configuration['SOD']['species']
+        infected = self.configuration['SOD']['infected']
         species_treated = self.configuration['SOD']['species_treated']
         all_trees = self.configuration['SOD']['all_trees']
         all_trees_treated = self.configuration['SOD']['all_trees_treated']
+        inf_treated = self.configuration['SOD']['infected_treated']
         env = get_environment(raster=studyArea, align=species)
 
         # get max trees possible infected (actually 90prct)
@@ -344,19 +377,19 @@ class SODPanel(wx.Panel):
             univar = gscript.parse_command('r.univar', map=species, flags='eg', percentile=99, env=env)
             self.maxTrees = float(univar['percentile_99'])
 
-
         gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
         maxvalue = gscript.raster_info(treatments_resampled)['max']
         univar = gscript.parse_command('r.univar', flags='g', map=treatments_resampled, env=env)
         self.treated_area = (float(univar['sum']) / maxvalue) * 10000
         self.money_spent = self.treated_area * self.price_per_m2
-        gscript.mapcalc("{s} = {l} - {l} * ({t} / {m})".format(s=species_treated, t=treatments_resampled, m=maxvalue, l='lide_den_int'), env=env)
-
-
-
-        #gscript.mapcalc("{st} = if(isnull({tr}), {sp}, 0)".format(tr=treatment, sp=species, st=species_treated), env=env)
-        # remove from all trees
-        #gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatment, at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
+#        gscript.mapcalc("{s} = {l} - {l} * ({t} / {m})".format(s=species_treated, t=treatments_resampled,
+#                                                               m=maxvalue, l=species), env=env)
+        gscript.mapcalc("{s} = int(if ({i} == 0, {l} - {l} * ({t} / {m}), max(1, {l} - {l} * ({t} / {m}))))".format(s=species_treated, t=treatments_resampled,
+                                                               i=infected, m=maxvalue, l=species), env=env)
+        gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=species_treated, ni=inf_treated), env=env)
+#        gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatments,
+#                        at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
+        gscript.mapcalc("{att} = round({at} - ({s} - {st}))".format(at=all_trees, att=all_trees_treated, st=species_treated, s=species), env=env)
 
         # get current player and attempt
         eventId = self.dashboard.get_current_event()
@@ -365,8 +398,9 @@ class SODPanel(wx.Panel):
             print 'no player selected'
             return
 
-        self.playersCtrl.SetStringSelection(playerName)
         self.eventsCtrl.SetStringSelection(self.eventsByIds[eventId])
+        self._onEventChanged(event=None)
+        self.playersCtrl.SetStringSelection(playerName)
         attempts = []
         if self.bar:
             attempts = self.bar.getAllAttempts(playerName)
@@ -379,7 +413,7 @@ class SODPanel(wx.Panel):
             new_attempt = str(max(attempts) + 1)
             self.attemptCtrl.SetStringSelection(new_attempt)
 
-        postfix = playerName + '_' + new_attempt
+        postfix = playerName + '_' + new_attempt + '_' + self.eventsByIds[eventId]
         # todo, save treatments
         gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix], env=env)
         extent = gscript.raster_info(studyArea)
@@ -392,13 +426,12 @@ class SODPanel(wx.Panel):
         message += '|output={}'.format(postfix)
         message += '|species={}'.format(species_treated)
         message += '|lvtree={}'.format(all_trees_treated)
-        message += '|start_time={}'.format(all_trees_treated)
-        message += '|end_time={}'.format(self.configuration['SOD']['start_time'])
-        message += '|spore_rate={}'.format(self.configuration['SOD']['end_time'])
+        message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
+        message += '|end_time={}'.format(self.configuration['SOD']['end_time'])
+        message += '|spore_rate={}'.format(self.configuration['SOD']['spore_rate'])
         message += '|wind={}'.format(self.configuration['SOD']['wind'])
         message += '|infected={}'.format(self.configuration['SOD']['infected'])
         message += '|runs={}'.format(self.configuration['SOD']['runs'])
-        self.timer.Start(self.speed)
         self.socket.sendall(message)
 
     def _run(self):
@@ -406,7 +439,7 @@ class SODPanel(wx.Panel):
 
     def _stop(self):
         self.socket.sendall('cmd:end')
-        self.timer.Stop()
+
 
     def _displayResult(self, event):
         if not self.resultsToDisplay.empty():
@@ -415,14 +448,34 @@ class SODPanel(wx.Panel):
             cmd = ['d.rast','values=0', 'flags=i', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             self.scaniface.postEvent(self.scaniface, evt)
+            # update year
+            res = re.search("_20[0-9]{2}_", name)
+            if res:
+                year = res.group().strip('_')
+                evt2 = updateTimeDisplay(value=year)
+                self.scaniface.postEvent(self, evt2)
 
     def ComputeBaseline(self):
         self.infoBar.ShowMessage("Computing baseline...")
         studyArea = self.studySelect.GetValue()
+        if not studyArea:
+            studyArea = self.configuration['tasks'][self.current]['base']
         extent = gscript.raster_info(studyArea)
         species = self.configuration['SOD']['species']
-        region = 'n={n},s={s},w={w},e={e},align={a}'.format(n=extent['north'], s=extent['south'], w=extent['west'], e=extent['east'], a=species)
-        self.socket.sendall('cmd:baseline:' + region)
+        region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
+                                              w=extent['west'], e=extent['east'], a=species)
+        message = 'cmd:baseline'
+        message += ':region={}'.format(region)
+        message += '|output={}'.format(self.configuration['SOD']['baseline'])
+        message += '|species={}'.format(self.configuration['SOD']['species'])
+        message += '|lvtree={}'.format(self.configuration['SOD']['all_trees'])
+        message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
+        message += '|end_time={}'.format(self.configuration['SOD']['end_time'])
+        message += '|spore_rate={}'.format(self.configuration['SOD']['spore_rate'])
+        message += '|wind={}'.format(self.configuration['SOD']['wind'])
+        message += '|infected={}'.format(self.configuration['SOD']['infected'])
+        message += '|runs={}'.format(self.configuration['SOD']['runs_baseline'])
+        self.socket.sendall(message)
 
     def _loadBaseline(self):
         # load baseline from dashboard when starting
@@ -444,9 +497,12 @@ class SODPanel(wx.Panel):
     def _loadCharts(self):
         # load charts from dashboard when starting
         eventId = self.dashboard.get_current_event()
+        if not eventId:
+            return
+        eventName = self.eventsByIds[eventId]
         json = self.dashboard.get_data_barJson(eventId)
         if json:
-            path = os.path.join(self.configuration['logDir'], 'bar.json')
+            path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))
             self.bar = BarData(filePath=path)
             self.bar.setDataFromJson(json)
 
@@ -460,7 +516,7 @@ class SODPanel(wx.Panel):
         for playerId, playerName in self.playersByIds.iteritems():
             json = self.dashboard.get_data_radarJson(eventId, playerId)
             if json:
-                path = os.path.join(self.configuration['logDir'], 'radar_{}.json'.format(playerName))
+                path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
                 self.radar[playerName] = RadarData(filePath=path)
                 self.radar[playerName].setDataFromJson(json)
 
@@ -478,7 +534,7 @@ class SODPanel(wx.Panel):
             univar = gscript.parse_command('r.univar', map=species, flags='eg', env=env)
             self.maxTrees = float(univar['percentile_90'])
 
-        n_dead = float(infoAllTrees['sum'])
+        n_dead = float(infoBaseline['sum'])
         n_all_trees = float(infoAllTrees['sum'])
         perc_dead = n_dead / n_all_trees
         counts = gscript.read_command('r.stats', flags='c', input=event.result, env=env).strip().splitlines()
@@ -505,6 +561,7 @@ class SODPanel(wx.Panel):
     def _processForDashboard(self, event):
         playerName = self.playersCtrl.GetStringSelection()
         playerId = self.playersByName[playerName]
+        eventName = self.eventsCtrl.GetStringSelection()
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         info = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
@@ -521,33 +578,35 @@ class SODPanel(wx.Panel):
             infected_cells = int(info['n'])
         money = self.money_spent
         treated = self.treated_area
-        price_per_tree = 0
+        price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead)
 
         record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
-        radarValues = [10, 0, 10, 0, 10, 10]
+        # scaling radar values
+        n_dead_scaled = round(min(10 * n_dead / float(self.baselineValues[0]), 10))
+        perc_dead_scaled = round(min(10 * perc_dead / float(self.baselineValues[1]), 10))
+        infected_scaled = round(min(10 * record[2] / float(self.baselineValues[2]), 10))
+        max_money = 10000000.
+        money_scaled = round(min(10 * record[3] / max_money, 10))
+        treated_scaled = round(min(10 * record[4] / (max_money / 1.24), 10))
+        # $5 max?
+        price_per_tree_scaled = round(min(10 * record[5] / 5, 10))
+        radarValues = [n_dead_scaled, perc_dead_scaled, infected_scaled, money_scaled, treated_scaled, price_per_tree_scaled]
 
-        path = os.path.join(self.configuration['logDir'], 'radar_{}.json'.format(playerName))
+        path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
         if playerName not in self.radar:
             self.radar[playerName] = RadarData(filePath=path, baseline=self.baselineValues)
         self.radar[playerName].addRecord(radarValues, record, baseline=False)
         self.dashboard.post_data_radar(jsonfile=path, eventId=self.dashboard.get_current_event(), playerId=playerId)
 
-        path = os.path.join(self.configuration['logDir'], 'bar.json')  # maybe named with event
+        path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
         if not self.bar:
             self.bar = BarData(filePath=path, baseline=self.baselineValues)
         self.bar.addRecord(record, playerName)
         self.dashboard.post_data_bar(jsonfile=path, eventId=self.dashboard.get_current_event())
         self.infoBar.Dismiss()
+        self._currentlyRunning = False
         #print 'remove layers'
 #        # TODO remove all layers
-#        ll = self.giface.GetLayerList()
-#        for l in reversed(ll):
-#            print dir(l)
-#            if l.maplayer.name.startswith(event.result):
-#                ll.DeleteLayer(l)
-#        ll = self.giface.GetLayerList()
-#        ll.AddLayer('raster', name=event.result, checked=True, cmd=['d.rast', 'map={}'.format(event.result)])
-
 
     def OnClose(self, event):
         # timer stop
@@ -608,6 +667,11 @@ class SODPanel(wx.Panel):
         # display
         if 'display' in self.configuration['tasks'][self.current]:
             self.StartDisplay()
+        # time display
+        if 'time_display' in self.configuration['tasks'][self.current]:
+            self.StartTimeDisplay()
+        # start display timer
+        self.timer.Start(self.speed)
 
     def StopTreatment(self):
         def _closeAdditionalWindows():
@@ -617,6 +681,9 @@ class SODPanel(wx.Panel):
             if self.dashboardFrame:
                 self.dashboardFrame.Destroy()
                 self.dashboardFrame = None
+            if self.timeDisplay:
+                self.timeDisplay.Destroy()
+                self.timeDisplay = None
 
         def _removeAllLayers():
             ll = self.giface.GetLayerList()
@@ -627,24 +694,36 @@ class SODPanel(wx.Panel):
         _removeAllLayers()
         self.settings['analyses']['file'] = ''
         self._stopScanning()
+        self.timer.Stop()
 
     def _bindButtons(self):
         topParent = wx.GetTopLevelParent(self)
         if "keyboard_events" in self.configuration:
             items = []
+            simulateId = animateId = None
             if 'simulate' in self.configuration['keyboard_events']:
                 simulateId = wx.NewId()
                 items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['simulate'], simulateId))
                 topParent.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+            if 'animate' in self.configuration['keyboard_events']:
+                animateId = wx.NewId()
+                items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['animate'], animateId))
+                topParent.Bind(wx.EVT_MENU, self.RunAnimation, id=animateId)
             accel_tbl = wx.AcceleratorTable(items)
             topParent.SetAcceleratorTable(accel_tbl)
             # Map displays
             for mapw in self.giface.GetAllMapDisplays():
-                mapw.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+                if simulateId:
+                    mapw.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+                if animateId:
+                    mapw.Bind(wx.EVT_MENU, self.RunAnimation, id=animateId)
                 mapw.SetAcceleratorTable(accel_tbl)
             # Layer Manager
             lm = self.giface.lmgr
-            lm.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+            if simulateId:
+                lm.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+            if animateId:
+                lm.Bind(wx.EVT_MENU, self.RunAnimation, id=animateId)
             lm.SetAcceleratorTable(accel_tbl)
 
     def LoadLayers(self, zoomToLayers=True):
@@ -668,6 +747,37 @@ class SODPanel(wx.Panel):
 
         if zoomToLayers:
             self.giface.GetMapWindow().ZoomToMap(layers=zoom)
+
+    def RemoveAllResultsLayers(self):
+        event = self.eventsCtrl.GetStringSelection()
+        pattern_layers_r = gscript.list_grouped(type='raster', pattern="*{}*".format(event))[gscript.gisenv()['MAPSET']]
+        pattern_layers_v = gscript.list_grouped(type='vector', pattern="*{}*".format(event))[gscript.gisenv()['MAPSET']]
+        self.RemoveLayers(layers=pattern_layers_r + pattern_layers_v)
+
+    def RemoveLayers(self, etype='raster', pattern=None, layers=None):
+        all_layers = []
+        if pattern:
+            pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
+            all_layers += pattern_layers
+        if layers:
+            all_layers += layers
+        ll = self.giface.GetLayerList()
+        for l in reversed(ll):
+            name = l.maplayer.name.split('@')[0]
+            if name in all_layers:
+                ll.DeleteLayer(l)
+
+    def AddLayersAsAnimation(self, etype='raster', pattern=None, layers=None):
+        all_layers = []
+        if pattern:
+            pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
+            all_layers += pattern_layers
+        if layers:
+            all_layers += layers
+
+        self.RemoveAllResultsLayers()
+        for name in all_layers:
+            self.resultsToDisplay.put(name)
 
     def GetInfColorTable(self):
         color = ['0 200:200:200',
@@ -695,3 +805,25 @@ class SODPanel(wx.Panel):
         self.dashboardFrame.SetSize(size)
         self.dashboardFrame.Show()
         self.dashboardFrame.SetPosition(pos)
+
+    def StartTimeDisplay(self):
+        self.timeDisplay = TimeDisplay(self, fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'])
+        pos = self.configuration['tasks'][self.current]['time_display']['position']
+        size = self.configuration['tasks'][self.current]['time_display']['size']
+        self.timeDisplay.SetSize(size)
+        self.timeDisplay.Show()
+        self.timeDisplay.SetPosition(pos)
+
+class TimeDisplay(wx.Frame):
+    def __init__(self, parent, fontsize):
+        wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
+        self.label = wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL)
+        font = wx.Font(fontsize, wx.DEFAULT, wx.NORMAL, wx.BOLD)
+        self.label.SetFont(font)
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.label, 1, wx.ALL|wx.ALIGN_CENTER|wx.GROW, border=10)
+        self.SetSizer(self.sizer)
+        self.sizer.Fit(self)
+
+    def Update(self, value):
+        self.label.SetLabel(str(value))

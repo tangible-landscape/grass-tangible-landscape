@@ -41,12 +41,11 @@ class DashBoardRequests:
         return int(data[0]['eventId'])
 
     def get_players(self, eventId):
-        res = requests.get(self.root + '/play/{eid}'.format(eid=eventId))
+        res = requests.get(self.root + '/player/{eid}'.format(eid=eventId))
         res.raise_for_status()
         playerNames = []
         playerIds = []
         for each in res.json():
-            if each['locationId'] == str(self.locationId):
                 playerNames.append(each['playerName'])
                 playerIds.append(int(each['playerId']))
         return playerIds, playerNames
@@ -203,7 +202,7 @@ class RadarData:
         if not baseline:
             baseline = [0, 0, 0, 0, 0, 0]
         self._filePath = filePath
-        self.attempts = ["First", "Second", "Third", "Fourth", "Fifth"]
+        self.attempts = [str(i) for i in range(1, 50)]
         self._template = \
         """{{
             "attempt": {attempt},
@@ -217,17 +216,19 @@ class RadarData:
                 {{"axis": "Price per Saved Tanoak", "value": {sppo} }}
             ],
             "tableRows": [
-                {{"column": "Number of Dead Tanoaks", "value": {ndo} }},
+                {{"column": "Number of Dead Tanoaks", "value": \"{ndo}\" }},
                 {{"column": "Percentage of Dead Tanoaks", "value": {pdo} }},
                 {{"column": "Infected Area (ha)", "value": {ia} }},
-                {{"column": "Money Spent", "value": {ms} }},
-                {{"column": "Area Treated", "value": {at} }},
+                {{"column": "Money Spent", "value": \"{ms}\" }},
+                {{"column": "Area Treated (ha)", "value": {at} }},
                 {{"column": "Price per Saved Tanoak", "value": {ppo} }}
             ]
         }}"""
         scaled = {'sndo': 10, 'spdo': 10, 'sia': 10, 'sms': 0, 'sat': 0, 'sppo': 0}
-        table = {'ndo': baseline[0], 'pdo': baseline[1], 'ia': baseline[2],
-                 'ms': baseline[3], 'at': baseline[4], 'ppo': baseline[5]}
+        table = {'ndo': str(baseline[0])[:-3] + 'K', 'pdo': '{:2.1f}'.format(100 * baseline[1]), 'ia': baseline[2],
+                 'ms': baseline[3], 'at': '{:2.1f}'.format(baseline[4]/ 10000.),
+                 'ppo': '{:2.1f}'.format(baseline[5])}
+
         scaled.update(table)
         baseline = self._template.format(attempt='null', baseline='true', **scaled)
         self._data = [json.loads(baseline)]
@@ -265,11 +266,13 @@ class RadarData:
 
         scaled = {'sndo': radarValues[0], 'spdo': radarValues[1], 'sia': radarValues[2],
                   'sms': radarValues[3], 'sat': radarValues[4], 'sppo': radarValues[5]}
-        table = {'ndo': tableValues[0], 'pdo': tableValues[1], 'ia': tableValues[2],
-                 'ms': tableValues[3], 'at': tableValues[4], 'ppo': tableValues[5]}
+        table = {'ndo': str(tableValues[0])[:-3] + 'K', 'pdo': '{:2.1f}'.format(100 * tableValues[1]), 'ia': tableValues[2],
+                 'ms': str(int(tableValues[3]))[:-3] + 'K', 'at': '{:2.1f}'.format(tableValues[4] / 10000.),
+                 'ppo': '{:2.1f}'.format(tableValues[5])}
         scaled.update(table)
         data = self._template.format(attempt='"{a}"'.format(a=self.attempts[att_indx]),
                                      baseline='false', **scaled)
+        print data
         self._data.append(json.loads(data))
         self.save()
 

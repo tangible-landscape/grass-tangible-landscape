@@ -12,7 +12,7 @@ import grass.script as gscript
 from tangible_utils import get_environment
 
 HOST = ''   # Symbolic name, meaning all available interfaces
-PORT = 8888  # Arbitrary non-privileged port
+PORT = 8889  # Arbitrary non-privileged port
 #PORT_C = 8000
 
 TMP_DIR = '/tmp/'
@@ -46,26 +46,21 @@ print 'Socket now listening'
 connections = {}
 
 
-def run_baseline(region):
+def run_baseline(settings):
     model = 'sod-cpp'
     params = {}
-    params['output'] = 'baseline'
-    params['species'] = 'lide_den_int'
-    params['lvtree'] = 'all_den_int'
-    params['infected'] = 'inf_2016'
-    params['wind'] = 'NW'
-    params['start_time'] = 2000
-    params['end_time'] = 2010
     params['random_seed'] = 42
     params['spore_rate'] = 1.2
-    params['runs'] = 20
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
     #params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
     params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
     params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
-    env = get_environment(**region)
+    region = settings.pop('region')
+    region = region.split(',')
+    env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
+    params.update(settings)
     print 'computing baseline'
     gscript.run_command(model, overwrite=True, env=env, **params)
 
@@ -84,7 +79,7 @@ def run_model(settings):
     params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
     
     region = settings.pop('region')
-    region.split(',')
+    region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
     name = settings['output_series']
@@ -157,14 +152,15 @@ def clientGUI(conn, connections, event):
                     #connections['GUI'].sendall('info:last:' + names[-1])
             elif message[1] == 'baseline':
                  if len(message) == 3:  # additional parameters
-                    region = {}
-                    for each in message[2].split(','):
+                    params = {}
+                    for each in message[2].split('|'):
                         key, val = each.split('=')
+                        print each
                         try:
-                            region[key] = float(val)
+                            params[key] = float(val)
                         except ValueError:
-                            region[key] = val
-                    name = run_baseline(region)
+                            params[key] = val
+                    name = run_baseline(params)
                     pack_path = TMP_DIR + name + '.pack'
                     gscript.run_command('r.pack', input=name, output=pack_path, overwrite=True)
                     if 'GUI' in connections:
