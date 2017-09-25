@@ -6,6 +6,7 @@ import ssl
 from thread import start_new_thread
 from threading import Event
 import select
+import time
 
 import grass.script as gscript
 
@@ -77,7 +78,7 @@ def run_model(settings):
 #    params['port'] = 8000
     params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
     params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
-    
+
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
@@ -90,14 +91,37 @@ def run_model(settings):
     gscript.run_command('t.register', input=name, maps=names.split(','), start=2000, unit='years', increment=1, overwrite=True)
 
     return name
-    
+
+def run_model_nonblocking(settings):
+    model = 'sod-cpp'
+    params = {}
+    params['output_series'] = 'output'
+    params['random_seed'] = 42
+    params['nprocs'] = 10
+#    params['ip_address'] = 'localhost'
+#    params['port'] = 8000
+    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
+    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
+
+    region = settings.pop('region')
+    region = region.split(',')
+    env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
+    params.update(settings)
+#    name = settings['output_series']
+    p = gscript.start_command(model, overwrite=True, env=env, **params)
+#    #names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
+#    gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
+#                        title='SOD', description='SOD', overwrite=True)
+#    gscript.run_command('t.register', input=name, maps=names.split(','), start=2000, unit='years', increment=1, overwrite=True)
+
+    return p
 
 
 def clientGUI(conn, connections, event):
     # Sending message to connected client
     conn.sendall('Welcome to the server.\n')
     # have file list to be sent one after the other
-    fileQueue = []
+    sod_process = None
     # infinite loop so that function do not terminate and thread do not end.
     while True:
         # receiving from client
@@ -140,15 +164,17 @@ def clientGUI(conn, connections, event):
                         except ValueError:
                             params[key] = val
 #                if 'computation' not in connections:
-                name = run_model(params)
+#                name = run_model(params)
+                sod_process = run_model_nonblocking(params)
+                start_new_thread(checkOutput, (connections['GUI'], params['output_series'], sod_process, event))
                 # series
-                pack_path = TMP_DIR + params['output_series']
-                gscript.run_command('t.rast.export', input=name, output=pack_path, format='pack', quiet=True, overwrite=True)
+#                pack_path = TMP_DIR + params['output_series']
+#                gscript.run_command('t.rast.export', input=name, output=pack_path, format='pack', quiet=True, overwrite=True)
+#
+#                if 'GUI' in connections:
+#                    connections['GUI'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
 
-                if 'GUI' in connections:
-                    connections['GUI'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
-                
-                
+
                     #connections['GUI'].sendall('info:last:' + names[-1])
             elif message[1] == 'baseline':
                  if len(message) == 3:  # additional parameters
@@ -192,6 +218,31 @@ def clientGUI(conn, connections, event):
     conn.shutdown(socket.SHUT_WR)
     conn.close()
     del connections['GUI']
+
+
+def checkOutput(connection, basename, sod_process, event):
+    old_found = []
+    event.set()
+    while sod_process.poll() is None:
+        time.sleep(0.1)
+        found = gscript.list_grouped(type='raster', pattern=basename + '_*')[gscript.gisenv()['MAPSET']]
+        for each in found:
+            if each not in old_found:
+                event.wait(2000)
+                pack_path = TMP_DIR + each + '.pack'
+                gscript.run_command('r.pack', input=each, output=pack_path, overwrite=True)
+                event.clear()
+                connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+                old_found.append(each)
+    sod_process.wait()
+    sod_process = None
+    pack_path = TMP_DIR + basename + '.pack'
+    gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
+    event.wait(2000)
+    event.clear()
+    connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+    event.wait(2000)
+    connection.sendall('info:last:' + basename)
 
 
 def clientComputation(conn, connections, event):

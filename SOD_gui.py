@@ -68,7 +68,6 @@ class SODPanel(wx.Panel):
 
         self.profileFrame = self.dashboardFrame = self.timeDisplay = None
 
-        self.maxTrees = 0  # how many max trees in cells we have for setting right color table
         self.treated_area = 0
         self.money_spent = 0
         self.price_per_m2 = 1.24
@@ -165,6 +164,7 @@ class SODPanel(wx.Panel):
                     self.configuration = json.load(f)
                     # this should reset the analysis file only when configuration is successfully loaded
                     self.settings['analyses']['file'] = ''
+                    self.speed = int(self.configuration['SOD']['animation_speed'])
             except IOError:
                 self.configFile = None
 
@@ -322,12 +322,16 @@ class SODPanel(wx.Panel):
                     evt = ProcessBaseline(result='baseline')
                     wx.PostEvent(self, evt)
                 else:
-                    gscript.run_command('t.rast.import', input=new_path, output=os.path.basename(path) + '_imported', quiet=True, overwrite=True)
-                    maps = gscript.read_command('t.rast.list', method='comma', input=os.path.basename(path) + '_imported').strip()
-                    for each in maps.split(','):
-                        resultsToDisplay.put(each)
-                    evt = ProcessForDashboardEvent(result=each)
-                    wx.PostEvent(self, evt)
+                    #gscript.run_command('t.rast.import', input=new_path, output=os.path.basename(path) + '_imported', quiet=True, overwrite=True)
+                    #maps = gscript.read_command('t.rast.list', method='comma', input=os.path.basename(path) + '_imported').strip()
+                    #for each in maps.split(','):
+                    #    resultsToDisplay.put(each)
+                    #evt = ProcessForDashboardEvent(result=each)
+                    #wx.PostEvent(self, evt)
+                    gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
+                    name = os.path.basename(path).strip('.pack')
+                    resultsToDisplay.put(name)
+                    print 'display'
 
                 ##########
             elif message[0] == 'info':
@@ -371,11 +375,6 @@ class SODPanel(wx.Panel):
         all_trees_treated = self.configuration['SOD']['all_trees_treated']
         inf_treated = self.configuration['SOD']['infected_treated']
         env = get_environment(raster=studyArea, align=species)
-
-        # get max trees possible infected (actually 90prct)
-        if not self.maxTrees:
-            univar = gscript.parse_command('r.univar', map=species, flags='eg', percentile=99, env=env)
-            self.maxTrees = float(univar['percentile_99'])
 
         gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
         maxvalue = gscript.raster_info(treatments_resampled)['max']
@@ -444,7 +443,8 @@ class SODPanel(wx.Panel):
     def _displayResult(self, event):
         if not self.resultsToDisplay.empty():
             name = self.resultsToDisplay.get()
-            gscript.write_command('r.colors', map=name, rules='-', stdin=self.GetInfColorTable(), quiet=True)
+            gscript.run_command('r.colors', map=name, quiet=True,
+                                rules=os.path.join(self.configuration['taskDir'], self.configuration['SOD']['color_trees']))
             cmd = ['d.rast','values=0', 'flags=i', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             self.scaniface.postEvent(self.scaniface, evt)
@@ -529,10 +529,6 @@ class SODPanel(wx.Panel):
         all_trees = self.configuration['SOD']['all_trees']
         species = self.configuration['SOD']['species']
         infoAllTrees = gscript.parse_command('r.univar', map=all_trees, flags='g', env=env)
-        # get max trees possible infected (actually 90prct)
-        if not self.maxTrees:
-            univar = gscript.parse_command('r.univar', map=species, flags='eg', env=env)
-            self.maxTrees = float(univar['percentile_90'])
 
         n_dead = float(infoBaseline['sum'])
         n_all_trees = float(infoAllTrees['sum'])
@@ -778,15 +774,6 @@ class SODPanel(wx.Panel):
         self.RemoveAllResultsLayers()
         for name in all_layers:
             self.resultsToDisplay.put(name)
-
-    def GetInfColorTable(self):
-        color = ['0 200:200:200',
-                 '{} yellow'.format(0.5 * self.maxTrees),
-                 '{} orange'.format(0.7 * self.maxTrees),
-                 '{} red'.format(0.8 * self.maxTrees),
-                 '{} 200:0:0'.format(self.maxTrees),
-                 '{} 0:0:0'.format(2 * self.maxTrees)]
-        return '\n'.join(color)
 
     def StartDisplay(self):
         multiple = False if 'multiple' not in self.configuration['tasks'][self.current]['display'] else self.configuration['tasks'][self.current]['display']['multiple']
