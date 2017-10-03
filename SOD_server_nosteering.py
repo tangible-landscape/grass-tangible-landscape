@@ -13,7 +13,7 @@ import grass.script as gscript
 from tangible_utils import get_environment
 
 HOST = ''   # Symbolic name, meaning all available interfaces
-PORT = 8889  # Arbitrary non-privileged port
+PORT = 8888  # Arbitrary non-privileged port
 #PORT_C = 8000
 
 TMP_DIR = '/tmp/'
@@ -51,7 +51,6 @@ def run_baseline(settings):
     model = 'sod-cpp'
     params = {}
     params['random_seed'] = 42
-    params['spore_rate'] = 1.2
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
@@ -84,7 +83,7 @@ def run_model(settings):
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
     name = settings['output_series']
-    gscript.run_command(model, overwrite=True, env=env, **params)
+    gscript.run_command(model, overwrite=True, flags='l', env=env, **params)
     names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
     gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
                         title='SOD', description='SOD', overwrite=True)
@@ -108,7 +107,7 @@ def run_model_nonblocking(settings):
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
 #    name = settings['output_series']
-    p = gscript.start_command(model, overwrite=True, env=env, **params)
+    p = gscript.start_command(model, overwrite=True, flags='l', env=env, **params)
 #    #names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
 #    gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
 #                        title='SOD', description='SOD', overwrite=True)
@@ -226,6 +225,7 @@ def checkOutput(connection, basename, sod_process, event):
     while sod_process.poll() is None:
         time.sleep(0.1)
         found = gscript.list_grouped(type='raster', pattern=basename + '_*')[gscript.gisenv()['MAPSET']]
+        last = found[-1]
         for each in found:
             if each not in old_found:
                 event.wait(2000)
@@ -236,13 +236,13 @@ def checkOutput(connection, basename, sod_process, event):
                 old_found.append(each)
     sod_process.wait()
     sod_process = None
-    pack_path = TMP_DIR + basename + '.pack'
-    gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
+#    pack_path = TMP_DIR + basename + '.pack'
+#    gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
+#    event.wait(2000)
+#    event.clear()
+#    connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
     event.wait(2000)
-    event.clear()
-    connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
-    event.wait(2000)
-    connection.sendall('info:last:' + basename)
+    connection.sendall('info:last:' + last)
 
 
 def clientComputation(conn, connections, event):

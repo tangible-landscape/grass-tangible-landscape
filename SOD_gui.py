@@ -59,6 +59,7 @@ class SODPanel(wx.Panel):
         self.current = 0
         self.baselineEnv = None
         self._currentlyRunning = False
+        self.switchCurrentResult = 0
 
         self.dashboard = DashBoardRequests()
         self.radarBaseline = None
@@ -340,11 +341,58 @@ class SODPanel(wx.Panel):
                     evt = ProcessForDashboardEvent(result=name)
                     wx.PostEvent(self, evt)
 
-    def RunAnimation(self, event=None):
+    def ShowResults(self, event=None):
+        # clear the queue to stop animation
+        with self.resultsToDisplay.mutex:
+            self.resultsToDisplay.queue.clear()
+
+        if self.switchCurrentResult == 0:
+            self.ShowAnimation()
+        elif self.switchCurrentResult == 1:
+            self.ShowProbability()
+        elif self.switchCurrentResult == 2:
+            self.RemoveAllResultsLayers()
+
+        self.switchCurrentResult += 1
+        if self.switchCurrentResult >= 3:
+            self.switchCurrentResult = 0
+
+    def ShowAnimation(self, event=None):
         event = self.eventsCtrl.GetStringSelection()
         name = self.playersCtrl.GetStringSelection()
         attempt = self.attemptCtrl.GetStringSelection()
         self.AddLayersAsAnimation(etype='raster', pattern="{n}_{a}_{e}_*".format(n=name, e=event, a=attempt))
+
+    def ShowProbability(self, event=None):
+        event = self.eventsCtrl.GetStringSelection()
+        name = self.playersCtrl.GetStringSelection()
+        attempt = self.attemptCtrl.GetStringSelection()
+        name = self.configuration['SOD']['probability'] + '_' + name + '_' + attempt + '_' + event
+
+        gscript.run_command('r.colors', map=name, quiet=True,
+                            rules=os.path.join(self.configuration['taskDir'], self.configuration['SOD']['color_probability']))
+        cmd = ['d.rast','values=0-10', 'flags=i', 'map={}'.format(name)]
+        self.RemoveAllResultsLayers()
+        self.ShowTreatment()
+        ll = self.giface.GetLayerList()
+        ll.AddLayer('raster', name=name, checked=True, opacity=1, cmd=cmd)
+
+    def ShowTreatment(self, event=None):
+        event = self.eventsCtrl.GetStringSelection()
+        name = self.playersCtrl.GetStringSelection()
+        attempt = self.attemptCtrl.GetStringSelection()
+        name = self.configuration['SOD']['treatments'] + '_' + name + '_' + attempt + '_' + event
+
+        env = get_environment(raster=name)
+        gscript.run_command('r.to.vect', flags='st', input=name, output=name, type='area', env=env)
+        gscript.run_command('v.generalize', input=name, output=name + '_gen', method='snakes', threshold=10, env=env)
+        cmd = ['d.vect', 'map={}'.format(name + '_gen'), 'color=none', 'fill_color=144:238:144']
+        ll = self.giface.GetLayerList()
+        ll.AddLayer('vector', name=name + '_gen', checked=True, opacity=1, cmd=cmd)
+
+    def _RunSimulation(self, event=None):
+        print '_runSimulation'
+        wx.FutureCall(self.configuration['SOD']['waitBeforeRun'], self.RunSimulation)
 
     def RunSimulation(self, event=None):
         print 'run simulation'
@@ -374,6 +422,7 @@ class SODPanel(wx.Panel):
         all_trees = self.configuration['SOD']['all_trees']
         all_trees_treated = self.configuration['SOD']['all_trees_treated']
         inf_treated = self.configuration['SOD']['infected_treated']
+        probability = self.configuration['SOD']['probability']
         env = get_environment(raster=studyArea, align=species)
 
         gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
@@ -413,6 +462,7 @@ class SODPanel(wx.Panel):
             self.attemptCtrl.SetStringSelection(new_attempt)
 
         postfix = playerName + '_' + new_attempt + '_' + self.eventsByIds[eventId]
+        probability = probability + '_' + postfix
         # todo, save treatments
         gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix], env=env)
         extent = gscript.raster_info(studyArea)
@@ -422,8 +472,8 @@ class SODPanel(wx.Panel):
         message = 'cmd:start'
         message += ':output_series={}'.format(postfix)
         message += '|region={}'.format(region)
-        message += '|output={}'.format(postfix)
         message += '|species={}'.format(species_treated)
+        message += '|probability={}'.format(probability)
         message += '|lvtree={}'.format(all_trees_treated)
         message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
         message += '|end_time={}'.format(self.configuration['SOD']['end_time'])
@@ -431,6 +481,9 @@ class SODPanel(wx.Panel):
         message += '|wind={}'.format(self.configuration['SOD']['wind'])
         message += '|infected={}'.format(self.configuration['SOD']['infected'])
         message += '|runs={}'.format(self.configuration['SOD']['runs'])
+
+        self.RemoveAllResultsLayers()
+
         self.socket.sendall(message)
 
     def _run(self):
@@ -467,6 +520,7 @@ class SODPanel(wx.Panel):
         message = 'cmd:baseline'
         message += ':region={}'.format(region)
         message += '|output={}'.format(self.configuration['SOD']['baseline'])
+        message += '|probability={}'.format(self.configuration['SOD']['baseline_probability'])
         message += '|species={}'.format(self.configuration['SOD']['species'])
         message += '|lvtree={}'.format(self.configuration['SOD']['all_trees'])
         message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
@@ -543,14 +597,14 @@ class SODPanel(wx.Panel):
         treated = 0
         price_per_tree = 0
 
+        gscript.run_command('r.colors', map=event.result, quiet=True,
+                            rules=os.path.join(self.configuration['taskDir'], self.configuration['SOD']['color_trees']))
         self.baselineValues = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
         path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
-        if not self.radarBaseline:
-            self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
+        self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
         self.dashboard.post_baseline_radar(path)
         path = os.path.join(self.configuration['logDir'], 'barBaseline.json')
-        if not self.barBaseline:
-            self.barBaseline = BarData(filePath=path, baseline=self.baselineValues)
+        self.barBaseline = BarData(filePath=path, baseline=self.baselineValues)
         self.dashboard.post_baseline_bar(path)
         self.infoBar.Dismiss()
 
@@ -584,8 +638,8 @@ class SODPanel(wx.Panel):
         max_money = 10000000.
         money_scaled = round(min(10 * record[3] / max_money, 10))
         treated_scaled = round(min(10 * record[4] / (max_money / 1.24), 10))
-        # $5 max?
-        price_per_tree_scaled = round(min(10 * record[5] / 5, 10))
+        # $50 max?
+        price_per_tree_scaled = round(max(min(10 * record[5] / 50, 10), 0))
         radarValues = [n_dead_scaled, perc_dead_scaled, infected_scaled, money_scaled, treated_scaled, price_per_tree_scaled]
 
         path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
@@ -601,6 +655,7 @@ class SODPanel(wx.Panel):
         self.dashboard.post_data_bar(jsonfile=path, eventId=self.dashboard.get_current_event())
         self.infoBar.Dismiss()
         self._currentlyRunning = False
+        self.switchCurrentResult = 1
         #print 'remove layers'
 #        # TODO remove all layers
 
@@ -700,26 +755,26 @@ class SODPanel(wx.Panel):
             if 'simulate' in self.configuration['keyboard_events']:
                 simulateId = wx.NewId()
                 items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['simulate'], simulateId))
-                topParent.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+                topParent.Bind(wx.EVT_MENU, self._RunSimulation, id=simulateId)
             if 'animate' in self.configuration['keyboard_events']:
                 animateId = wx.NewId()
                 items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['animate'], animateId))
-                topParent.Bind(wx.EVT_MENU, self.RunAnimation, id=animateId)
+                topParent.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
             accel_tbl = wx.AcceleratorTable(items)
             topParent.SetAcceleratorTable(accel_tbl)
             # Map displays
             for mapw in self.giface.GetAllMapDisplays():
                 if simulateId:
-                    mapw.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+                    mapw.Bind(wx.EVT_MENU, self._RunSimulation, id=simulateId)
                 if animateId:
-                    mapw.Bind(wx.EVT_MENU, self.RunAnimation, id=animateId)
+                    mapw.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
                 mapw.SetAcceleratorTable(accel_tbl)
             # Layer Manager
             lm = self.giface.lmgr
             if simulateId:
-                lm.Bind(wx.EVT_MENU, self.RunSimulation, id=simulateId)
+                lm.Bind(wx.EVT_MENU, self._RunSimulation, id=simulateId)
             if animateId:
-                lm.Bind(wx.EVT_MENU, self.RunAnimation, id=animateId)
+                lm.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
             lm.SetAcceleratorTable(accel_tbl)
 
     def LoadLayers(self, zoomToLayers=True):
@@ -736,6 +791,9 @@ class SODPanel(wx.Panel):
                     zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
+                            opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.labels':
+                ll.AddLayer('labels', name=cmd[1].split('=')[1], checked=True,
                             opacity=opacity, cmd=cmd)
             else:
                 ll.AddLayer('command', name=' '.join(cmd), checked=True,
@@ -772,6 +830,7 @@ class SODPanel(wx.Panel):
             all_layers += layers
 
         self.RemoveAllResultsLayers()
+        self.ShowTreatment()
         for name in all_layers:
             self.resultsToDisplay.put(name)
 

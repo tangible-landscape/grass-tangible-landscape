@@ -47,7 +47,7 @@ class DashBoardRequests:
         playerIds = []
         for each in res.json():
                 playerNames.append(each['playerName'])
-                playerIds.append(int(each['playerId']))
+                playerIds.append(each['playerId'])
         return playerIds, playerNames
 
     def get_current_player(self):
@@ -55,7 +55,7 @@ class DashBoardRequests:
         if res.status_code == 404:
             return None, None
         data = res.json()
-        return int(data[0]['playerId']), data[0]['playerName']
+        return data[0]['playerId'], data[0]['playerName']
 
     def get_data_barJson(self, eventId):
         try:
@@ -156,7 +156,7 @@ class DashBoardRequests:
     def _post_data_radar(self, jsonfile, eventId, playerId):
         post_data = {'file': open(jsonfile, 'rb')}
         res = requests.post(self.root + '/charts/radar', files=post_data,
-                            data={"locationId": self.locationId, "eventId": eventId, 'playerId': int(playerId)})
+                            data={"locationId": self.locationId, "eventId": eventId, 'playerId': playerId})
         res.raise_for_status()
         return res.json()['id']
 
@@ -213,7 +213,7 @@ class RadarData:
                 {{"axis": "Infected Area (ha)", "value": {sia} }},
                 {{"axis": "Money Spent", "value": {sms} }},
                 {{"axis": "Area Treated", "value": {sat} }},
-                {{"axis": "Price per Saved Tanoak", "value": {sppo} }}
+                {{"axis": "Price per Protected Tanoak", "value": {sppo} }}
             ],
             "tableRows": [
                 {{"column": "Number of Dead Tanoaks", "value": \"{ndo}\" }},
@@ -221,7 +221,7 @@ class RadarData:
                 {{"column": "Infected Area (ha)", "value": {ia} }},
                 {{"column": "Money Spent", "value": \"{ms}\" }},
                 {{"column": "Area Treated (ha)", "value": {at} }},
-                {{"column": "Price per Saved Tanoak", "value": {ppo} }}
+                {{"column": "Price per Protected Tanoak", "value": {ppo} }}
             ]
         }}"""
         scaled = {'sndo': 10, 'spdo': 10, 'sia': 10, 'sms': 0, 'sat': 0, 'sppo': 0}
@@ -300,42 +300,42 @@ class BarData:
                 "axis": "Number of Dead Tanoaks",
                 "options": False,
                 "values": [
-                    {"value": baseline[0], "playerName": "Baseline", "attempt": ""}
+                    {"value": baseline[0], "playerName": "No treatment", "attempt": ""}
                 ]
             },
             {
                 "axis": "Percentage of Dead Tanoaks",
                 "options": False,
                 "values": [
-                    {"value": baseline[1], "playerName": "Baseline", "attempt": ""}
+                    {"value": baseline[1], "playerName": "No treatment", "attempt": ""}
                 ]
             },
             {
                 "axis": "Infected Area (ha)",
                 "options": False,
                 "values": [
-                    {"value": baseline[2], "playerName": "Baseline", "attempt": ""}
+                    {"value": baseline[2], "playerName": "No treatment", "attempt": ""}
                 ]
             },
             {
                 "axis": "Money Spent",
                 "options": {"money": True},
                 "values": [
-                    {"value": baseline[3], "playerName": "Baseline", "attempt": ""}
+                    {"value": baseline[3], "playerName": "No treatment", "attempt": ""}
                 ]
             },
             {
                 "axis": "Area Treated (ha)",
                 "options": False,
                 "values": [
-                    {"value": baseline[4], "playerName": "Baseline", "attempt": ""}
+                    {"value": baseline[4], "playerName": "No treatment", "attempt": ""}
                 ]
             },
             {
-                "axis": "Price per Saved Tanoak",
+                "axis": "Price per Protected Tanoak",
                 "options": {"negative": True},
                 "values": [
-                    {"value": baseline[5], "playerName": "Baseline", "attempt": ""}
+                    {"value": baseline[5], "playerName": "No treatment", "attempt": ""}
                 ]
             }
         ]
