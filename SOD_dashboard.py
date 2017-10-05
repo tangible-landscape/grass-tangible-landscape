@@ -208,16 +208,16 @@ class RadarData:
             "attempt": {attempt},
             "baseline": {baseline},
             "data": [
-                {{"axis": "Number of Dead Tanoaks", "value": {sndo} }},
-                {{"axis": "Percentage of Dead Tanoaks", "value": {spdo} }},
+                {{"axis": "Number of Infected Tanoaks", "value": {sndo} }},
+                {{"axis": "Percentage of Infected Tanoaks", "value": {spdo} }},
                 {{"axis": "Infected Area (ha)", "value": {sia} }},
                 {{"axis": "Money Spent", "value": {sms} }},
                 {{"axis": "Area Treated", "value": {sat} }},
                 {{"axis": "Price per Protected Tanoak", "value": {sppo} }}
             ],
             "tableRows": [
-                {{"column": "Number of Dead Tanoaks", "value": \"{ndo}\" }},
-                {{"column": "Percentage of Dead Tanoaks", "value": {pdo} }},
+                {{"column": "Number of Infected Tanoaks", "value": \"{ndo}\" }},
+                {{"column": "Percentage of Infected Tanoaks", "value": {pdo} }},
                 {{"column": "Infected Area (ha)", "value": {ia} }},
                 {{"column": "Money Spent", "value": \"{ms}\" }},
                 {{"column": "Area Treated (ha)", "value": {at} }},
@@ -297,14 +297,14 @@ class BarData:
         self._data = \
         [
             {
-                "axis": "Number of Dead Tanoaks",
+                "axis": "Number of Infected Tanoaks",
                 "options": False,
                 "values": [
                     {"value": baseline[0], "playerName": "No treatment", "attempt": ""}
                 ]
             },
             {
-                "axis": "Percentage of Dead Tanoaks",
+                "axis": "Percentage of Infected Tanoaks",
                 "options": False,
                 "values": [
                     {"value": baseline[1], "playerName": "No treatment", "attempt": ""}

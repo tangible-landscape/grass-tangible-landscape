@@ -60,6 +60,7 @@ class SODPanel(wx.Panel):
         self.baselineEnv = None
         self._currentlyRunning = False
         self.switchCurrentResult = 0
+        self.showDisplayChange = True
 
         self.dashboard = DashBoardRequests()
         self.radarBaseline = None
@@ -248,7 +249,8 @@ class SODPanel(wx.Panel):
     def OnDisplayUpdate(self, event):
         if not self.dashboardFrame:
             return
-        self.dashboardFrame.show_value(event.value)
+        if self.showDisplayChange:
+            self.dashboardFrame.show_value(event.value)
 
     def OnTimeDisplayUpdate(self, event):
         if not self.timeDisplay:
@@ -352,6 +354,7 @@ class SODPanel(wx.Panel):
             self.ShowProbability()
         elif self.switchCurrentResult == 2:
             self.RemoveAllResultsLayers()
+            self.showDisplayChange = True
 
         self.switchCurrentResult += 1
         if self.switchCurrentResult >= 3:
@@ -392,7 +395,9 @@ class SODPanel(wx.Panel):
 
     def _RunSimulation(self, event=None):
         print '_runSimulation'
-        wx.FutureCall(self.configuration['SOD']['waitBeforeRun'], self.RunSimulation)
+        if self.switchCurrentResult == 0:
+            #it's allowed to interact now
+            wx.FutureCall(self.configuration['SOD']['waitBeforeRun'], self.RunSimulation)
 
     def RunSimulation(self, event=None):
         print 'run simulation'
@@ -406,6 +411,8 @@ class SODPanel(wx.Panel):
 
         if self._currentlyRunning:
             return
+
+        self.showDisplayChange = False
 
         self._currentlyRunning = True
         self.infoBar.ShowMessage("Processing...")
@@ -477,6 +484,7 @@ class SODPanel(wx.Panel):
         message += '|lvtree={}'.format(all_trees_treated)
         message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
         message += '|end_time={}'.format(self.configuration['SOD']['end_time'])
+        message += '|kappa={}'.format(self.configuration['SOD']['kappa'])
         message += '|spore_rate={}'.format(self.configuration['SOD']['spore_rate'])
         message += '|wind={}'.format(self.configuration['SOD']['wind'])
         message += '|infected={}'.format(self.configuration['SOD']['infected'])
@@ -526,6 +534,7 @@ class SODPanel(wx.Panel):
         message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
         message += '|end_time={}'.format(self.configuration['SOD']['end_time'])
         message += '|spore_rate={}'.format(self.configuration['SOD']['spore_rate'])
+        message += '|kappa={}'.format(self.configuration['SOD']['kappa'])
         message += '|wind={}'.format(self.configuration['SOD']['wind'])
         message += '|infected={}'.format(self.configuration['SOD']['infected'])
         message += '|runs={}'.format(self.configuration['SOD']['runs_baseline'])
@@ -580,13 +589,12 @@ class SODPanel(wx.Panel):
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         infoBaseline = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        all_trees = self.configuration['SOD']['all_trees']
         species = self.configuration['SOD']['species']
-        infoAllTrees = gscript.parse_command('r.univar', map=all_trees, flags='g', env=env)
+        infoAllTanoaks = gscript.parse_command('r.univar', map=species, flags='g', env=env)
 
         n_dead = float(infoBaseline['sum'])
-        n_all_trees = float(infoAllTrees['sum'])
-        perc_dead = n_dead / n_all_trees
+        n_all_tanoaks = float(infoAllTanoaks['sum'])
+        perc_dead = n_dead / n_all_tanoaks
         counts = gscript.read_command('r.stats', flags='c', input=event.result, env=env).strip().splitlines()
         zero, cnts = counts[0].split(' ')
         if zero == '0':
@@ -615,11 +623,11 @@ class SODPanel(wx.Panel):
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         info = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        all_trees = self.configuration['SOD']['all_trees']
-        infoAllTrees = gscript.parse_command('r.univar', map=all_trees, flags='g', env=env)
+        all_tanoaks = self.configuration['SOD']['species']
+        infoAllTanoaks = gscript.parse_command('r.univar', map=all_tanoaks, flags='g', env=env)
         n_dead = float(info['sum'])
-        n_all_trees = float(infoAllTrees['sum'])
-        perc_dead = n_dead / n_all_trees
+        n_all_tanoaks = float(infoAllTanoaks['sum'])
+        perc_dead = n_dead / n_all_tanoaks
         counts = gscript.read_command('r.stats', flags='c', input=event.result, env=env).strip().splitlines()
         zero, cnts = counts[0].split(' ')
         if zero == '0':
@@ -688,6 +696,7 @@ class SODPanel(wx.Panel):
         self.scaniface.changedInput = True
 
     def StartTreatment(self):
+        self.showDisplayChange = True
         self.scaniface.additionalParams4Analyses = {}
         self.LoadLayers()
         treatmentRaster = self.treatmentSelect.GetValue()

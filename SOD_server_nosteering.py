@@ -55,8 +55,8 @@ def run_baseline(settings):
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
     #params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
-    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
-    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
+    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file_future.txt'
+    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file_future.txt'
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
@@ -75,8 +75,8 @@ def run_model(settings):
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
-    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
-    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
+    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file_future.txt'
+    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file_future.txt'
 
     region = settings.pop('region')
     region = region.split(',')
@@ -99,8 +99,8 @@ def run_model_nonblocking(settings):
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
-    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file.txt'
-    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file.txt'
+    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file_future.txt'
+    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file_future.txt'
 
     region = settings.pop('region')
     region = region.split(',')
