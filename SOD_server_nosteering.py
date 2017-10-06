@@ -236,11 +236,11 @@ def checkOutput(connection, basename, sod_process, event):
                 old_found.append(each)
     sod_process.wait()
     sod_process = None
-#    pack_path = TMP_DIR + basename + '.pack'
-#    gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
-#    event.wait(2000)
-#    event.clear()
-#    connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+    pack_path = TMP_DIR + basename + '.pack'
+    gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
+    event.wait(2000)
+    event.clear()
+    connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
     event.wait(2000)
     connection.sendall('info:last:' + last)
 

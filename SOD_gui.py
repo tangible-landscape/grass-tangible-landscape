@@ -61,6 +61,7 @@ class SODPanel(wx.Panel):
         self._currentlyRunning = False
         self.switchCurrentResult = 0
         self.showDisplayChange = True
+        self.lastRecordedTreatment = ''
 
         self.dashboard = DashBoardRequests()
         self.radarBaseline = None
@@ -333,8 +334,10 @@ class SODPanel(wx.Panel):
                     #wx.PostEvent(self, evt)
                     gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
                     name = os.path.basename(path).strip('.pack')
-                    resultsToDisplay.put(name)
-                    print 'display'
+                    # avoid showing aggregate result
+                    if len(name.split('_')) == 6:
+                        resultsToDisplay.put(name)
+                        print 'display'
 
                 ##########
             elif message[0] == 'info':
@@ -397,6 +400,8 @@ class SODPanel(wx.Panel):
         print '_runSimulation'
         if self.switchCurrentResult == 0:
             #it's allowed to interact now
+            # just to be sure remove results
+            self.RemoveAllResultsLayers()
             wx.FutureCall(self.configuration['SOD']['waitBeforeRun'], self.RunSimulation)
 
     def RunSimulation(self, event=None):
@@ -472,12 +477,14 @@ class SODPanel(wx.Panel):
         probability = probability + '_' + postfix
         # todo, save treatments
         gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix], env=env)
+        self.lastRecordedTreatment = treatments + '_' + postfix
         extent = gscript.raster_info(studyArea)
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
                                               w=extent['west'], e=extent['east'], a=species)
         # run simulation
         message = 'cmd:start'
         message += ':output_series={}'.format(postfix)
+        message += '|output={}'.format(postfix)
         message += '|region={}'.format(region)
         message += '|species={}'.format(species_treated)
         message += '|probability={}'.format(probability)
@@ -636,7 +643,12 @@ class SODPanel(wx.Panel):
             infected_cells = int(info['n'])
         money = self.money_spent
         treated = self.treated_area
-        price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead)
+
+
+        data = gscript.read_command('r.univar', flags='gt', map=all_tanoaks, zones=self.lastRecordedTreatment).strip().splitlines()[-1].split('|')
+        culled_trees = int(data[-1])
+        print 'culled_trees', culled_trees
+        price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead - culled_trees)
 
         record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
         # scaling radar values
@@ -697,6 +709,7 @@ class SODPanel(wx.Panel):
 
     def StartTreatment(self):
         self.showDisplayChange = True
+        self.switchCurrentResult = 0
         self.scaniface.additionalParams4Analyses = {}
         self.LoadLayers()
         treatmentRaster = self.treatmentSelect.GetValue()
