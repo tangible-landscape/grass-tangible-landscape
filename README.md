@@ -51,6 +51,10 @@ Manual installation:
 
         g.gui.tangible
     
-![Tangible Landscape plugin](https://github.com/ncsu-osgeorel/grass-tangible-landscape/blob/master/tangible_landscape_dialog.png "Tangible Landscape plugin")
+![Tangible Landscape plugin](https://github.com/tangible-landscape/grass-tangible-landscape/wiki/img/plugin/scanning_tab.png "Tangible Landscape plugin")
 
+Authors
+--------
+Anna Petrasova (lead developer), Vaclav Petras, Payam Tabrizian, Brendan Harmon, Helena Mitasova
 
+NCSU GeoForAll Laboratory
