@@ -480,7 +480,6 @@ def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSup
     classification = 'tmp_classification'
     filtered_classification = 'tmp_filtered_classification'
     reject = 'tmp_reject'
-    tmp_new = 'tmp_' + new
     if useSuperPixels:
         try:
             gcore.run_command('i.superpixels.slic', group=group, output=segment, compactness=compactness,
@@ -498,5 +497,4 @@ def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSup
     grast.mapcalc('{new} = if({classif} < {thres}, {classif}, null())'.format(new=filtered_classification,
                                                                               classif=classification, thres=percentile), env=env)
     segments = segment if useSuperPixels else segment_clump
-    gcore.run_command('r.stats.quantile', base=segments, cover=filtered_classification, output=tmp_new, env=env)
-    grast.mapcalc('{new} = int({old})'.format(new=new, old=tmp_new), env=env)
+    gcore.run_command('r.mode', base=segments, cover=filtered_classification, output=new, env=env)
