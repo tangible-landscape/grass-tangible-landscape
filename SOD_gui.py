@@ -308,6 +308,8 @@ class SODPanel(wx.Panel):
                 self.socket.sendall(data)
                 data = self.socket.recv(1024)
                 total_received = len(data)
+                if not os.path.exists(TMP_DIR):
+                    os.mkdir(TMP_DIR)
                 new_path = os.path.join(TMP_DIR, os.path.basename(path))
                 f = open(new_path, 'wb')
                 f.write(data)
@@ -335,7 +337,7 @@ class SODPanel(wx.Panel):
                     gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
                     name = os.path.basename(path).strip('.pack')
                     # avoid showing aggregate result
-                    if len(name.split('_')) == 6:
+                    if len(name.split('_')) == 6 or len(name.split('_')) == 7:
                         resultsToDisplay.put(name)
                         print 'display'
 
@@ -655,7 +657,7 @@ class SODPanel(wx.Panel):
         n_dead_scaled = round(min(10 * n_dead / float(self.baselineValues[0]), 10))
         perc_dead_scaled = round(min(10 * perc_dead / float(self.baselineValues[1]), 10))
         infected_scaled = round(min(10 * record[2] / float(self.baselineValues[2]), 10))
-        max_money = 10000000.
+        max_money = 5000000.
         money_scaled = round(min(10 * record[3] / max_money, 10))
         treated_scaled = round(min(10 * record[4] / (max_money / 1.24), 10))
         # $50 max?

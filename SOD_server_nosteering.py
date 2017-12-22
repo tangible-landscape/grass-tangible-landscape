@@ -50,7 +50,6 @@ connections = {}
 def run_baseline(settings):
     model = 'sod-cpp'
     params = {}
-    params['random_seed'] = 42
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
@@ -62,7 +61,7 @@ def run_baseline(settings):
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
     print 'computing baseline'
-    gscript.run_command(model, overwrite=True, env=env, **params)
+    gscript.run_command(model, overwrite=True, flags='s', env=env, **params)
 
     return params['output']
 
@@ -95,7 +94,6 @@ def run_model_nonblocking(settings):
     model = 'sod-cpp'
     params = {}
     params['output_series'] = 'output'
-    params['random_seed'] = 42
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
@@ -107,7 +105,7 @@ def run_model_nonblocking(settings):
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
 #    name = settings['output_series']
-    p = gscript.start_command(model, overwrite=True, flags='l', env=env, **params)
+    p = gscript.start_command(model, overwrite=True, flags='ls', env=env, **params)
 #    #names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
 #    gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
 #                        title='SOD', description='SOD', overwrite=True)
@@ -225,7 +223,6 @@ def checkOutput(connection, basename, sod_process, event):
     while sod_process.poll() is None:
         time.sleep(0.1)
         found = gscript.list_grouped(type='raster', pattern=basename + '_*')[gscript.gisenv()['MAPSET']]
-        last = found[-1]
         for each in found:
             if each not in old_found:
                 event.wait(2000)
@@ -242,7 +239,7 @@ def checkOutput(connection, basename, sod_process, event):
     event.clear()
     connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
     event.wait(2000)
-    connection.sendall('info:last:' + last)
+    connection.sendall('info:last:' + basename)
 
 
 def clientComputation(conn, connections, event):
