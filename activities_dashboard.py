@@ -48,7 +48,7 @@ class DashboardFrame(wx.Frame):
 
 
 class MultipleDashboardFrame(wx.Frame):
-    def __init__(self, parent, fontsize, average, maximum, title, formatting_string):
+    def __init__(self, parent, fontsize, average, maximum, title, formatting_string, vertical=False):
         wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         # TODO: average not used yet here
 
@@ -59,20 +59,36 @@ class MultipleDashboardFrame(wx.Frame):
         self.labels = []
         self.titles = []
         self.gauges = []
-        self.sizer = wx.GridBagSizer(5, 5)
+        if vertical:
+            self.sizer = wx.BoxSizer(wx.VERTICAL)
+        else:
+            self.sizer = wx.GridBagSizer(5, 5)
         for i in range(len(self.list_title)):
-            self.titles.append(wx.StaticText(self, label=self.list_title[i], style=wx.ALIGN_CENTRE))
-            self.labels.append(wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL))
+            if vertical:
+                self.titles.append(wx.StaticText(self, label=self.list_title[i] + ':', style=wx.ALIGN_LEFT))
+                self.labels.append(wx.StaticText(self, style=wx.ALIGN_RIGHT))
+            else:
+                self.titles.append(wx.StaticText(self, label=self.list_title[i], style=wx.ALIGN_CENTER))
+                self.labels.append(wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL))
             self.gauges.append(wx.Gauge(self, range=self.list_maximum[i], style=wx.GA_VERTICAL))
             self.gauges[i].SetBackgroundColour(wx.WHITE)
             font = wx.Font(fontsize, wx.DEFAULT, wx.NORMAL, wx.BOLD)
             self.labels[i].SetFont(font)
             self.titles[i].SetFont(font)
-            self.sizer.Add(self.titles[i], pos=(0, i), flag=wx.ALL|wx.ALIGN_CENTER)
-            self.sizer.Add(self.gauges[i], pos=(1, i), flag=wx.ALL|wx.EXPAND)
-            self.sizer.Add(self.labels[i], pos=(2, i), flag=wx.ALL|wx.ALIGN_CENTER)
-            self.sizer.AddGrowableCol(i, 0)
-        self.sizer.AddGrowableRow(1)
+            if vertical:
+                sizer = wx.BoxSizer(wx.HORIZONTAL)
+                self.gauges[i].Hide()
+                sizer.Add(self.titles[i], proportion=0, border=5, flag=wx.ALL|wx.ALIGN_LEFT|wx.EXPAND)
+                sizer.Add(self.labels[i], proportion=1, border=5, flag=wx.ALL|wx.ALIGN_RIGHT|wx.EXPAND)
+                self.sizer.Add(sizer, proportion=1,  flag=wx.ALL|wx.EXPAND)
+            else:
+
+                self.sizer.Add(self.titles[i], pos=(0, i), flag=wx.ALL|wx.ALIGN_CENTER)
+                self.sizer.Add(self.gauges[i], pos=(1, i), flag=wx.ALL|wx.EXPAND)
+                self.sizer.Add(self.labels[i], pos=(2, i), flag=wx.ALL|wx.ALIGN_CENTER)
+                self.sizer.AddGrowableCol(i, 0)
+        if not vertical:
+            self.sizer.AddGrowableRow(1)
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
@@ -97,11 +113,11 @@ class MultipleDashboardFrame(wx.Frame):
 if __name__ == "__main__":
     app = wx.App()
     if True:
-        fr = MultipleDisplayFrame(parent=None, fontsize=20, list_maximum=[200, 100, 20],
-                                  list_title=['T 1', 'T 2', 'T 3'], list_formatting_string=['{}', '{}', '{}'])
+        fr = MultipleDashboardFrame(parent=None, fontsize=10, average=1, maximum=[200, 100, 20],
+                                    title=['T 1', 'T 2', 'T 3'], formatting_string=['{}', '{}', '{}'], vertical=True)
         fr.SetPosition((700, 200))
-        fr.SetSize((500, 200))
-        fr.show_values([50, 20, 10])
+        fr.SetSize((150, 100))
+        fr.show_value([5000, 20, 1000000])
     else:
         fr = DisplayFrame(None, 20, 3, 100)
         fr.SetPosition((2700, 200))

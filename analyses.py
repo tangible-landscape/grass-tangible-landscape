@@ -207,46 +207,12 @@ def change_detection_area(before, after, change, height_threshold, filter_slope_
     gcore.run_command('g.remove', type='raster', name=['slope_tmp_get_change', 'before_after_regression_tmp'], flags='f', env=env)
 
 
-def detect_markers(scanned_elev, points, slope_threshold, save_height, env):
-    """Detects markers based on current scan only (no difference)."""
-    slope = 'slope_tmp_get_marker'
-    range = 'range_tmp_get_marker'
-    slope_sum = 'slope_sum_tmp_get_marker'
-    flowacc = 'flowacc_tmp_get_marker'
-    raster_points = "raster_points_tmp_get_marker"
-
-    save_height = True
-    gcore.run_command('r.watershed', elevation=scanned_elev, accumulation=flowacc, env=env)
-    gcore.run_command('r.slope.aspect', elevation=scanned_elev, slope=slope, env=env)
-    gcore.run_command('r.neighbors', input=slope, method='median',
-                      output=slope_sum, size=5, flags='c', env=env)
-    if save_height:
-        gcore.run_command('r.neighbors', input=scanned_elev, method='range',
-                          output=range, size=13, env=env)
-
-    if save_height:
-        range_ = range
-    else:
-        range_ = 1
-
-    grast.mapcalc(exp='{raster_points} = if({flowacc} == 1 && {slope_sum} > {slope_threshold}, {range}, null())'.format(
-                  raster_points=raster_points, flowacc=flowacc, slope_sum=slope_sum,
-                  slope_threshold=slope_threshold, range=range_), env=env)
-
-    options = {}
-    if save_height:
-        options['column'] = 'height'
-
-    gcore.run_command('r.to.vect', input=raster_points, output=points, type='point', env=env, **options)
-    gcore.run_command('g.remove', type='raster', pattern="*tmp_get_marker", flags='f')
-
 
 def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, debug, env):
     diff_thr = 'diff_thr_' + str(uuid.uuid4()).replace('-', '')
     diff_thr_clump = 'diff_thr_clump_' + str(uuid.uuid4()).replace('-', '')
-    regressed = 'regressed_' + str(uuid.uuid4()).replace('-', '')
-    match_scan(base=before, scan=after, matched=regressed, env=env)
     coeff = gcore.parse_command('r.regression.line', mapx=after, mapy=before, flags='g', env=env)
+    grast.mapcalc('diff = {a} + {b} * {after} - {before}'.format(a=coeff['a'], b=coeff['b'],before=before,after=after), env=env)
     try:
         if add:
             grast.mapcalc("{diff_thr} = if(({a} + {b} * {after} - {before}) > {thr1} &&"
@@ -261,7 +227,7 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
                                                                                                         thr=height_threshold), env=env)
 
         gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
-        stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().split(os.linesep)
+        stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().splitlines()
         if debug:
             print 'DEBUG: {}'.format(stats)
         if len(stats) > 0 and stats[0]:
@@ -275,13 +241,8 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
                     cat, value = stat.split()
                     cats.append(cat)
             if cats:
-                expression = '{change} = if(('.format(change=change)
-                for i, cat in enumerate(cats):
-                    if i != 0:
-                        expression += ' || '
-                    expression += '{diff_thr_clump} == {val}'.format(diff_thr_clump=diff_thr_clump, val=cat)
-                expression += '), 1, null())'
-                gcore.run_command('r.mapcalc', overwrite=True, env=env, expression=expression)
+                rules = ['{c}:{c}:1'.format(c=c) for c in cats]
+                gcore.write_command('r.recode', input=diff_thr_clump, output=change, rules='-', stdin='\n'.join(rules), env=env)
                 gcore.run_command('r.volume', flags='f', input=change, clump=diff_thr_clump, centroids=change, env=env)
             else:
                 gcore.warning("No change found!")
@@ -290,9 +251,9 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
             gcore.warning("No change found!")
             gcore.run_command('v.edit', map=change, tool='create', env=env)
 
-        gcore.run_command('g.remove', flags='f', type=['raster'], name=[diff_thr, diff_thr_clump, regressed], env=env)
+        gcore.run_command('g.remove', flags='f', type=['raster'], name=[diff_thr, diff_thr_clump], env=env)
     except:
-        gcore.run_command('g.remove', flags='f', type=['raster'], name=[diff_thr, diff_thr_clump, regressed], env=env)
+        gcore.run_command('g.remove', flags='f', type=['raster'], name=[diff_thr, diff_thr_clump], env=env)
 
 
 def drain(elevation, point, drain, conditioned, env):
@@ -480,7 +441,6 @@ def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSup
     classification = 'tmp_classification'
     filtered_classification = 'tmp_filtered_classification'
     reject = 'tmp_reject'
-    tmp_new = 'tmp_' + new
     if useSuperPixels:
         try:
             gcore.run_command('i.superpixels.slic', group=group, output=segment, compactness=compactness,
@@ -498,5 +458,4 @@ def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSup
     grast.mapcalc('{new} = if({classif} < {thres}, {classif}, null())'.format(new=filtered_classification,
                                                                               classif=classification, thres=percentile), env=env)
     segments = segment if useSuperPixels else segment_clump
-    gcore.run_command('r.stats.quantile', base=segments, cover=filtered_classification, output=tmp_new, env=env)
-    grast.mapcalc('{new} = int({old})'.format(new=new, old=tmp_new), env=env)
+    gcore.run_command('r.mode', base=segments, cover=filtered_classification, output=new, env=env)

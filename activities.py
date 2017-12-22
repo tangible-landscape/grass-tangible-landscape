@@ -491,13 +491,14 @@ class ActivitiesPanel(wx.Panel):
     def StartDisplay(self):
         multiple = False if 'multiple' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['multiple']
         title = None if 'title' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['title']
+        vertical = False if 'vertical' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['vertical']
         fontsize = self.tasks[self.current]['display']['fontsize']
         average = self.tasks[self.current]['display']['average']
         maximum = self.tasks[self.current]['display']['maximum']
         formatting_string = self.tasks[self.current]['display']['formatting_string']
         if multiple:
             self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
-                                                     title=title, formatting_string=formatting_string)
+                                                     title=title, formatting_string=formatting_string, vertical=vertical)
         else:
             self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
         pos = self.tasks[self.current]['display']['position']

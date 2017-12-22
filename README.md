@@ -1,6 +1,6 @@
 Tangible Landscape
 ==================
-This README describes the installation of new version of Tangible Landscape which runs on Linux (Ubuntu) and Mac (OS X Yosemite). This repository contains also older, unsupported, version running solely on MS Windows.
+This README describes the installation of Tangible Landscape which runs on Linux (Ubuntu) and Mac. This repository contains also older, unsupported, version running solely on MS Windows.
 
 Dependencies:
 -------------
@@ -51,6 +51,10 @@ Manual installation:
 
         g.gui.tangible
     
-![Tangible Landscape plugin](https://github.com/ncsu-osgeorel/grass-tangible-landscape/blob/master/tangible_landscape_dialog.png "Tangible Landscape plugin")
+![Tangible Landscape plugin](https://github.com/tangible-landscape/grass-tangible-landscape/wiki/img/plugin/scanning_tab.png "Tangible Landscape plugin")
 
+Authors
+--------
+Anna Petrasova (lead developer), Vaclav Petras, Payam Tabrizian, Brendan Harmon, Helena Mitasova
 
+NCSU GeoForAll Laboratory

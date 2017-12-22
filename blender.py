@@ -105,7 +105,7 @@ def blender_export_vector(vector, path, vtype, name=None, z=False, tmp_path='/tm
             params['lco'] = 'SHPT=POINT'
         if z:
             params['lco'] += 'Z'
-        gscript.run_command('v.out.ogr', input=vector, output=out, env=env,
+        gscript.run_command('v.out.ogr', input=vector, output=out, env=env, format='ESRI_Shapefile',
                             **params)
     except CalledModuleError, e:
         print e

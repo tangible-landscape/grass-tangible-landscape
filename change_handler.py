@@ -7,11 +7,15 @@ class RasterChangeHandler(FileSystemEventHandler):
         super(RasterChangeHandler, self).__init__()
         self.callback = callback
         self.data = data
+        self.latest_timestamp = 0
 
     def on_created(self, event):
         super(RasterChangeHandler, self).on_created(event)
         if os.path.basename(event.src_path) == self.data['scan'] + 'tmp':
-            self.callback()
+            tstamp = os.path.getmtime(event.src_path)
+            if self.latest_timestamp != tstamp:
+                self.callback()
+                self.latest_timestamp = tstamp
 
 
 class DrawingChangeHandler(FileSystemEventHandler):
@@ -20,8 +24,12 @@ class DrawingChangeHandler(FileSystemEventHandler):
         super(DrawingChangeHandler, self).__init__()
         self.callback = callback
         self.data = data
+        self.latest_timestamp = 0
 
     def on_created(self, event):
         super(DrawingChangeHandler, self).on_created(event)
         if os.path.basename(event.src_path) == self.data:
-            self.callback()
+            tstamp = os.path.getmtime(event.src_path)
+            if self.latest_timestamp != tstamp:
+                self.callback()
+                self.latest_timestamp = tstamp
