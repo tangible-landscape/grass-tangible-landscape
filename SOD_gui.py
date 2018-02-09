@@ -442,12 +442,19 @@ class SODPanel(wx.Panel):
         gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
         maxvalue = gscript.raster_info(treatments_resampled)['max']
         univar = gscript.parse_command('r.univar', flags='g', map=treatments_resampled, env=env)
-        self.treated_area = (float(univar['sum']) / maxvalue) * 10000
+        if float(univar['sum']) == 0:
+            self.treated_area = 0
+        else:
+            self.treated_area = (float(univar['sum']) / maxvalue) * 10000
         self.money_spent = self.treated_area * self.price_per_m2
 #        gscript.mapcalc("{s} = {l} - {l} * ({t} / {m})".format(s=species_treated, t=treatments_resampled,
 #                                                               m=maxvalue, l=species), env=env)
-        gscript.mapcalc("{s} = int(if ({i} == 0, {l} - {l} * ({t} / {m}), max(1, {l} - {l} * ({t} / {m}))))".format(s=species_treated, t=treatments_resampled,
-                                                               i=infected, m=maxvalue, l=species), env=env)
+        if maxvalue:
+            gscript.mapcalc("{s} = int(if ({i} == 0, {l} - {l} * ({t} / {m}), max(1, {l} - {l} * ({t} / {m}))))".format(s=species_treated, t=treatments_resampled,
+                                                                   i=infected, m=maxvalue, l=species), env=env)
+        else:  # when there is no treatment
+            gscript.mapcalc("{s} = int(if ({i} == 0, {l}, max(1, {l})))".format(s=species_treated, t=treatments_resampled,
+                                                                   i=infected, m=maxvalue, l=species), env=env)
         gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=species_treated, ni=inf_treated), env=env)
 #        gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatments,
 #                        at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
@@ -648,7 +655,10 @@ class SODPanel(wx.Panel):
 
 
         data = gscript.read_command('r.univar', flags='gt', map=all_tanoaks, zones=self.lastRecordedTreatment).strip().splitlines()[-1].split('|')
-        culled_trees = int(data[-1])
+        try:
+            culled_trees = int(data[-1])
+        except ValueError:  # in case of no treatment
+            culled_trees = 0
         print 'culled_trees', culled_trees
         price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead - culled_trees)
 
