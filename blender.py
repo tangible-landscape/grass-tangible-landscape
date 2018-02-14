@@ -118,3 +118,38 @@ def blender_export_vector(vector, path, vtype, name=None, z=False, tmp_path='/tm
             except OSError as e:
                 if e.errno == 95:
                     pass
+
+
+def blender_export_PNG(raster, path, name=None, tmp_path='/tmp', time_suffix=True, env=None):
+    """Export raster as PNG to be used by Blender, assumes 8bit"""
+    if not (path and os.path.exists(path)):
+        print 'Blender path does not exist:\n{p}'.format(p=path)
+        return
+    local = True
+    if 'server=' in path:
+        local = False
+
+    if time_suffix:
+        time = datetime.now()
+        suffix = '_{}_{}_{}'.format(time.hour, time.minute, time.second)
+    else:
+        suffix = ''
+
+    if not name:
+        name = raster
+
+    fullname = '{name}{suffix}.png'.format(name=name, suffix=suffix)
+
+    if local:
+        out = os.path.join(path, fullname)
+    else:
+        out = os.path.join(tmp_path, fullname)
+    gscript.run_command('r.out.gdal', input=raster, format='PNG',
+                        out=out, quiet=True, env=env)
+
+    if not local:
+        try:
+            shutil.copyfile(out, os.path.join(path, fullname))
+        except OSError as e:
+            if e.errno == 95:
+                pass
