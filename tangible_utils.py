@@ -97,7 +97,10 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
             print 'error in r.info'
             return
         if scanFilter['debug']:
-            print info['max'] - info['min']
+            try:
+                print info['max'] - info['min']
+            except TypeError:  # unsupported operand type(s) for -: 'NoneType' and 'NoneType'
+                return
         threshold = scanFilter['threshold']
         if info['max'] - info['min'] > threshold:
             scanFilter['counter'] += 1
