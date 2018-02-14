@@ -443,7 +443,7 @@ def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSup
     reject = 'tmp_reject'
     if useSuperPixels:
         try:
-            gcore.run_command('i.superpixels.slic', group=group, output=segment, compactness=compactness,
+            gcore.run_command('i.superpixels.slic', input=group, output=segment, compactness=compactness,
                               minsize=minsize, env=env)
         except CalledModuleError, e:
             print 'i.superpixels.slic failed'
