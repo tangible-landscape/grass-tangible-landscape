@@ -129,10 +129,13 @@ class ActivitiesPanel(wx.Panel):
         if self.configFile:
             try:
                 with open(self.configFile, 'r') as f:
-                    self.configuration = json.load(f)
-                    self.tasks = self.configuration['tasks']
-                    # this should reset the analysis file only when configuration is successfully loaded
-                    self.settings['analyses']['file'] = ''
+                    try:
+                        self.configuration = json.load(f)
+                        self.tasks = self.configuration['tasks']
+                        # this should reset the analysis file only when configuration is successfully loaded
+                        self.settings['analyses']['file'] = ''
+                    except ValueError:
+                        self.configFile = None
             except IOError:
                 self.configFile = None
 
@@ -201,9 +204,16 @@ class ActivitiesPanel(wx.Panel):
             self.settings['activities']['config'] = self.configFile
             self._enableGUI(True)
             with open(self.configFile, 'r') as f:
-                self.configuration = json.load(f)
-                self.tasks = self.configuration['tasks']
-                self.title.SetLabel(self.tasks[self.current]['title'])
+                try:
+                    self.configuration = json.load(f)
+                    self.tasks = self.configuration['tasks']
+                    self.title.SetLabel(self.tasks[self.current]['title'])
+                except ValueError:
+                    self.configuration = {}
+                    self.settings['activities']['config'] = ''
+                    self._enableGUI(False)
+                    wx.MessageBox(parent=self, message='Parsing error while reading JSON file, please correct it and try again.',
+                                  caption="Can't read JSON file", style=wx.OK | wx.ICON_ERROR)
             self._bindUserStop()
         else:
             self.settings['activities']['config'] = ''
