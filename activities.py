@@ -66,7 +66,7 @@ class ActivitiesPanel(wx.Panel):
         else:
             self.configFile = self.settings['activities']['config']
 
-        self.configPath = filebrowse.FileBrowseButton(self, labelText='Configuration:',
+        self.configPath = filebrowse.FileBrowseButton(self, labelText='Configuration:', fileMask = "JSON file (*.json)|*.json",
                                                      changeCallback=self._loadConfiguration)
         self.configPath.SetValue(self.configFile, 0)
 
