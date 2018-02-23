@@ -225,11 +225,11 @@ class ActivitiesPanel(wx.Panel):
         self.scaniface.filter['filter'] = False
         self._startScanning()
 
-        wx.CallLater(3000, self.OnCalibrationDone)
+        wx.CallLater(2000, self.OnCalibrationDone)
 
     def OnCalibrationDone(self):
-        self.buttonCalibrate.SetLabel("Calibrate")
         self._stopScanning()
+        wx.CallLater(4000, lambda: self.buttonCalibrate.SetLabel("Calibrate"))
 
     def OnBack(self, event):
         if not self._checkChangeTask():
