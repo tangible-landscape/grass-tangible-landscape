@@ -394,9 +394,11 @@ class SODPanel(wx.Panel):
         env = get_environment(raster=name)
         gscript.run_command('r.to.vect', flags='st', input=name, output=name, type='area', env=env)
         gscript.run_command('v.generalize', input=name, output=name + '_gen', method='snakes', threshold=10, env=env)
-        cmd = ['d.vect', 'map={}'.format(name + '_gen'), 'color=none', 'fill_color=144:238:144']
-        ll = self.giface.GetLayerList()
-        ll.AddLayer('vector', name=name + '_gen', checked=True, opacity=1, cmd=cmd)
+        # test if vector exists (if any treatment was done)
+        if gscript.find_file(name=name + '_gen', element='vector')['fullname']:
+            cmd = ['d.vect', 'map={}'.format(name + '_gen'), 'color=none', 'fill_color=144:238:144']
+            ll = self.giface.GetLayerList()
+            ll.AddLayer('vector', name=name + '_gen', checked=True, opacity=1, cmd=cmd)
 
     def _RunSimulation(self, event=None):
         print '_runSimulation'
