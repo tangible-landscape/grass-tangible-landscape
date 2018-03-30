@@ -118,7 +118,10 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     except CalledModuleError:
         print 'error in r.info'
         return
-    if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
+    try:
+        if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
+            return
+    except ZeroDivisionError:
         return
     env = get_environment(rast=scan_name)
     if not analysesFile or not os.path.exists(analysesFile):
