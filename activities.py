@@ -309,13 +309,16 @@ class ActivitiesPanel(wx.Panel):
             self.slides.Next()
             self.slidesStatus.SetLabel("Slide {}".format(slidenum))
 
+    def _getTaskDir(self):
+        return self.configuration['taskDir'] if 'taskDir' in self.configuration else os.path.dirname(self.settings['activities']['config'])
+
     def _startTask(self):
         self.currentSubtask = 0
         self._processingSubTask = False
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
-        self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
+        self.settings['analyses']['file'] = os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
         if 'scanning_params' in self.tasks[self.current]:
             for each in self.tasks[self.current]['scanning_params'].keys():
@@ -443,7 +446,7 @@ class ActivitiesPanel(wx.Panel):
         wx.SafeYield()
         env = get_environment(rast=self.settings['output']['scan'])
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -452,7 +455,7 @@ class ActivitiesPanel(wx.Panel):
         for func in functions:
             exec('del postprocess.' + func)
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
