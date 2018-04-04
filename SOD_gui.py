@@ -813,18 +813,15 @@ class SODPanel(wx.Panel):
                 lm.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
             lm.SetAcceleratorTable(accel_tbl)
 
-    def LoadLayers(self, zoomToLayers=True):
+    def LoadLayers(self):
         ll = self.giface.GetLayerList()
-        zoom = []
         for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
             opacity = 1.0
             if "layers_opacity" in self.configuration['tasks'][self.current]:
                 opacity = float(self.configuration['tasks'][self.current]['layers_opacity'][i])
             if cmd[0] == 'd.rast':
-                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
-                                opacity=opacity, cmd=cmd)
-                if cmd[1].split('=')[1] != 'scan':
-                    zoom.append(l.maplayer)
+                ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                            opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=opacity, cmd=cmd)
@@ -835,8 +832,10 @@ class SODPanel(wx.Panel):
                 ll.AddLayer('command', name=' '.join(cmd), checked=True,
                             opacity=opacity, cmd=[])
 
-        if zoomToLayers:
-            self.giface.GetMapWindow().ZoomToMap(layers=zoom)
+        # zoom to base map
+        base = self.configuration['tasks'][self.current]['base']
+        self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
+        self.giface.GetMapWindow().UpdateMap()
 
     def RemoveAllResultsLayers(self):
         event = self.eventsCtrl.GetStringSelection()
