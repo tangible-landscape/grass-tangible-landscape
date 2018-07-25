@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-@brief SOD GUI
+@brief POPSS GUI
 
 This program is free software under the GNU General Public License
 (>=v2). Read the file COPYING that comes with GRASS for details.
@@ -36,7 +36,7 @@ updateTimeDisplay, EVT_UPDATE_TIME_DISPLAY = wx.lib.newevent.NewEvent()
 TMP_DIR = '/tmp/test_SOD/'
 
 
-class SODPanel(wx.Panel):
+class PopssPanel(wx.Panel):
     def __init__(self, parent, giface, settings, scaniface):
         wx.Panel.__init__(self, parent)
         self.env = None
@@ -75,18 +75,18 @@ class SODPanel(wx.Panel):
         self.money_spent = 0
         self.price_per_m2 = 1.24
 
-        if 'SOD' not in self.settings:
-            self.settings['SOD'] = {}
-            self.settings['SOD']['config'] = ''
-            self.settings['SOD']['urlDashboard'] = ''
-            self.settings['SOD']['urlSteering'] = ''
+        if 'POPSS' not in self.settings:
+            self.settings['POPSS'] = {}
+            self.settings['POPSS']['config'] = ''
+            self.settings['POPSS']['urlDashboard'] = ''
+            self.settings['POPSS']['urlSteering'] = ''
         else:
-            self.configFile = self.settings['SOD']['config']
+            self.configFile = self.settings['POPSS']['config']
 
 
         self.infoBar = wx.InfoBar(self)
-        self.urlDashboard = wx.TextCtrl(self, value=self.settings['SOD']['urlDashboard'])
-        self.urlSteering = wx.TextCtrl(self, value=self.settings['SOD']['urlSteering'])
+        self.urlDashboard = wx.TextCtrl(self, value=self.settings['POPSS']['urlDashboard'])
+        self.urlSteering = wx.TextCtrl(self, value=self.settings['POPSS']['urlSteering'])
         # config file
         self.configFileCtrl = filebrowse.FileBrowseButton(self, labelText='Configuration:', changeCallback=self._loadConfiguration)
         self.configFileCtrl.SetValue(self.configFile, 0)
@@ -168,7 +168,7 @@ class SODPanel(wx.Panel):
                     self.configuration = json.load(f)
                     # this should reset the analysis file only when configuration is successfully loaded
                     self.settings['analyses']['file'] = ''
-                    self.speed = int(self.configuration['SOD']['animation_speed'])
+                    self.speed = int(self.configuration['POPSS']['animation_speed'])
             except IOError:
                 self.configFile = None
 
@@ -279,7 +279,7 @@ class SODPanel(wx.Panel):
     def _loadConfiguration(self, event):
         self.configFile = self.configFileCtrl.GetValue().strip()
         if self.configFile:
-            self.settings['SOD']['config'] = self.configFile
+            self.settings['POPSS']['config'] = self.configFile
             with open(self.configFile, 'r') as f:
                 self.configuration = json.load(f)
                 self.studySelect.SetValue(self.configuration['tasks'][self.current]['base'])
@@ -376,10 +376,10 @@ class SODPanel(wx.Panel):
         event = self.eventsCtrl.GetStringSelection()
         name = self.playersCtrl.GetStringSelection()
         attempt = self.attemptCtrl.GetStringSelection()
-        name = self.configuration['SOD']['probability'] + '_' + name + '_' + attempt + '_' + event
+        name = self.configuration['POPSS']['probability'] + '_' + name + '_' + attempt + '_' + event
 
         gscript.run_command('r.colors', map=name, quiet=True,
-                            rules=os.path.join(self.configuration['taskDir'], self.configuration['SOD']['color_probability']))
+                            rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_probability']))
         cmd = ['d.rast','values=0-10', 'flags=i', 'map={}'.format(name)]
         self.RemoveAllResultsLayers()
         self.ShowTreatment()
@@ -390,7 +390,7 @@ class SODPanel(wx.Panel):
         event = self.eventsCtrl.GetStringSelection()
         name = self.playersCtrl.GetStringSelection()
         attempt = self.attemptCtrl.GetStringSelection()
-        name = self.configuration['SOD']['treatments'] + '_' + name + '_' + attempt + '_' + event
+        name = self.configuration['POPSS']['treatments'] + '_' + name + '_' + attempt + '_' + event
 
         env = get_environment(raster=name)
         gscript.run_command('r.to.vect', flags='st', input=name, output=name, type='area', env=env)
@@ -407,7 +407,7 @@ class SODPanel(wx.Panel):
             #it's allowed to interact now
             # just to be sure remove results
             self.RemoveAllResultsLayers()
-            wx.FutureCall(self.configuration['SOD']['waitBeforeRun'], self.RunSimulation)
+            wx.FutureCall(self.configuration['POPSS']['waitBeforeRun'], self.RunSimulation)
 
     def RunSimulation(self, event=None):
         print 'run simulation'
@@ -428,18 +428,18 @@ class SODPanel(wx.Panel):
         self.infoBar.ShowMessage("Processing...")
         # grab a new raster of conditions
         # process new input layer
-        treatments = self.configuration['SOD']['treatments']
+        treatments = self.configuration['POPSS']['treatments']
         treatments_resampled = treatments + '_resampled'
         studyArea = self.studySelect.GetValue()
         if not studyArea:
             studyArea = self.configuration['tasks'][self.current]['base']
-        species = self.configuration['SOD']['species']
-        infected = self.configuration['SOD']['infected']
-        species_treated = self.configuration['SOD']['species_treated']
-        all_trees = self.configuration['SOD']['all_trees']
-        all_trees_treated = self.configuration['SOD']['all_trees_treated']
-        inf_treated = self.configuration['SOD']['infected_treated']
-        probability = self.configuration['SOD']['probability']
+        species = self.configuration['POPSS']['species']
+        infected = self.configuration['POPSS']['infected']
+        species_treated = self.configuration['POPSS']['species_treated']
+        all_trees = self.configuration['POPSS']['all_trees']
+        all_trees_treated = self.configuration['POPSS']['all_trees_treated']
+        inf_treated = self.configuration['POPSS']['infected_treated']
+        probability = self.configuration['POPSS']['probability']
         env = get_environment(raster=studyArea, align=species)
 
         gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
@@ -501,13 +501,13 @@ class SODPanel(wx.Panel):
         message += '|species={}'.format(species_treated)
         message += '|probability={}'.format(probability)
         message += '|lvtree={}'.format(all_trees_treated)
-        message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
-        message += '|end_time={}'.format(self.configuration['SOD']['end_time'])
-        message += '|kappa={}'.format(self.configuration['SOD']['kappa'])
-        message += '|spore_rate={}'.format(self.configuration['SOD']['spore_rate'])
-        message += '|wind={}'.format(self.configuration['SOD']['wind'])
-        message += '|infected={}'.format(self.configuration['SOD']['infected'])
-        message += '|runs={}'.format(self.configuration['SOD']['runs'])
+        message += '|start_time={}'.format(self.configuration['POPSS']['start_time'])
+        message += '|end_time={}'.format(self.configuration['POPSS']['end_time'])
+        message += '|kappa={}'.format(self.configuration['POPSS']['kappa'])
+        message += '|spore_rate={}'.format(self.configuration['POPSS']['spore_rate'])
+        message += '|wind={}'.format(self.configuration['POPSS']['wind'])
+        message += '|infected={}'.format(self.configuration['POPSS']['infected'])
+        message += '|runs={}'.format(self.configuration['POPSS']['runs'])
 
         self.RemoveAllResultsLayers()
 
@@ -524,7 +524,7 @@ class SODPanel(wx.Panel):
         if not self.resultsToDisplay.empty():
             name = self.resultsToDisplay.get()
             gscript.run_command('r.colors', map=name, quiet=True,
-                                rules=os.path.join(self.configuration['taskDir'], self.configuration['SOD']['color_trees']))
+                                rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
             cmd = ['d.rast','values=0', 'flags=i', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             self.scaniface.postEvent(self.scaniface, evt)
@@ -541,22 +541,22 @@ class SODPanel(wx.Panel):
         if not studyArea:
             studyArea = self.configuration['tasks'][self.current]['base']
         extent = gscript.raster_info(studyArea)
-        species = self.configuration['SOD']['species']
+        species = self.configuration['POPSS']['species']
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
                                               w=extent['west'], e=extent['east'], a=species)
         message = 'cmd:baseline'
         message += ':region={}'.format(region)
-        message += '|output={}'.format(self.configuration['SOD']['baseline'])
-        message += '|probability={}'.format(self.configuration['SOD']['baseline_probability'])
-        message += '|species={}'.format(self.configuration['SOD']['species'])
-        message += '|lvtree={}'.format(self.configuration['SOD']['all_trees'])
-        message += '|start_time={}'.format(self.configuration['SOD']['start_time'])
-        message += '|end_time={}'.format(self.configuration['SOD']['end_time'])
-        message += '|spore_rate={}'.format(self.configuration['SOD']['spore_rate'])
-        message += '|kappa={}'.format(self.configuration['SOD']['kappa'])
-        message += '|wind={}'.format(self.configuration['SOD']['wind'])
-        message += '|infected={}'.format(self.configuration['SOD']['infected'])
-        message += '|runs={}'.format(self.configuration['SOD']['runs_baseline'])
+        message += '|output={}'.format(self.configuration['POPSS']['baseline'])
+        message += '|probability={}'.format(self.configuration['POPSS']['baseline_probability'])
+        message += '|species={}'.format(self.configuration['POPSS']['species'])
+        message += '|lvtree={}'.format(self.configuration['POPSS']['all_trees'])
+        message += '|start_time={}'.format(self.configuration['POPSS']['start_time'])
+        message += '|end_time={}'.format(self.configuration['POPSS']['end_time'])
+        message += '|spore_rate={}'.format(self.configuration['POPSS']['spore_rate'])
+        message += '|kappa={}'.format(self.configuration['POPSS']['kappa'])
+        message += '|wind={}'.format(self.configuration['POPSS']['wind'])
+        message += '|infected={}'.format(self.configuration['POPSS']['infected'])
+        message += '|runs={}'.format(self.configuration['POPSS']['runs_baseline'])
         self.socket.sendall(message)
 
     def _loadBaseline(self):
@@ -608,7 +608,7 @@ class SODPanel(wx.Panel):
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         infoBaseline = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        species = self.configuration['SOD']['species']
+        species = self.configuration['POPSS']['species']
         infoAllTanoaks = gscript.parse_command('r.univar', map=species, flags='g', env=env)
 
         n_dead = float(infoBaseline['sum'])
@@ -625,7 +625,7 @@ class SODPanel(wx.Panel):
         price_per_tree = 0
 
         gscript.run_command('r.colors', map=event.result, quiet=True,
-                            rules=os.path.join(self.configuration['taskDir'], self.configuration['SOD']['color_trees']))
+                            rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
         self.baselineValues = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
         path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
         self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
@@ -642,7 +642,7 @@ class SODPanel(wx.Panel):
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         info = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        all_tanoaks = self.configuration['SOD']['species']
+        all_tanoaks = self.configuration['POPSS']['species']
         infoAllTanoaks = gscript.parse_command('r.univar', map=all_tanoaks, flags='g', env=env)
         n_dead = float(info['sum'])
         n_all_tanoaks = float(infoAllTanoaks['sum'])
