@@ -103,7 +103,7 @@ class SODPanel(wx.Panel):
         self.studySelect = Select(self, size=(-1, -1), type='raster')
         baselineButton = wx.Button(self, label="Compute baseline")
         # treatment area
-        self.treatmentSelect = Select(self, size=(-1, -1), type='raster')
+        self.treatmentSelect = Select(self, size=(-1, -1), type='region')
         startTreatmentButton = wx.Button(self, label="Start")
         stopTreatmentButton = wx.Button(self, label="Stop")
 
@@ -116,6 +116,7 @@ class SODPanel(wx.Panel):
         baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self.ComputeBaseline())
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
+        self.treatmentSelect.Bind(wx.EVT_COMBOBOX, lambda evt: self.ChangeRegion())
 
         self.Bind(wx.EVT_TIMER, self._displayResult, self.timer)
         self.Bind(EVT_PROCESS_NEW_EVENT, self._processForDashboard)
@@ -726,12 +727,8 @@ class SODPanel(wx.Panel):
         self.switchCurrentResult = 0
         self.scaniface.additionalParams4Analyses = {}
         self.LoadLayers()
-        treatmentRaster = self.treatmentSelect.GetValue()
-        if treatmentRaster:
-            self.giface.GetMapWindow().ZoomToMap(layers=[treatmentRaster])
-            self.settings['scan']['elevation'] = treatmentRaster
-        else:
-            self.settings['scan']['elevation'] = self.configuration['tasks'][self.current]['base']
+        if self.treatmentSelect.GetValue():
+            self.ChangeRegion()
 
         self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
@@ -813,6 +810,26 @@ class SODPanel(wx.Panel):
                 lm.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
             lm.SetAcceleratorTable(accel_tbl)
 
+    def ChangeRegion(self):
+        region = self.treatmentSelect.GetValue()
+        # if empty, go back to default
+        if not region:
+            # set for scanning treatments
+            self.settings['scan']['elevation'] = self.configuration['tasks'][self.current]['base']
+            self.settings['scan']['region'] = ''
+            self.ZoomToBase()
+        else:
+            # check if exists
+            region = region.split('@')[0]
+            f = gscript.find_file(name=region, element='windows')
+            if not f['fullname']:
+                return
+
+            # set for scanning treatments
+            self.settings['scan']['elevation'] = ''
+            self.settings['scan']['region'] = region
+            self.ZoomToRegion(region)
+
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
         for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
@@ -833,8 +850,15 @@ class SODPanel(wx.Panel):
                             opacity=opacity, cmd=[])
 
         # zoom to base map
+        self.ZoomToBase()
+
+    def ZoomToBase(self):
         base = self.configuration['tasks'][self.current]['base']
         self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
+        self.giface.GetMapWindow().UpdateMap()
+
+    def ZoomToRegion(self, region):
+        self.giface.GetMapWindow().Map.GetRegion(regionName=region, update=True)
         self.giface.GetMapWindow().UpdateMap()
 
     def RemoveAllResultsLayers(self):
