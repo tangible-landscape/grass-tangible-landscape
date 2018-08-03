@@ -48,35 +48,27 @@ connections = {}
 
 
 def run_baseline(settings):
-    model = 'sod-cpp'
+    model = 'r.spread.sod'
     params = {}
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
-    #params['ncdf_weather'] = '/home/anna/Documents/Projects/SOD2/SOD-modeling-cpp/layers/weather/weatherCoeff_2000_2014.nc'
-    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file_future.txt'
-    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file_future.txt'
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
     print 'computing baseline'
-    gscript.run_command(model, overwrite=True, flags='s', env=env, **params)
+    gscript.run_command(model, overwrite=True, env=env, **params)
 
     return params['output']
 
 
 def run_model(settings):
-    model = 'sod-cpp'
+    model = 'r.spread.sod'
     params = {}
-    params['output_series'] = 'output'
-    params['random_seed'] = 42
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
-    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file_future.txt'
-    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file_future.txt'
-
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
@@ -91,21 +83,17 @@ def run_model(settings):
     return name
 
 def run_model_nonblocking(settings):
-    model = 'sod-cpp'
+    model = 'r.spread.sod'
     params = {}
-    params['output_series'] = 'output'
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
 #    params['port'] = 8000
-    params['moisture_file'] = '/home/tangible/analyses/SOD/data/moisture_file_future.txt'
-    params['temperature_file'] = '/home/tangible/analyses/SOD/data/temperature_file_future.txt'
-
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     params.update(settings)
 #    name = settings['output_series']
-    p = gscript.start_command(model, overwrite=True, flags='ls', env=env, **params)
+    p = gscript.start_command(model, overwrite=True, flags='l', env=env, **params)
 #    #names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
 #    gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
 #                        title='SOD', description='SOD', overwrite=True)
@@ -178,7 +166,6 @@ def clientGUI(conn, connections, event):
                     params = {}
                     for each in message[2].split('|'):
                         key, val = each.split('=')
-                        print each
                         try:
                             params[key] = float(val)
                         except ValueError:

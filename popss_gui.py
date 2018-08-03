@@ -116,7 +116,7 @@ class PopssPanel(wx.Panel):
         baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self.ComputeBaseline())
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
-        self.treatmentSelect.Bind(wx.EVT_COMBOBOX, lambda evt: self.ChangeRegion())
+        self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
 
         self.Bind(wx.EVT_TIMER, self._displayResult, self.timer)
         self.Bind(EVT_PROCESS_NEW_EVENT, self._processForDashboard)
@@ -190,6 +190,7 @@ class PopssPanel(wx.Panel):
         urlS = self.urlSteering.GetValue()
         if not urlS:
             return
+        self.settings['POPSS']['urlSteering'] = urlS
         urlS = urlS.split(':')
         self.socket = socket.socket()
 #        self.s = ssl.wrap_socket(self.s, cert_reqs=ssl.CERT_REQUIRED,
@@ -213,6 +214,7 @@ class PopssPanel(wx.Panel):
         if urlD:
             if not urlD.startswith('http'):
                 urlD = 'http://' + urlD
+            self.settings['POPSS']['urlDashboard'] = urlD
             self.dashboard.set_root_URL(urlD)
             self.eventsByIds = dict(zip(*self.dashboard.get_events()))
             self.eventsByName = dict(reversed(item) for item in self.eventsByIds.items())
@@ -376,7 +378,7 @@ class PopssPanel(wx.Panel):
         event = self.eventsCtrl.GetStringSelection()
         name = self.playersCtrl.GetStringSelection()
         attempt = self.attemptCtrl.GetStringSelection()
-        name = self.configuration['POPSS']['probability'] + '_' + name + '_' + attempt + '_' + event
+        name = self.configuration['POPSS']['model']['probability'] + '_' + name + '_' + attempt + '_' + event
 
         gscript.run_command('r.colors', map=name, quiet=True,
                             rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_probability']))
@@ -433,13 +435,13 @@ class PopssPanel(wx.Panel):
         studyArea = self.studySelect.GetValue()
         if not studyArea:
             studyArea = self.configuration['tasks'][self.current]['base']
-        species = self.configuration['POPSS']['species']
-        infected = self.configuration['POPSS']['infected']
+        species = self.configuration['POPSS']['model']['species']
+        infected = self.configuration['POPSS']['model']['infected']
         species_treated = self.configuration['POPSS']['species_treated']
-        all_trees = self.configuration['POPSS']['all_trees']
+        all_trees = self.configuration['POPSS']['model']['lvtree']
         all_trees_treated = self.configuration['POPSS']['all_trees_treated']
         inf_treated = self.configuration['POPSS']['infected_treated']
-        probability = self.configuration['POPSS']['probability']
+        probability = self.configuration['POPSS']['model']['probability']
         env = get_environment(raster=studyArea, align=species)
 
         gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
@@ -493,21 +495,16 @@ class PopssPanel(wx.Panel):
         extent = gscript.raster_info(studyArea)
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
                                               w=extent['west'], e=extent['east'], a=species)
+
+        model_params = self.configuration['POPSS']['model'].copy()
+        model_params.update({'output': postfix, 'output_series': postfix, 'probability': probability})
         # run simulation
-        message = 'cmd:start'
-        message += ':output_series={}'.format(postfix)
-        message += '|output={}'.format(postfix)
-        message += '|region={}'.format(region)
-        message += '|species={}'.format(species_treated)
-        message += '|probability={}'.format(probability)
-        message += '|lvtree={}'.format(all_trees_treated)
-        message += '|start_time={}'.format(self.configuration['POPSS']['start_time'])
-        message += '|end_time={}'.format(self.configuration['POPSS']['end_time'])
-        message += '|kappa={}'.format(self.configuration['POPSS']['kappa'])
-        message += '|spore_rate={}'.format(self.configuration['POPSS']['spore_rate'])
-        message += '|wind={}'.format(self.configuration['POPSS']['wind'])
-        message += '|infected={}'.format(self.configuration['POPSS']['infected'])
-        message += '|runs={}'.format(self.configuration['POPSS']['runs'])
+        message = 'cmd:start:'
+        message += "region=" + region
+        for key in model_params:
+            message += '|'
+            message += '{k}={v}'.format(k=key, v=model_params[key])
+        
 
         self.RemoveAllResultsLayers()
 
@@ -541,22 +538,17 @@ class PopssPanel(wx.Panel):
         if not studyArea:
             studyArea = self.configuration['tasks'][self.current]['base']
         extent = gscript.raster_info(studyArea)
-        species = self.configuration['POPSS']['species']
+        species = self.configuration['POPSS']['model']['species']
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
                                               w=extent['west'], e=extent['east'], a=species)
-        message = 'cmd:baseline'
-        message += ':region={}'.format(region)
-        message += '|output={}'.format(self.configuration['POPSS']['baseline'])
-        message += '|probability={}'.format(self.configuration['POPSS']['baseline_probability'])
-        message += '|species={}'.format(self.configuration['POPSS']['species'])
-        message += '|lvtree={}'.format(self.configuration['POPSS']['all_trees'])
-        message += '|start_time={}'.format(self.configuration['POPSS']['start_time'])
-        message += '|end_time={}'.format(self.configuration['POPSS']['end_time'])
-        message += '|spore_rate={}'.format(self.configuration['POPSS']['spore_rate'])
-        message += '|kappa={}'.format(self.configuration['POPSS']['kappa'])
-        message += '|wind={}'.format(self.configuration['POPSS']['wind'])
-        message += '|infected={}'.format(self.configuration['POPSS']['infected'])
-        message += '|runs={}'.format(self.configuration['POPSS']['runs_baseline'])
+        message = 'cmd:baseline:'
+        message += 'region=' + region
+        baseline_model = self.configuration['POPSS']['model'].copy()
+        baseline_model.update(self.configuration['POPSS']['baseline'])
+        for key in baseline_model:
+            message += '|'
+            message += '{k}={v}'.format(k=key, v=baseline_model[key])
+
         self.socket.sendall(message)
 
     def _loadBaseline(self):
@@ -608,7 +600,7 @@ class PopssPanel(wx.Panel):
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         infoBaseline = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        species = self.configuration['POPSS']['species']
+        species = self.configuration['POPSS']['model']['species']
         infoAllTanoaks = gscript.parse_command('r.univar', map=species, flags='g', env=env)
 
         n_dead = float(infoBaseline['sum'])
@@ -626,7 +618,8 @@ class PopssPanel(wx.Panel):
 
         gscript.run_command('r.colors', map=event.result, quiet=True,
                             rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
-        self.baselineValues = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
+#        self.baselineValues = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
+        self.baselineValues = (infected_cells * res * res / 10000, money, treated)
         path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
         self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
         self.dashboard.post_baseline_radar(path)
@@ -642,7 +635,7 @@ class PopssPanel(wx.Panel):
         env = get_environment(raster=event.result)
         res = gscript.raster_info(event.result)['nsres']
         info = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        all_tanoaks = self.configuration['POPSS']['species']
+        all_tanoaks = self.configuration['POPSS']['model']['species']
         infoAllTanoaks = gscript.parse_command('r.univar', map=all_tanoaks, flags='g', env=env)
         n_dead = float(info['sum'])
         n_all_tanoaks = float(infoAllTanoaks['sum'])
@@ -665,17 +658,19 @@ class PopssPanel(wx.Panel):
         print 'culled_trees', culled_trees
         price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead - culled_trees)
 
-        record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
+        #record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
+        record = (infected_cells * res * res / 10000, money, treated)
         # scaling radar values
-        n_dead_scaled = round(min(10 * n_dead / float(self.baselineValues[0]), 10))
-        perc_dead_scaled = round(min(10 * perc_dead / float(self.baselineValues[1]), 10))
-        infected_scaled = round(min(10 * record[2] / float(self.baselineValues[2]), 10))
+        #n_dead_scaled = round(min(10 * n_dead / float(self.baselineValues[0]), 10))
+        #perc_dead_scaled = round(min(10 * perc_dead / float(self.baselineValues[1]), 10))
+        infected_scaled = round(min(10 * record[0] / float(self.baselineValues[0]), 10))
         max_money = 5000000.
-        money_scaled = round(min(10 * record[3] / max_money, 10))
-        treated_scaled = round(min(10 * record[4] / (max_money / 1.24), 10))
+        money_scaled = round(min(10 * record[1] / max_money, 10))
+        treated_scaled = round(min(10 * record[2] / (max_money / 1.24), 10))
         # $50 max?
-        price_per_tree_scaled = round(max(min(10 * record[5] / 50, 10), 0))
-        radarValues = [n_dead_scaled, perc_dead_scaled, infected_scaled, money_scaled, treated_scaled, price_per_tree_scaled]
+        #price_per_tree_scaled = round(max(min(10 * record[5] / 50, 10), 0))
+        #radarValues = [n_dead_scaled, perc_dead_scaled, infected_scaled, money_scaled, treated_scaled, price_per_tree_scaled]
+        radarValues = [infected_scaled, money_scaled, treated_scaled]
 
         path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
         if playerName not in self.radar:
@@ -683,6 +678,7 @@ class PopssPanel(wx.Panel):
         self.radar[playerName].addRecord(radarValues, record, baseline=False)
         self.dashboard.post_data_radar(jsonfile=path, eventId=self.dashboard.get_current_event(), playerId=playerId)
 
+        record = (infected_cells * res * res / 10000, money, treated)
         path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
         if not self.bar:
             self.bar = BarData(filePath=path, baseline=self.baselineValues)
@@ -818,6 +814,7 @@ class PopssPanel(wx.Panel):
             self.settings['scan']['elevation'] = self.configuration['tasks'][self.current]['base']
             self.settings['scan']['region'] = ''
             self.ZoomToBase()
+            self.scaniface.changedInput = True
         else:
             # check if exists
             region = region.split('@')[0]
@@ -829,6 +826,7 @@ class PopssPanel(wx.Panel):
             self.settings['scan']['elevation'] = ''
             self.settings['scan']['region'] = region
             self.ZoomToRegion(region)
+            self.scaniface.changedInput = True
 
     def LoadLayers(self):
         ll = self.giface.GetLayerList()

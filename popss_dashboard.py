@@ -199,39 +199,20 @@ class DashBoardRequests:
 
 class RadarData:
     def __init__(self, filePath, baseline=None):
+        self.columns = ["Infected Area (ha)", "Money Spent", "Area Treated (ha)"]
+        self.formatting = ["{:.1f}", "{:.1f} K", "{:.1f}"]
+        self.multiplication = [1., 1/10000., 1.]
         if not baseline:
-            baseline = [0, 0, 0, 0, 0, 0]
+            baseline = [0, 0, 0]
+        scaled = [10, 0, 0]
         self._filePath = filePath
         self.attempts = [str(i) for i in range(1, 50)]
-        self._template = \
-        """{{
-            "attempt": {attempt},
-            "baseline": {baseline},
-            "data": [
-                {{"axis": "Number of Infected Tanoaks", "value": {sndo} }},
-                {{"axis": "Percentage of Infected Tanoaks", "value": {spdo} }},
-                {{"axis": "Infected Area (ha)", "value": {sia} }},
-                {{"axis": "Money Spent", "value": {sms} }},
-                {{"axis": "Area Treated", "value": {sat} }},
-                {{"axis": "Price per Protected Tanoak", "value": {sppo} }}
-            ],
-            "tableRows": [
-                {{"column": "Number of Infected Tanoaks", "value": \"{ndo}\" }},
-                {{"column": "Percentage of Infected Tanoaks", "value": {pdo} }},
-                {{"column": "Infected Area (ha)", "value": {ia} }},
-                {{"column": "Money Spent", "value": \"{ms}\" }},
-                {{"column": "Area Treated (ha)", "value": {at} }},
-                {{"column": "Price per Protected Tanoak", "value": {ppo} }}
-            ]
-        }}"""
-        scaled = {'sndo': 10, 'spdo': 10, 'sia': 10, 'sms': 0, 'sat': 0, 'sppo': 0}
-        table = {'ndo': str(baseline[0])[:-3] + 'K', 'pdo': '{:2.1f}'.format(100 * baseline[1]), 'ia': baseline[2],
-                 'ms': baseline[3], 'at': '{:2.1f}'.format(baseline[4]/ 10000.),
-                 'ppo': '{:2.1f}'.format(baseline[5])}
-
-        scaled.update(table)
-        baseline = self._template.format(attempt='null', baseline='true', **scaled)
-        self._data = [json.loads(baseline)]
+        self._data = [{'data': [], 'tableRows':[], 'attempt': None, "baseline": True}]
+        i = 0
+        for c, f, m in zip(self.columns, self.formatting, self.multiplication):
+            self._data[0]['data'].append({'axis': c, 'value': scaled[i]})
+            self._data[0]['tableRows'].append({'column': c, 'value': f.format(baseline[i] * m)})
+            i += 1
         self.save()
 
     def setDataFromJson(self, jsonString):
@@ -264,16 +245,13 @@ class RadarData:
                 att_indx = tmp
         att_indx += 1
 
-        scaled = {'sndo': radarValues[0], 'spdo': radarValues[1], 'sia': radarValues[2],
-                  'sms': radarValues[3], 'sat': radarValues[4], 'sppo': radarValues[5]}
-        table = {'ndo': str(tableValues[0])[:-3] + 'K', 'pdo': '{:2.1f}'.format(100 * tableValues[1]), 'ia': tableValues[2],
-                 'ms': str(int(tableValues[3]))[:-3] + 'K', 'at': '{:2.1f}'.format(tableValues[4] / 10000.),
-                 'ppo': '{:2.1f}'.format(tableValues[5])}
-        scaled.update(table)
-        data = self._template.format(attempt='"{a}"'.format(a=self.attempts[att_indx]),
-                                     baseline='false', **scaled)
-        print data
-        self._data.append(json.loads(data))
+        self._data.append({'data': [], 'tableRows': [], 'attempt': str(self.attempts[att_indx]), "baseline": False})
+        i = 0
+        for c, f, m in zip(self.columns, self.formatting, self.multiplication):
+            self._data[-1]['data'].append({'axis': c, 'value': radarValues[i]})
+            self._data[-1]['tableRows'].append({'column': c, 'value': f.format(tableValues[i] * m)})
+            i += 1
+
         self.save()
 
     def removeAttempt(self, attempt):
@@ -292,53 +270,15 @@ class RadarData:
 class BarData:
     def __init__(self, filePath, baseline=None):
         if not baseline:
-            baseline = [0, 0, 0, 0, 0, 0]
+            baseline = [0, 0, 0]
+        columns = ["Infected Area (ha)", "Money Spent", "Area Treated (ha)"]
         self._filePath = filePath
-        self._data = \
-        [
-            {
-                "axis": "Number of Infected Tanoaks",
-                "options": False,
-                "values": [
-                    {"value": baseline[0], "playerName": "No treatment", "attempt": ""}
-                ]
-            },
-            {
-                "axis": "Percentage of Infected Tanoaks",
-                "options": False,
-                "values": [
-                    {"value": baseline[1], "playerName": "No treatment", "attempt": ""}
-                ]
-            },
-            {
-                "axis": "Infected Area (ha)",
-                "options": False,
-                "values": [
-                    {"value": baseline[2], "playerName": "No treatment", "attempt": ""}
-                ]
-            },
-            {
-                "axis": "Money Spent",
-                "options": {"money": True},
-                "values": [
-                    {"value": baseline[3], "playerName": "No treatment", "attempt": ""}
-                ]
-            },
-            {
-                "axis": "Area Treated (ha)",
-                "options": False,
-                "values": [
-                    {"value": baseline[4], "playerName": "No treatment", "attempt": ""}
-                ]
-            },
-            {
-                "axis": "Price per Protected Tanoak",
-                "options": {"negative": True},
-                "values": [
-                    {"value": baseline[5], "playerName": "No treatment", "attempt": ""}
-                ]
-            }
-        ]
+        self._data = []
+        i = 0
+        for each in columns:
+            col = {"axis": each, "options": False, "values": [{"value": baseline[i], "playerName": "No treatment", "attempt": ""}]}
+            self._data.append(col)
+            i += 1
         self.save()
 
     def save(self):
@@ -358,24 +298,6 @@ class BarData:
     def addRecord(self, values, player):
         for i, value in enumerate(values):
             self._addRecord(i, value, player)
-
-    def addRecordNDeadOaks(self, value, player):
-        self._addRecord(self, 0, value, player)
-
-    def addPercDeadOaks(self, value, player):
-        self._addRecord(self, 1, value, player)
-
-    def addInfectedArea(self, value, player):
-        self._addRecord(self, 2, value, player)
-
-    def addMoneySpent(self, value, player):
-        self._addRecord(self, 3, value, player)
-
-    def addAreaTreated(self, value, player):
-        self._addRecord(self, 4, value, player)
-
-    def addPricePerOak(self, value, player):
-        self._addRecord(self, 5, value, player)
 
     def _addRecord(self, which, value, player):
         cnt_attempt = 1
@@ -403,72 +325,63 @@ class BarData:
 
 
 def main():
+    # BEFORE RUNNING:
+    # create an event, create at least one player and set him as playing
     dashboard = DashBoardRequests()
-    eventIds = dashboard.get_events()
-    eid = eventIds.keys()[0]
-    playerIds, playerNames = dashboard.get_players(eid)
-    fp = '/tmp/SOD_{evt}.json'.format(evt=eventIds[eid])
-    #fp_baseline = '/tmp/SOD_{evt}_baseline.json'.format(evt=eventIds[eid])
+    dashboard.set_root_URL('http://localhost:3000')
+    eids, enames = dashboard.get_events()
+    events = dict(zip(eids, enames))
+    eid = dashboard.get_current_event()
 
-    baseline = (56784, 5.898, 3417, 0, 0, 0)
-    #barBaseline = BarData(filePath=fp_baseline, baseline=baseline)
+    playerIds, playerNames = dashboard.get_players(eid)
+    fp = '/tmp/SOD_{evt}.json'.format(evt=events[eid])
+    fp_baseline = '/tmp/SOD_{evt}_baseline.json'.format(evt=events[eid])
+
+    baseline = (3417, 0, 0)
+    barBaseline = BarData(filePath=fp_baseline, baseline=baseline)
     bar = BarData(filePath=fp, baseline=baseline)
 
-    #dashboard.post_baseline_bar(fp_baseline)
+    dashboard.post_baseline_bar(fp_baseline)
+    dashboard.post_data_bar(fp_baseline, eid)
     try:
         barjson = dashboard.get_data_barJson(eid)
         bar.setDataFromJson(barjson)
     except requests.exceptions.HTTPError:
         pass
 
-    bar.addRecord((15000, 6, 1500, 500, 200, 10), playerNames[2])
+    bar.addRecord((1500, 500, 200), playerNames[0])
     dashboard.post_data_bar(fp, eid)
 
-
-    bar.addRecord((20000, 8, 1000, 1000, 100, 10), playerNames[0])
+    bar.addRecord((1000, 100, 10), playerNames[0])
     dashboard.post_data_bar(fp, eid)
 
-    bar.addRecord((10000, 8, 2000, 1000, 100, 10), playerNames[0])
+    bar.addRecord((2000, 1000, 100), playerNames[0])
     dashboard.post_data_bar(fp, eid)
 
-    bar.addRecord((500, 2, 3000, 100, 10, 100), playerNames[1])
+    bar.addRecord((3000, 100, 10), playerNames[0])
     dashboard.post_data_bar(fp, eid)
 
-#    fp = '/tmp/SOD_{evt}_baseline.json'.format(evt=eventIds[eid])
-#    baseline = (10000, 5.898, 3417, 0, 0, 0)
-#    radar = RadarData(filePath=fp, baseline=baseline)
-#    dashboard.post_baseline_radar(fp)
+    fp = '/tmp/SOD_{evt}_baseline.json'.format(evt=events[eid])
+    baseline = (3417, 0, 0, 0)
+    radar = RadarData(filePath=fp, baseline=baseline)
+    dashboard.post_baseline_radar(fp)
 
     for each in playerIds:
-        fp = '/tmp/SOD_{evt}_{pl}.json'.format(evt=eventIds[eid], pl=each)
+        fp = '/tmp/SOD_{evt}_{pl}.json'.format(evt=events[eid], pl=each)
         radar = RadarData(filePath=fp, baseline=baseline)
         try:
-            radarjson = dashboard.get_data_radarJson(eid, each)
-            radar.setDataFromJson(radarjson)
+            #radarjson = dashboard.get_data_radarJson(eid, each)
+            #radar.setDataFromJson(radarjson)
+            pass
         except requests.exceptions.HTTPError:
             pass
+        dashboard.post_data_radar(fp, eventId=eid, playerId=each)
 
-        radarValues = {'sndo': 5, 'spdo': 5, 'sia': 5, 'sms': 3, 'sat': 3, 'sppo': 3}
-        tableValues = {'ndo': baseline[0], 'pdo': baseline[1], 'ia': baseline[2],
-                       'ms': baseline[3], 'at': baseline[4], 'ppo': baseline[5]}
+        radarValues = [1, 2, 3]
+        tableValues = [baseline[0], baseline[1], baseline[2]]
         radar.addRecord(radarValues, tableValues, baseline=False)
         dashboard.post_data_radar(fp, eventId=eid, playerId=each)
 
-    radarValues = {'sndo': 10, 'spdo': 3, 'sia': 5, 'sms': 2, 'sat': 3, 'sppo': 1}
-    radar.addRecord(radarValues, tableValues, baseline=False)
-    dashboard.post_data_radar(fp, eventId=eid, playerId=1)
-
-    radarValues = {'sndo': 1, 'spdo': 3, 'sia': 10, 'sms': 2, 'sat': 3, 'sppo': 1}
-    radar.addRecord(radarValues, tableValues, baseline=False)
-    dashboard.post_data_radar(fp, eventId=eid, playerId=1)
-
-    radarValues = {'sndo': 9, 'spdo': 3, 'sia': 10, 'sms': 7, 'sat': 3, 'sppo': 6}
-    radar.addRecord(radarValues, tableValues, baseline=False)
-    dashboard.post_data_radar(fp, eventId=eid, playerId=1)
-    radar.removeLast()
-    dashboard.post_data_radar(fp, eventId=eid, playerId=1)
-    #bar.removeLast()
-        #dashboard.post_data_bar(fp, eid)
 
 if __name__ == '__main__':
     main()
