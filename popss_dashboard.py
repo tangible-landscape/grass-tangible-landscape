@@ -332,10 +332,12 @@ def main():
     eids, enames = dashboard.get_events()
     events = dict(zip(eids, enames))
     eid = dashboard.get_current_event()
+    import os, tempfile, shutil
+    tmpdir = tempfile.mkdtemp()
 
     playerIds, playerNames = dashboard.get_players(eid)
-    fp = '/tmp/SOD_{evt}.json'.format(evt=events[eid])
-    fp_baseline = '/tmp/SOD_{evt}_baseline.json'.format(evt=events[eid])
+    fp = os.path.join(tmpdir, 'SOD_{evt}.json'.format(evt=events[eid]))
+    fp_baseline = os.path.join(tmpdir, 'SOD_{evt}_baseline.json'.format(evt=events[eid]))
 
     baseline = (3417, 0, 0)
     barBaseline = BarData(filePath=fp_baseline, baseline=baseline)
@@ -361,13 +363,13 @@ def main():
     bar.addRecord((3000, 100, 10), playerNames[0])
     dashboard.post_data_bar(fp, eid)
 
-    fp = '/tmp/SOD_{evt}_baseline.json'.format(evt=events[eid])
-    baseline = (3417, 0, 0, 0)
+    fp = os.path.join(tmpdir, 'SOD_{evt}_baseline.json'.format(evt=events[eid]))
+    baseline = (3417, 0, 0)
     radar = RadarData(filePath=fp, baseline=baseline)
     dashboard.post_baseline_radar(fp)
 
     for each in playerIds:
-        fp = '/tmp/SOD_{evt}_{pl}.json'.format(evt=events[eid], pl=each)
+        fp = os.path.join(tmpdir, 'SOD_{evt}_{pl}.json'.format(evt=events[eid], pl=each))
         radar = RadarData(filePath=fp, baseline=baseline)
         try:
             #radarjson = dashboard.get_data_radarJson(eid, each)
@@ -381,6 +383,8 @@ def main():
         tableValues = [baseline[0], baseline[1], baseline[2]]
         radar.addRecord(radarValues, tableValues, baseline=False)
         dashboard.post_data_radar(fp, eventId=eid, playerId=each)
+
+    shutil.rmtree(tmpdir)
 
 
 if __name__ == '__main__':
