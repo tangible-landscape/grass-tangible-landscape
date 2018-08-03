@@ -73,7 +73,6 @@ class PopssPanel(wx.Panel):
 
         self.treated_area = 0
         self.money_spent = 0
-        self.price_per_m2 = 1.24
 
         if 'POPSS' not in self.settings:
             self.settings['POPSS'] = {}
@@ -442,28 +441,35 @@ class PopssPanel(wx.Panel):
         all_trees_treated = self.configuration['POPSS']['all_trees_treated']
         inf_treated = self.configuration['POPSS']['infected_treated']
         probability = self.configuration['POPSS']['model']['probability']
+        treatment_efficacy = self.configuration['POPSS']['treatment_efficacy']
+        price_per_m2 = self.configuration['POPSS']['price']
         env = get_environment(raster=studyArea, align=species)
 
-        gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
-        maxvalue = gscript.raster_info(treatments_resampled)['max']
-        univar = gscript.parse_command('r.univar', flags='g', map=treatments_resampled, env=env)
-        if float(univar['sum']) == 0:
-            self.treated_area = 0
+        self.treated_area = self.computeTreatmentArea(treatments)
+        self.money_spent = self.treated_area * price_per_m2
+
+        # compute proportion
+        if gscript.raster_info(treatments)['ewres'] < gscript.raster_info(species)['ewres']:
+            gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
+            maxvalue = gscript.raster_info(treatments_resampled)['max']
+            gscript.mapcalc("{p} = if(isnull({t}), 0, {t} / {m}".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue))
+            gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', treatments_resampled], env=env)
         else:
-            self.treated_area = (float(univar['sum']) / maxvalue) * 10000
-        self.money_spent = self.treated_area * self.price_per_m2
-#        gscript.mapcalc("{s} = {l} - {l} * ({t} / {m})".format(s=species_treated, t=treatments_resampled,
-#                                                               m=maxvalue, l=species), env=env)
-        if maxvalue:
-            gscript.mapcalc("{s} = int(if ({i} == 0, {l} - {l} * ({t} / {m}), max(1, {l} - {l} * ({t} / {m}))))".format(s=species_treated, t=treatments_resampled,
-                                                                   i=infected, m=maxvalue, l=species), env=env)
+            gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='average', env=env)
+            gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
+
+        if self.treated_area:
+            gscript.mapcalc("{s} = int({l} - {l} * {t} * {e})".format(s=species_treated, t=treatments_resampled,
+                                                                   i=infected, l=species, e=treatment_efficacy), env=env)
         else:  # when there is no treatment
-            gscript.mapcalc("{s} = int(if ({i} == 0, {l}, max(1, {l})))".format(s=species_treated, t=treatments_resampled,
-                                                                   i=infected, m=maxvalue, l=species), env=env)
+            gscript.mapcalc("{s} = int(if ({i} == 0, {l}, max(1, {l})))".format(s=species_treated, i=infected, l=species), env=env)
+
         gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=species_treated, ni=inf_treated), env=env)
+        # this is not used in pops
+        gscript.mapcalc("{att} = round({at} - ({s} - {st}))".format(at=all_trees, att=all_trees_treated, st=species_treated, s=species), env=env)
+
 #        gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatments,
 #                        at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
-        gscript.mapcalc("{att} = round({at} - ({s} - {st}))".format(at=all_trees, att=all_trees_treated, st=species_treated, s=species), env=env)
 
         # get current player and attempt
         eventId = self.dashboard.get_current_event()
@@ -497,7 +503,8 @@ class PopssPanel(wx.Panel):
                                               w=extent['west'], e=extent['east'], a=species)
 
         model_params = self.configuration['POPSS']['model'].copy()
-        model_params.update({'output': postfix, 'output_series': postfix, 'probability': probability})
+        model_params.update({'output': postfix, 'output_series': postfix,
+                             'probability': probability, 'species': species_treated})
         # run simulation
         message = 'cmd:start:'
         message += "region=" + region
@@ -509,6 +516,15 @@ class PopssPanel(wx.Panel):
         self.RemoveAllResultsLayers()
 
         self.socket.sendall(message)
+
+    def computeTreatmentArea(self, treatments):
+        env = get_environment(raster=treatments)
+        univar = gscript.parse_command('r.univar', flags='g', map=treatments, env=env)
+        if float(univar['sum']) == 0:
+            return 0
+        else:
+            res = gscript.region(env=env)
+            return float(univar['n']) * res['nsres'] * res['ewres']
 
     def _run(self):
         self.socket.sendall('cmd:play')
