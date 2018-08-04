@@ -24,7 +24,7 @@ from grass.pydispatch.signal import Signal
 
 from tangible_utils import addLayers, get_environment, removeLayers
 
-from SOD_dashboard import DashBoardRequests, RadarData, BarData
+from popss_dashboard import DashBoardRequests, RadarData, BarData
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 
@@ -452,7 +452,7 @@ class PopssPanel(wx.Panel):
         if gscript.raster_info(treatments)['ewres'] < gscript.raster_info(species)['ewres']:
             gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
             maxvalue = gscript.raster_info(treatments_resampled)['max']
-            gscript.mapcalc("{p} = if(isnull({t}), 0, {t} / {m}".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue))
+            gscript.mapcalc("{p} = if(isnull({t}), 0, {t} / {m})".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue))
             gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', treatments_resampled], env=env)
         else:
             gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='average', env=env)
