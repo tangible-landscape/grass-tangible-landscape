@@ -22,7 +22,7 @@ from gui_core.gselect import Select
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
-from tangible_utils import addLayers, get_environment, removeLayers
+from tangible_utils import addLayers, get_environment, removeLayers, checkLayers
 
 from popss_dashboard import DashBoardRequests, RadarData, BarData
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
@@ -62,6 +62,7 @@ class PopssPanel(wx.Panel):
         self.switchCurrentResult = 0
         self.showDisplayChange = True
         self.lastRecordedTreatment = ''
+        self.lastDisplayedLayerAnim = ''
 
         self.dashboard = DashBoardRequests()
         self.radarBaseline = None
@@ -106,12 +107,12 @@ class PopssPanel(wx.Panel):
         startTreatmentButton = wx.Button(self, label="Start")
         stopTreatmentButton = wx.Button(self, label="Stop")
 
-        runBtn = wx.Button(self, label="Run")
-        stopBtn = wx.Button(self, label="Stop")
+        runBtn = wx.Button(self, label="Run simulation")
+        visualizationBtn = wx.Button(self, label="Switch visualization")
 
         btnConnect.Bind(wx.EVT_BUTTON, lambda evt: self._connect())
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
-        stopBtn.Bind(wx.EVT_BUTTON, lambda evt: self._stop())
+        visualizationBtn.Bind(wx.EVT_BUTTON, lambda evt: self.ShowResults())
         baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self.ComputeBaseline())
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
@@ -156,7 +157,7 @@ class PopssPanel(wx.Panel):
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(runBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(stopBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(visualizationBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         self.SetSizer(self.mainSizer)
         self.mainSizer.Fit(self)
@@ -511,7 +512,6 @@ class PopssPanel(wx.Panel):
         for key in model_params:
             message += '|'
             message += '{k}={v}'.format(k=key, v=model_params[key])
-        
 
         self.RemoveAllResultsLayers()
 
@@ -532,14 +532,21 @@ class PopssPanel(wx.Panel):
     def _stop(self):
         self.socket.sendall('cmd:end')
 
-
     def _displayResult(self, event):
         if not self.resultsToDisplay.empty():
             name = self.resultsToDisplay.get()
             gscript.run_command('r.colors', map=name, quiet=True,
                                 rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
-            cmd = ['d.rast','values=0', 'flags=i', 'map={}'.format(name)]
+            cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
+            # uncheck previous one (lethal temperature can remove infection)
+            if self.lastDisplayedLayerAnim:
+                ll = self.giface.GetLayerList()
+                found = ll.GetLayersByName(self.lastDisplayedLayerAnim)
+                if found:
+                    evtCheck = checkLayers(layers=found, checked=False)
+                    self.scaniface.postEvent(self.scaniface, evtCheck)
+            self.lastDisplayedLayerAnim = name
             self.scaniface.postEvent(self.scaniface, evt)
             # update year
             res = re.search("_20[0-9]{2}_", name)
@@ -903,6 +910,7 @@ class PopssPanel(wx.Panel):
             all_layers += layers
 
         self.RemoveAllResultsLayers()
+        self.lastDisplayedLayerAnim = ''
         self.ShowTreatment()
         for name in all_layers:
             self.resultsToDisplay.put(name)
