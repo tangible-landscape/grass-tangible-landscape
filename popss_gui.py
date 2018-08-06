@@ -742,6 +742,7 @@ class PopssPanel(wx.Panel):
         self.scaniface.changedInput = True
 
     def StartTreatment(self):
+        self._loadConfiguration(None)
         self.showDisplayChange = True
         self.switchCurrentResult = 0
         self.scaniface.additionalParams4Analyses = {}
