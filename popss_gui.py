@@ -338,7 +338,7 @@ class PopssPanel(wx.Panel):
                     #evt = ProcessForDashboardEvent(result=each)
                     #wx.PostEvent(self, evt)
                     gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
-                    name = os.path.basename(path).strip('.pack')
+                    name = os.path.basename(path).replace('.pack', '')
                     # avoid showing aggregate result
                     if len(name.split('_')) == 6 or len(name.split('_')) == 7:
                         resultsToDisplay.put(name)
