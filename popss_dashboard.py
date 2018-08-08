@@ -199,9 +199,9 @@ class DashBoardRequests:
 
 class RadarData:
     def __init__(self, filePath, baseline=None):
-        self.columns = ["Infected Area (ha)", "Money Spent", "Area Treated (ha)"]
-        self.formatting = ["{:.1f}", "{:.1f} K", "{:.1f}"]
-        self.multiplication = [1., 1/10000., 1.]
+        self.columns = ["Infected Area (mi2)", "Money Spent", "Area Treated (mi2)"]
+        self.formatting = ["{:.1f}", "{:.0f} M", "{:.1f}"]
+        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7]
         if not baseline:
             baseline = [0, 0, 0]
         scaled = [10, 0, 0]
@@ -271,12 +271,14 @@ class BarData:
     def __init__(self, filePath, baseline=None):
         if not baseline:
             baseline = [0, 0, 0]
-        columns = ["Infected Area (ha)", "Money Spent", "Area Treated (ha)"]
+        columns = ["Infected Area (mi2)", "Money Spent (M)", "Area Treated (mi2)"]
+        self.formatting = [lambda x: round(x, 1), int, lambda x: round(x, 1)]
+        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7]
         self._filePath = filePath
         self._data = []
         i = 0
         for each in columns:
-            col = {"axis": each, "options": False, "values": [{"value": baseline[i], "playerName": "No treatment", "attempt": ""}]}
+            col = {"axis": each, "options": False, "values": [{"value": self.formatting[i](baseline[i] * self.multiplication[i]), "playerName": "No treatment", "attempt": ""}]}
             self._data.append(col)
             i += 1
         self.save()
@@ -297,7 +299,7 @@ class BarData:
 
     def addRecord(self, values, player):
         for i, value in enumerate(values):
-            self._addRecord(i, value, player)
+            self._addRecord(i, self.formatting[i](value * self.multiplication[i]), player)
 
     def _addRecord(self, which, value, player):
         cnt_attempt = 1

@@ -642,7 +642,7 @@ class PopssPanel(wx.Panel):
         gscript.run_command('r.colors', map=event.result, quiet=True,
                             rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
 #        self.baselineValues = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
-        self.baselineValues = (infected_cells * res * res / 10000, money, treated)
+        self.baselineValues = (infected_cells * res * res, money, treated)
         path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
         self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
         self.dashboard.post_baseline_radar(path)
@@ -682,7 +682,7 @@ class PopssPanel(wx.Panel):
         price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead - culled_trees)
 
         #record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
-        record = (infected_cells * res * res / 10000, money, treated)
+        record = (infected_cells * res * res, money, treated)
         # scaling radar values
         #n_dead_scaled = round(min(10 * n_dead / float(self.baselineValues[0]), 10))
         #perc_dead_scaled = round(min(10 * perc_dead / float(self.baselineValues[1]), 10))
@@ -701,7 +701,7 @@ class PopssPanel(wx.Panel):
         self.radar[playerName].addRecord(radarValues, record, baseline=False)
         self.dashboard.post_data_radar(jsonfile=path, eventId=self.dashboard.get_current_event(), playerId=playerId)
 
-        record = (infected_cells * res * res / 10000, money, treated)
+        record = (infected_cells * res * res, money, treated)
         path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
         if not self.bar:
             self.bar = BarData(filePath=path, baseline=self.baselineValues)
