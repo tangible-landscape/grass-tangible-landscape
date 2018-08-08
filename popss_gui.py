@@ -443,10 +443,11 @@ class PopssPanel(wx.Panel):
         inf_treated = self.configuration['POPSS']['infected_treated']
         probability = self.configuration['POPSS']['model']['probability']
         treatment_efficacy = self.configuration['POPSS']['treatment_efficacy']
-        price_per_m2 = self.configuration['POPSS']['price']
+        price_function = self.configuration['POPSS']['price']
         env = get_environment(raster=studyArea, align=species)
 
         self.treated_area = self.computeTreatmentArea(treatments)
+        price_per_m2 = eval(price_function.format(treatment_efficacy))
         self.money_spent = self.treated_area * price_per_m2
 
         # compute proportion
@@ -678,7 +679,6 @@ class PopssPanel(wx.Panel):
             culled_trees = int(data[-1])
         except ValueError:  # in case of no treatment
             culled_trees = 0
-        print 'culled_trees', culled_trees
         price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead - culled_trees)
 
         #record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
@@ -710,7 +710,7 @@ class PopssPanel(wx.Panel):
         self.infoBar.Dismiss()
         self._currentlyRunning = False
         self.switchCurrentResult = 1
-        #print 'remove layers'
+
 #        # TODO remove all layers
 
     def OnClose(self, event):
@@ -745,7 +745,7 @@ class PopssPanel(wx.Panel):
         self._loadConfiguration(None)
         self.showDisplayChange = True
         self.switchCurrentResult = 0
-        self.scaniface.additionalParams4Analyses = {}
+        self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPSS']}
         self.LoadLayers()
         if self.treatmentSelect.GetValue():
             self.ChangeRegion()
