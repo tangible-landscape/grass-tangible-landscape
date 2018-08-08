@@ -199,12 +199,12 @@ class DashBoardRequests:
 
 class RadarData:
     def __init__(self, filePath, baseline=None):
-        self.columns = ["Infected Area (mi2)", "Money Spent", "Area Treated (mi2)"]
-        self.formatting = ["{:.1f}", "{:.0f} M", "{:.1f}"]
-        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7]
+        self.columns = ["Infected Area (mi2)", "Money Spent", "Area Treated (mi2)", "Crop affected (mi2)"]
+        self.formatting = ["{:.1f}", "{:.0f} M", "{:.1f}", "{:.1f}"]
+        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7, 3.861e-7]
         if not baseline:
-            baseline = [0, 0, 0]
-        scaled = [10, 0, 0]
+            baseline = [0, 0, 0, 0]
+        scaled = [10, 0, 0, 0]
         self._filePath = filePath
         self.attempts = [str(i) for i in range(1, 50)]
         self._data = [{'data': [], 'tableRows':[], 'attempt': None, "baseline": True}]
@@ -270,10 +270,10 @@ class RadarData:
 class BarData:
     def __init__(self, filePath, baseline=None):
         if not baseline:
-            baseline = [0, 0, 0]
-        columns = ["Infected Area (mi2)", "Money Spent (M)", "Area Treated (mi2)"]
-        self.formatting = [lambda x: round(x, 1), int, lambda x: round(x, 1)]
-        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7]
+            baseline = [0, 0, 0, 0]
+        columns = ["Infected Area (mi2)", "Money Spent (M)", "Area Treated (mi2)", "Crop affected (mi2)"]
+        self.formatting = [lambda x: round(x, 1), int, lambda x: round(x, 1), lambda x: round(x, 1)]
+        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7, 3.861e-7]
         self._filePath = filePath
         self._data = []
         i = 0

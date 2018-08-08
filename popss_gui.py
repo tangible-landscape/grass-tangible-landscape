@@ -627,6 +627,14 @@ class PopssPanel(wx.Panel):
         species = self.configuration['POPSS']['model']['species']
         infoAllTanoaks = gscript.parse_command('r.univar', map=species, flags='g', env=env)
 
+        # crops affected - overlay:
+        gscript.mapcalc("crop_affected = if(! isnull({c}) && {i} > 0, 1, null())".format(c=self.configuration['POPSS']["crop"], i=event.result), env=env)
+        crop_info = gscript.parse_command('r.univar', map='crop_affected', flags='g', env=env)
+        if crop_info:
+            crop_affected_area = int(crop_info['n']) * res * res
+        else:
+            crop_affected_area = 0
+
         n_dead = float(infoBaseline['sum'])
         n_all_tanoaks = float(infoAllTanoaks['sum'])
         perc_dead = n_dead / n_all_tanoaks
@@ -643,7 +651,7 @@ class PopssPanel(wx.Panel):
         gscript.run_command('r.colors', map=event.result, quiet=True,
                             rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
 #        self.baselineValues = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
-        self.baselineValues = (infected_cells * res * res, money, treated)
+        self.baselineValues = (infected_cells * res * res, money, treated, crop_affected_area)
         path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
         self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
         self.dashboard.post_baseline_radar(path)
@@ -674,6 +682,14 @@ class PopssPanel(wx.Panel):
         treated = self.treated_area
 
 
+        # crops affected - overlay:
+        # TODO: overlay with probability > 20% maybe? now it overlays with averaged scenario, which is larger than one run
+        gscript.mapcalc("crop_affected = if(! isnull({c}) && {i} > 0, 1, null())".format(c=self.configuration['POPSS']["crop"], i=event.result), env=env)
+        crop_info = gscript.parse_command('r.univar', map='crop_affected', flags='g', env=env)
+        if crop_info:
+            crop_affected_area = int(crop_info['n']) * res * res
+        else:
+            crop_affected_area = 0
         data = gscript.read_command('r.univar', flags='gt', map=all_tanoaks, zones=self.lastRecordedTreatment).strip().splitlines()[-1].split('|')
         try:
             culled_trees = int(data[-1])
@@ -682,7 +698,7 @@ class PopssPanel(wx.Panel):
         price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead - culled_trees)
 
         #record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
-        record = (infected_cells * res * res, money, treated)
+        record = (infected_cells * res * res, money, treated, crop_affected_area)
         # scaling radar values
         #n_dead_scaled = round(min(10 * n_dead / float(self.baselineValues[0]), 10))
         #perc_dead_scaled = round(min(10 * perc_dead / float(self.baselineValues[1]), 10))
@@ -693,7 +709,7 @@ class PopssPanel(wx.Panel):
         # $50 max?
         #price_per_tree_scaled = round(max(min(10 * record[5] / 50, 10), 0))
         #radarValues = [n_dead_scaled, perc_dead_scaled, infected_scaled, money_scaled, treated_scaled, price_per_tree_scaled]
-        radarValues = [infected_scaled, money_scaled, treated_scaled]
+        radarValues = [infected_scaled, money_scaled, treated_scaled, 0]
 
         path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
         if playerName not in self.radar:
@@ -701,7 +717,7 @@ class PopssPanel(wx.Panel):
         self.radar[playerName].addRecord(radarValues, record, baseline=False)
         self.dashboard.post_data_radar(jsonfile=path, eventId=self.dashboard.get_current_event(), playerId=playerId)
 
-        record = (infected_cells * res * res, money, treated)
+        record = (infected_cells * res * res, money, treated, crop_affected_area)
         path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
         if not self.bar:
             self.bar = BarData(filePath=path, baseline=self.baselineValues)
