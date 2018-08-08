@@ -520,7 +520,7 @@ class PopssPanel(wx.Panel):
     def computeTreatmentArea(self, treatments):
         env = get_environment(raster=treatments)
         univar = gscript.parse_command('r.univar', flags='g', map=treatments, env=env)
-        if float(univar['sum']) == 0:
+        if not univar or float(univar['sum']) == 0:
             return 0
         else:
             res = gscript.region(env=env)
