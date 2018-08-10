@@ -11,8 +11,9 @@ import os
 import socket
 import threading
 import Queue
-import requests
+import traceback
 import json
+import imp
 import re
 import wx
 import wx.lib.newevent
@@ -21,6 +22,7 @@ import wx.lib.filebrowsebutton as filebrowse
 from gui_core.gselect import Select
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
+from grass.exceptions import CalledModuleError, ScriptError
 
 from tangible_utils import addLayers, get_environment, removeLayers, checkLayers
 
@@ -381,7 +383,7 @@ class PopssPanel(wx.Panel):
         name = self.configuration['POPSS']['model']['probability'] + '_' + name + '_' + attempt + '_' + event
 
         gscript.run_command('r.colors', map=name, quiet=True,
-                            rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_probability']))
+                            rules=self.configuration['POPSS']['color_probability'])
         cmd = ['d.rast','values=0-10', 'flags=i', 'map={}'.format(name)]
         self.RemoveAllResultsLayers()
         self.ShowTreatment()
@@ -537,7 +539,7 @@ class PopssPanel(wx.Panel):
         if not self.resultsToDisplay.empty():
             name = self.resultsToDisplay.get()
             gscript.run_command('r.colors', map=name, quiet=True,
-                                rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
+                                rules=self.configuration['POPSS']['color_trees'])
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             # uncheck previous one (lethal temperature can remove infection)
@@ -618,40 +620,38 @@ class PopssPanel(wx.Panel):
                 self.radar[playerName] = RadarData(filePath=path)
                 self.radar[playerName].setDataFromJson(json)
 
+    def _reloadAnalysisFile(self, funcPrefix):
+        analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
+        try:
+            myanalyses = imp.load_source('myanalyses', analysesFile)
+        except StandardError:
+            return None
+        functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
+        for func in functions:
+            exec('del myanalyses.' + func)
+        try:
+            myanalyses = imp.load_source('myanalyses', analysesFile)
+        except StandardError:
+            return None
+        functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
+        return myanalyses, functions
+
     def _processBaseline(self, event):
         self.infoBar.ShowMessage("Processing baseline...")
-        print "processing baseline in GUI"
-        env = get_environment(raster=event.result)
-        res = gscript.raster_info(event.result)['nsres']
-        infoBaseline = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        species = self.configuration['POPSS']['model']['species']
-        infoAllTanoaks = gscript.parse_command('r.univar', map=species, flags='g', env=env)
 
-        # crops affected - overlay:
-        gscript.mapcalc("crop_affected = if(! isnull({c}) && {i} > 0, 1, null())".format(c=self.configuration['POPSS']["crop"], i=event.result), env=env)
-        crop_info = gscript.parse_command('r.univar', map='crop_affected', flags='g', env=env)
-        if crop_info:
-            crop_affected_area = int(crop_info['n']) * res * res
-        else:
-            crop_affected_area = 0
+        # run analyses for dashboard
+        myanalyses, functions = self._reloadAnalysisFile(funcPrefix='pops')
+        for func in functions:
+            try:
+                exec('self.baselineValues, baselineRadar = myanalyses.' + func + "(infected=event.result,"
+                                                " money_spent=0,"
+                                                " treated_area=0,"
+                                                " baselineValues=[],"
+                                                " pops=self.configuration['POPSS'],"
+                                                " baseline=True)")
+            except (CalledModuleError, StandardError, ScriptError):
+                print traceback.print_exc()
 
-        n_dead = float(infoBaseline['sum'])
-        n_all_tanoaks = float(infoAllTanoaks['sum'])
-        perc_dead = n_dead / n_all_tanoaks
-        counts = gscript.read_command('r.stats', flags='c', input=event.result, env=env).strip().splitlines()
-        zero, cnts = counts[0].split(' ')
-        if zero == '0':
-            infected_cells = int(infoBaseline['n']) - int(cnts)
-        else:
-            infected_cells = int(infoBaseline['n'])
-        money = 0
-        treated = 0
-        price_per_tree = 0
-
-        gscript.run_command('r.colors', map=event.result, quiet=True,
-                            rules=os.path.join(self.configuration['taskDir'], self.configuration['POPSS']['color_trees']))
-#        self.baselineValues = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
-        self.baselineValues = (infected_cells * res * res, money, treated, crop_affected_area)
         path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
         self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
         self.dashboard.post_baseline_radar(path)
@@ -664,64 +664,31 @@ class PopssPanel(wx.Panel):
         playerName = self.playersCtrl.GetStringSelection()
         playerId = self.playersByName[playerName]
         eventName = self.eventsCtrl.GetStringSelection()
-        env = get_environment(raster=event.result)
-        res = gscript.raster_info(event.result)['nsres']
-        info = gscript.parse_command('r.univar', map=event.result, flags='g', env=env)
-        all_tanoaks = self.configuration['POPSS']['model']['species']
-        infoAllTanoaks = gscript.parse_command('r.univar', map=all_tanoaks, flags='g', env=env)
-        n_dead = float(info['sum'])
-        n_all_tanoaks = float(infoAllTanoaks['sum'])
-        perc_dead = n_dead / n_all_tanoaks
-        counts = gscript.read_command('r.stats', flags='c', input=event.result, env=env).strip().splitlines()
-        zero, cnts = counts[0].split(' ')
-        if zero == '0':
-            infected_cells = int(info['n']) - int(cnts)
-        else:
-            infected_cells = int(info['n'])
-        money = self.money_spent
-        treated = self.treated_area
 
-
-        # crops affected - overlay:
-        # TODO: overlay with probability > 20% maybe? now it overlays with averaged scenario, which is larger than one run
-        gscript.mapcalc("crop_affected = if(! isnull({c}) && {i} > 0, 1, null())".format(c=self.configuration['POPSS']["crop"], i=event.result), env=env)
-        crop_info = gscript.parse_command('r.univar', map='crop_affected', flags='g', env=env)
-        if crop_info:
-            crop_affected_area = int(crop_info['n']) * res * res
-        else:
-            crop_affected_area = 0
-        data = gscript.read_command('r.univar', flags='gt', map=all_tanoaks, zones=self.lastRecordedTreatment).strip().splitlines()[-1].split('|')
-        try:
-            culled_trees = int(data[-1])
-        except ValueError:  # in case of no treatment
-            culled_trees = 0
-        price_per_tree = self.money_spent / (self.baselineValues[0] - n_dead - culled_trees)
-
-        #record = (n_dead, perc_dead, infected_cells * res * res / 10000, money, treated, price_per_tree)
-        record = (infected_cells * res * res, money, treated, crop_affected_area)
-        # scaling radar values
-        #n_dead_scaled = round(min(10 * n_dead / float(self.baselineValues[0]), 10))
-        #perc_dead_scaled = round(min(10 * perc_dead / float(self.baselineValues[1]), 10))
-        infected_scaled = round(min(10 * record[0] / float(self.baselineValues[0]), 10))
-        max_money = 5000000.
-        money_scaled = round(min(10 * record[1] / max_money, 10))
-        treated_scaled = round(min(10 * record[2] / (max_money / 1.24), 10))
-        # $50 max?
-        #price_per_tree_scaled = round(max(min(10 * record[5] / 50, 10), 0))
-        #radarValues = [n_dead_scaled, perc_dead_scaled, infected_scaled, money_scaled, treated_scaled, price_per_tree_scaled]
-        radarValues = [infected_scaled, money_scaled, treated_scaled, 0]
+        # run analyses for dashboard
+        myanalyses, functions = self._reloadAnalysisFile(funcPrefix='pops')
+        for func in functions:
+            try:
+                exec('resultsBar, resultsRadar = myanalyses.' + func + "(infected=event.result,"
+                                                " money_spent=self.money_spent,"
+                                                " treated_area=self.treated_area,"
+                                                " baselineValues=self.baselineValues,"
+                                                " pops=self.configuration['POPSS'],"
+                                                " baseline=False)")
+            except (CalledModuleError, StandardError, ScriptError):
+                print traceback.print_exc()
 
         path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
         if playerName not in self.radar:
             self.radar[playerName] = RadarData(filePath=path, baseline=self.baselineValues)
-        self.radar[playerName].addRecord(radarValues, record, baseline=False)
+        self.radar[playerName].addRecord(resultsRadar, resultsBar, baseline=False)
         self.dashboard.post_data_radar(jsonfile=path, eventId=self.dashboard.get_current_event(), playerId=playerId)
 
-        record = (infected_cells * res * res, money, treated, crop_affected_area)
+#        record = (infected_cells * res * res, money, treated, crop_affected_area)
         path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
         if not self.bar:
             self.bar = BarData(filePath=path, baseline=self.baselineValues)
-        self.bar.addRecord(record, playerName)
+        self.bar.addRecord(resultsBar, playerName)
         self.dashboard.post_data_bar(jsonfile=path, eventId=self.dashboard.get_current_event())
         self.infoBar.Dismiss()
         self._currentlyRunning = False
