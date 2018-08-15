@@ -874,6 +874,7 @@ class PopssPanel(wx.Panel):
         self.RemoveLayers(layers=pattern_layers_r + pattern_layers_v)
 
     def RemoveLayers(self, etype='raster', pattern=None, layers=None):
+        # works only for raster/vector at this point
         all_layers = []
         if pattern:
             pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
@@ -882,9 +883,10 @@ class PopssPanel(wx.Panel):
             all_layers += layers
         ll = self.giface.GetLayerList()
         for l in reversed(ll):
-            name = l.maplayer.name.split('@')[0]
-            if name in all_layers:
-                ll.DeleteLayer(l)
+            if l.maplayer.name:
+                name = l.maplayer.name.split('@')[0]
+                if name in all_layers:
+                    ll.DeleteLayer(l)
 
     def AddLayersAsAnimation(self, etype='raster', pattern=None, layers=None):
         all_layers = []
