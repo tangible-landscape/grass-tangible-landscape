@@ -29,6 +29,8 @@ class DashBoardRequests:
         eventIds = []
         for each in res.json():
             eventIds.append(int(each['_id']))
+            for char in ".-+ &%#@!?,():'":
+                each['name'] = each['name'].replace(char, '_')
             eventNames.append(each['name'])
         return eventIds, eventNames
 

@@ -342,7 +342,8 @@ class PopssPanel(wx.Panel):
                     gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
                     name = os.path.basename(path).replace('.pack', '')
                     # avoid showing aggregate result
-                    if len(name.split('_')) == 6 or len(name.split('_')) == 7:
+                    # player_attempt_event_year_month_day
+                    if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
                         resultsToDisplay.put(name)
                         print 'display'
 
