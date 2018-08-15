@@ -30,7 +30,7 @@ from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS
 from drawing import DrawingPanel
 
 from export import OutputPanel
-from popss_gui import PopssPanel
+from pops_gui import PopsPanel
 
 from activities import ActivitiesPanel
 from tangible_utils import get_show_layer_icon
@@ -478,9 +478,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.notebook.AddPage(self.drawing_panel, "Drawing")
         self.drawing_panel.Bind(EVT_UPDATE_GUI, self.OnUpdate)
         self.drawing_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
-        self.popss_panel = PopssPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
-        self.notebook.AddPage(self.popss_panel, "POPSS")
-        self.popss_panel.Bind(wx.EVT_CLOSE, self.popss_panel.OnClose)
+        self.pops_panel = PopsPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
+        self.notebook.AddPage(self.pops_panel, "POPS")
+        self.pops_panel.Bind(wx.EVT_CLOSE, self.pops_panel.OnClose)
         self.activities_panel = ActivitiesPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
         self.notebook.AddPage(self.activities_panel, "Activities")
 
@@ -531,7 +531,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(EVT_REMOVE_LAYERS, self.OnRemoveLayers)
         self.Bind(EVT_CHECK_LAYERS, self.OnCheckLayers)
 
-        self.Bind(wx.EVT_CLOSE, self.popss_panel.OnClose)
+        self.Bind(wx.EVT_CLOSE, self.pops_panel.OnClose)
 
         self.pause = None
         self.resume_once = None

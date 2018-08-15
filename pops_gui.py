@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-@brief POPSS GUI
+@brief POPS GUI
 
 This program is free software under the GNU General Public License
 (>=v2). Read the file COPYING that comes with GRASS for details.
@@ -26,7 +26,7 @@ from grass.exceptions import CalledModuleError, ScriptError
 
 from tangible_utils import addLayers, get_environment, removeLayers, checkLayers
 
-from popss_dashboard import DashBoardRequests, RadarData, BarData
+from pops_dashboard import DashBoardRequests, RadarData, BarData
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 
@@ -38,7 +38,7 @@ updateTimeDisplay, EVT_UPDATE_TIME_DISPLAY = wx.lib.newevent.NewEvent()
 TMP_DIR = '/tmp/test_SOD/'
 
 
-class PopssPanel(wx.Panel):
+class PopsPanel(wx.Panel):
     def __init__(self, parent, giface, settings, scaniface):
         wx.Panel.__init__(self, parent)
         self.env = None
@@ -77,18 +77,18 @@ class PopssPanel(wx.Panel):
         self.treated_area = 0
         self.money_spent = 0
 
-        if 'POPSS' not in self.settings:
-            self.settings['POPSS'] = {}
-            self.settings['POPSS']['config'] = ''
-            self.settings['POPSS']['urlDashboard'] = ''
-            self.settings['POPSS']['urlSteering'] = ''
+        if 'POPS' not in self.settings:
+            self.settings['POPS'] = {}
+            self.settings['POPS']['config'] = ''
+            self.settings['POPS']['urlDashboard'] = ''
+            self.settings['POPS']['urlSteering'] = ''
         else:
-            self.configFile = self.settings['POPSS']['config']
+            self.configFile = self.settings['POPS']['config']
 
 
         self.infoBar = wx.InfoBar(self)
-        self.urlDashboard = wx.TextCtrl(self, value=self.settings['POPSS']['urlDashboard'])
-        self.urlSteering = wx.TextCtrl(self, value=self.settings['POPSS']['urlSteering'])
+        self.urlDashboard = wx.TextCtrl(self, value=self.settings['POPS']['urlDashboard'])
+        self.urlSteering = wx.TextCtrl(self, value=self.settings['POPS']['urlSteering'])
         # config file
         self.configFileCtrl = filebrowse.FileBrowseButton(self, labelText='Configuration:', changeCallback=self._loadConfiguration)
         self.configFileCtrl.SetValue(self.configFile, 0)
@@ -170,7 +170,7 @@ class PopssPanel(wx.Panel):
                     self.configuration = json.load(f)
                     # this should reset the analysis file only when configuration is successfully loaded
                     self.settings['analyses']['file'] = ''
-                    self.speed = int(self.configuration['POPSS']['animation_speed'])
+                    self.speed = int(self.configuration['POPS']['animation_speed'])
             except IOError:
                 self.configFile = None
 
@@ -192,7 +192,7 @@ class PopssPanel(wx.Panel):
         urlS = self.urlSteering.GetValue()
         if not urlS:
             return
-        self.settings['POPSS']['urlSteering'] = urlS
+        self.settings['POPS']['urlSteering'] = urlS
         urlS = urlS.split(':')
         self.socket = socket.socket()
 #        self.s = ssl.wrap_socket(self.s, cert_reqs=ssl.CERT_REQUIRED,
@@ -216,7 +216,7 @@ class PopssPanel(wx.Panel):
         if urlD:
             if not urlD.startswith('http'):
                 urlD = 'http://' + urlD
-            self.settings['POPSS']['urlDashboard'] = urlD
+            self.settings['POPS']['urlDashboard'] = urlD
             self.dashboard.set_root_URL(urlD)
             self.eventsByIds = dict(zip(*self.dashboard.get_events()))
             self.eventsByName = dict(reversed(item) for item in self.eventsByIds.items())
@@ -283,7 +283,7 @@ class PopssPanel(wx.Panel):
     def _loadConfiguration(self, event):
         self.configFile = self.configFileCtrl.GetValue().strip()
         if self.configFile:
-            self.settings['POPSS']['config'] = self.configFile
+            self.settings['POPS']['config'] = self.configFile
             with open(self.configFile, 'r') as f:
                 self.configuration = json.load(f)
                 self.studySelect.SetValue(self.configuration['tasks'][self.current]['base'])
@@ -381,10 +381,10 @@ class PopssPanel(wx.Panel):
         event = self.eventsCtrl.GetStringSelection()
         name = self.playersCtrl.GetStringSelection()
         attempt = self.attemptCtrl.GetStringSelection()
-        name = self.configuration['POPSS']['model']['probability'] + '_' + name + '_' + attempt + '_' + event
+        name = self.configuration['POPS']['model']['probability'] + '_' + name + '_' + attempt + '_' + event
 
         gscript.run_command('r.colors', map=name, quiet=True,
-                            rules=self.configuration['POPSS']['color_probability'])
+                            rules=self.configuration['POPS']['color_probability'])
         cmd = ['d.rast','values=0-10', 'flags=i', 'map={}'.format(name)]
         self.RemoveAllResultsLayers()
         self.ShowTreatment()
@@ -395,7 +395,7 @@ class PopssPanel(wx.Panel):
         event = self.eventsCtrl.GetStringSelection()
         name = self.playersCtrl.GetStringSelection()
         attempt = self.attemptCtrl.GetStringSelection()
-        name = self.configuration['POPSS']['treatments'] + '_' + name + '_' + attempt + '_' + event
+        name = self.configuration['POPS']['treatments'] + '_' + name + '_' + attempt + '_' + event
 
         env = get_environment(raster=name)
         gscript.run_command('r.to.vect', flags='st', input=name, output=name, type='area', env=env)
@@ -412,7 +412,7 @@ class PopssPanel(wx.Panel):
             #it's allowed to interact now
             # just to be sure remove results
             self.RemoveAllResultsLayers()
-            wx.FutureCall(self.configuration['POPSS']['waitBeforeRun'], self.RunSimulation)
+            wx.FutureCall(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
 
     def RunSimulation(self, event=None):
         print 'run simulation'
@@ -433,20 +433,20 @@ class PopssPanel(wx.Panel):
         self.infoBar.ShowMessage("Processing...")
         # grab a new raster of conditions
         # process new input layer
-        treatments = self.configuration['POPSS']['treatments']
+        treatments = self.configuration['POPS']['treatments']
         treatments_resampled = treatments + '_resampled'
         studyArea = self.studySelect.GetValue()
         if not studyArea:
             studyArea = self.configuration['tasks'][self.current]['base']
-        species = self.configuration['POPSS']['model']['species']
-        infected = self.configuration['POPSS']['model']['infected']
-        species_treated = self.configuration['POPSS']['species_treated']
-        all_trees = self.configuration['POPSS']['model']['lvtree']
-        all_trees_treated = self.configuration['POPSS']['all_trees_treated']
-        inf_treated = self.configuration['POPSS']['infected_treated']
-        probability = self.configuration['POPSS']['model']['probability']
-        treatment_efficacy = self.configuration['POPSS']['treatment_efficacy']
-        price_function = self.configuration['POPSS']['price']
+        species = self.configuration['POPS']['model']['species']
+        infected = self.configuration['POPS']['model']['infected']
+        species_treated = self.configuration['POPS']['species_treated']
+        all_trees = self.configuration['POPS']['model']['lvtree']
+        all_trees_treated = self.configuration['POPS']['all_trees_treated']
+        inf_treated = self.configuration['POPS']['infected_treated']
+        probability = self.configuration['POPS']['model']['probability']
+        treatment_efficacy = self.configuration['POPS']['treatment_efficacy']
+        price_function = self.configuration['POPS']['price']
         env = get_environment(raster=studyArea, align=species)
 
         self.treated_area = self.computeTreatmentArea(treatments)
@@ -507,7 +507,7 @@ class PopssPanel(wx.Panel):
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
                                               w=extent['west'], e=extent['east'], a=species)
 
-        model_params = self.configuration['POPSS']['model'].copy()
+        model_params = self.configuration['POPS']['model'].copy()
         model_params.update({'output': postfix, 'output_series': postfix,
                              'probability': probability, 'species': species_treated})
         # run simulation
@@ -540,7 +540,7 @@ class PopssPanel(wx.Panel):
         if not self.resultsToDisplay.empty():
             name = self.resultsToDisplay.get()
             gscript.run_command('r.colors', map=name, quiet=True,
-                                rules=self.configuration['POPSS']['color_trees'])
+                                rules=self.configuration['POPS']['color_trees'])
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
             evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
             # uncheck previous one (lethal temperature can remove infection)
@@ -565,13 +565,13 @@ class PopssPanel(wx.Panel):
         if not studyArea:
             studyArea = self.configuration['tasks'][self.current]['base']
         extent = gscript.raster_info(studyArea)
-        species = self.configuration['POPSS']['model']['species']
+        species = self.configuration['POPS']['model']['species']
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
                                               w=extent['west'], e=extent['east'], a=species)
         message = 'cmd:baseline:'
         message += 'region=' + region
-        baseline_model = self.configuration['POPSS']['model'].copy()
-        baseline_model.update(self.configuration['POPSS']['baseline'])
+        baseline_model = self.configuration['POPS']['model'].copy()
+        baseline_model.update(self.configuration['POPS']['baseline'])
         for key in baseline_model:
             message += '|'
             message += '{k}={v}'.format(k=key, v=baseline_model[key])
@@ -648,7 +648,7 @@ class PopssPanel(wx.Panel):
                                                 " money_spent=0,"
                                                 " treated_area=0,"
                                                 " baselineValues=[],"
-                                                " pops=self.configuration['POPSS'],"
+                                                " pops=self.configuration['POPS'],"
                                                 " baseline=True)")
             except (CalledModuleError, StandardError, ScriptError):
                 print traceback.print_exc()
@@ -674,7 +674,7 @@ class PopssPanel(wx.Panel):
                                                 " money_spent=self.money_spent,"
                                                 " treated_area=self.treated_area,"
                                                 " baselineValues=self.baselineValues,"
-                                                " pops=self.configuration['POPSS'],"
+                                                " pops=self.configuration['POPS'],"
                                                 " baseline=False)")
             except (CalledModuleError, StandardError, ScriptError):
                 print traceback.print_exc()
@@ -729,7 +729,7 @@ class PopssPanel(wx.Panel):
         self._loadConfiguration(None)
         self.showDisplayChange = True
         self.switchCurrentResult = 0
-        self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPSS']}
+        self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS']}
         self.LoadLayers()
         if self.treatmentSelect.GetValue():
             self.ChangeRegion()
