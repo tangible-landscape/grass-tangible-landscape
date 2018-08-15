@@ -840,20 +840,45 @@ class PopssPanel(wx.Panel):
         ll = self.giface.GetLayerList()
         for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
             opacity = 1.0
+            checked = True
             if "layers_opacity" in self.configuration['tasks'][self.current]:
                 opacity = float(self.configuration['tasks'][self.current]['layers_opacity'][i])
+            if "layers_checked" in self.configuration['tasks'][self.current]:
+                checked = float(self.configuration['tasks'][self.current]['layers_checked'][i])
             if cmd[0] == 'd.rast':
-                ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
-                            opacity=opacity, cmd=cmd)
+                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.vect':
-                ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
-                            opacity=opacity, cmd=cmd)
+                l = ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.labels':
-                ll.AddLayer('labels', name=cmd[1].split('=')[1], checked=True,
-                            opacity=opacity, cmd=cmd)
+                l = ll.AddLayer('labels', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.shade':
+                l = ll.AddLayer('shaded', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.rgb':
+                l = ll.AddLayer('rgb', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.legend':
+                l = ll.AddLayer('rastleg', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.northarrow':
+                l = ll.AddLayer('northarrow', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
             else:
-                ll.AddLayer('command', name=' '.join(cmd), checked=True,
-                            opacity=opacity, cmd=[])
+                l = ll.AddLayer('command', name=' '.join(cmd), checked=checked,
+                                opacity=opacity, cmd=[])
+            if not checked:
+                # workaround: in not checked the order of layers is wrong
+                try:
+                    for each in ll:
+                        ll.SelectLayer(each, False)
+                    ll.SelectLayer(l, True)
+                except AttributeError:
+                    # SelectLayer introduced in r73097, for cases before:
+                    ll._tree.Unselect()
+                    ll._tree.SelectItem(l._layer, True)
 
         # zoom to base map
         self.ZoomToBase()
