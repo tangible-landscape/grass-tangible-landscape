@@ -70,7 +70,7 @@ class AnalysesPanel(wx.Panel):
 
         fileBox = wx.StaticBox(self, label='  Python file with analyses to run ')
         fileSizer = wx.StaticBoxSizer(fileBox, wx.VERTICAL)
-        self.selectAnalyses = filebrowse.FileBrowseButton(self, labelText="File path:",
+        self.selectAnalyses = filebrowse.FileBrowseButton(self, labelText="File path:", fileMask="Python file (*.py)|*.py",
                                                           startDirectory=initDir, initialValue=path,
                                                           changeCallback=lambda evt: self.SetAnalysesFile(evt.GetString()))
         if self.settings['analyses']['file']:
@@ -141,7 +141,7 @@ class AnalysesPanel(wx.Panel):
         get_lib_path('g.gui.tangible')
         dlg = wx.FileDialog(self, message="Create a new file with analyses",
                             wildcard="Python source (*.py)|*.py",
-                            style=wx.SAVE | wx.FD_OVERWRITE_PROMPT)
+                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         if dlg.ShowModal() == wx.ID_OK:
             path = dlg.GetPath()
             orig = os.path.join(get_lib_path('g.gui.tangible'), 'current_analyses.py')

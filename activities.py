@@ -66,7 +66,7 @@ class ActivitiesPanel(wx.Panel):
         else:
             self.configFile = self.settings['activities']['config']
 
-        self.configPath = filebrowse.FileBrowseButton(self, labelText='Configuration:',
+        self.configPath = filebrowse.FileBrowseButton(self, labelText='Configuration:', fileMask = "JSON file (*.json)|*.json",
                                                      changeCallback=self._loadConfiguration)
         self.configPath.SetValue(self.configFile, 0)
 
@@ -129,10 +129,13 @@ class ActivitiesPanel(wx.Panel):
         if self.configFile:
             try:
                 with open(self.configFile, 'r') as f:
-                    self.configuration = json.load(f)
-                    self.tasks = self.configuration['tasks']
-                    # this should reset the analysis file only when configuration is successfully loaded
-                    self.settings['analyses']['file'] = ''
+                    try:
+                        self.configuration = json.load(f)
+                        self.tasks = self.configuration['tasks']
+                        # this should reset the analysis file only when configuration is successfully loaded
+                        self.settings['analyses']['file'] = ''
+                    except ValueError:
+                        self.configFile = None
             except IOError:
                 self.configFile = None
 
@@ -166,24 +169,42 @@ class ActivitiesPanel(wx.Panel):
         topParent = wx.GetTopLevelParent(self)
         if "keyboard_events" in self.configuration:
             items = []
-            if 'stopTask' in self.configuration['keyboard_events']:
-                userStopId = wx.NewId()
-                items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['stopTask'], userStopId))
-                topParent.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-            if 'scanOnce' in self.configuration['keyboard_events']:
-                userScanOnceId = wx.NewId()
-                items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['scanOnce'], userScanOnceId))
-                topParent.Bind(wx.EVT_MENU, self.OnScanOnce, id=userScanOnceId)
+            for eventName in self.configuration['keyboard_events']:
+                if eventName == 'stopTask':
+                    userStopId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['stopTask'], userStopId))
+                    topParent.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+                elif eventName == 'scanOnce':
+                    userScanOnceId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['scanOnce'], userScanOnceId))
+                    topParent.Bind(wx.EVT_MENU, self.OnScanOnce, id=userScanOnceId)
+                else:
+                    customId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events'][eventName], customId))
+                    topParent.Bind(wx.EVT_MENU, lambda evt: self.CustomAction(eventName), id=customId)
+                    #topParent.Bind(wx.EVT_MENU, self.CustomAction, id=customId)
             accel_tbl = wx.AcceleratorTable(items)
             topParent.SetAcceleratorTable(accel_tbl)
-            # Map displays
-            for mapw in self.giface.GetAllMapDisplays():
-                mapw.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-                mapw.SetAcceleratorTable(accel_tbl)
-            # Layer Manager
-            lm = self.giface.lmgr
-            lm.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-            lm.SetAcceleratorTable(accel_tbl)
+            if 'userStopId' in self.configuration['keyboard_events']:
+                # Map displays
+                for mapw in self.giface.GetAllMapDisplays():
+                    mapw.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+                    mapw.SetAcceleratorTable(accel_tbl)
+                # Layer Manager
+                lm = self.giface.lmgr
+                lm.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+                lm.SetAcceleratorTable(accel_tbl)
+
+
+    def CustomAction(self, eventName):
+        env = get_environment(rast=self.settings['output']['scan'])
+        myanalyses, functions = self._reloadAnalysisFile(funcPrefix=eventName)
+
+        for func in functions:
+            try:
+                exec('myanalyses.' + func + "(eventHandler=wx.GetTopLevelParent(self), env=env)")
+            except (CalledModuleError, StandardError, ScriptError):
+                print traceback.print_exc()
 
     def _checkChangeTask(self):
         if self.timer.IsRunning():
@@ -201,9 +222,16 @@ class ActivitiesPanel(wx.Panel):
             self.settings['activities']['config'] = self.configFile
             self._enableGUI(True)
             with open(self.configFile, 'r') as f:
-                self.configuration = json.load(f)
-                self.tasks = self.configuration['tasks']
-                self.title.SetLabel(self.tasks[self.current]['title'])
+                try:
+                    self.configuration = json.load(f)
+                    self.tasks = self.configuration['tasks']
+                    self.title.SetLabel(self.tasks[self.current]['title'])
+                except ValueError:
+                    self.configuration = {}
+                    self.settings['activities']['config'] = ''
+                    self._enableGUI(False)
+                    wx.MessageBox(parent=self, message='Parsing error while reading JSON file, please correct it and try again.',
+                                  caption="Can't read JSON file", style=wx.OK | wx.ICON_ERROR)
             self._bindUserStop()
         else:
             self.settings['activities']['config'] = ''
@@ -225,11 +253,11 @@ class ActivitiesPanel(wx.Panel):
         self.scaniface.filter['filter'] = False
         self._startScanning()
 
-        wx.CallLater(3000, self.OnCalibrationDone)
+        wx.CallLater(2000, self.OnCalibrationDone)
 
     def OnCalibrationDone(self):
-        self.buttonCalibrate.SetLabel("Calibrate")
         self._stopScanning()
+        wx.CallLater(4000, lambda: self.buttonCalibrate.SetLabel("Calibrate"))
 
     def OnBack(self, event):
         if not self._checkChangeTask():
@@ -600,3 +628,19 @@ class ActivitiesPanel(wx.Panel):
     def OnScanOnce(self, event):
         self.scaniface.resume_once = True
         self.scaniface.changedInput = True
+
+    def _reloadAnalysisFile(self, funcPrefix):
+        analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
+        try:
+            myanalyses = imp.load_source('myanalyses', analysesFile)
+        except StandardError:
+            return None
+        functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
+        for func in functions:
+            exec('del myanalyses.' + func)
+        try:
+            myanalyses = imp.load_source('myanalyses', analysesFile)
+        except StandardError:
+            return None
+        functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
+        return myanalyses, functions

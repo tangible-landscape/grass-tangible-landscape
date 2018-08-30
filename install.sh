@@ -68,8 +68,8 @@ sudo make -j2 install
 cd ../..
 
 # GRASS GIS
-svn checkout https://svn.osgeo.org/grass/grass/branches/releasebranch_7_2 grass72_release
-cd grass72_release
+svn checkout https://svn.osgeo.org/grass/grass/branches/releasebranch_7_4 grass74_release
+cd grass74_release
 CFLAGS="-O2 -Wall" LDFLAGS="-s" ./configure \
   --enable-largefile=yes \
   --with-nls \
@@ -92,8 +92,8 @@ cd ..
 # r.in.kinect
 git clone https://github.com/tangible-landscape/r.in.kinect.git
 cd r.in.kinect
-make MODULE_TOPDIR=../grass72_release
-make install MODULE_TOPDIR=../grass72_release
+make MODULE_TOPDIR=../grass74_release
+make install MODULE_TOPDIR=../grass74_release
 cd ..
 
 # TL plugin
@@ -102,8 +102,8 @@ cd ..
 # this is for the development of grass-tangible-landscape
 git clone https://github.com/tangible-landscape/grass-tangible-landscape.git
 cd grass-tangible-landscape
-make MODULE_TOPDIR=../grass72_release
-make install MODULE_TOPDIR=../grass72_release
+make MODULE_TOPDIR=../grass74_release
+make install MODULE_TOPDIR=../grass74_release
 cd ..
 
 # set up GRASS GIS icon in dash
@@ -112,8 +112,8 @@ cat << EOF > /tmp/grass.desktop
 Version=1.0
 Name=GRASS GIS
 Comment=Start GRASS GIS
-Exec=${CDIR}/grass72_release/bin.x86_64-pc-linux-gnu/grass72
-Icon=${CDIR}/grass72_release/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
+Exec=${CDIR}/grass74_release/bin.x86_64-pc-linux-gnu/grass74
+Icon=${CDIR}/grass74_release/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
 Terminal=true
 Type=Application
 Categories=GIS;Application;

@@ -71,7 +71,7 @@ class OutputPanel(wx.Panel):
         self.ifPLY = wx.CheckBox(self, label="")
         self.ifPLY.SetValue(self.settings['output']['PLY'])
         self.ifPLY.Bind(wx.EVT_CHECKBOX, self.OnChange)
-        self.exportPLY = filebrowse.FileBrowseButton(self, labelText="Export PLY:", fileMode=wx.SAVE,
+        self.exportPLY = filebrowse.FileBrowseButton(self, labelText="Export PLY:", fileMode=wx.FD_SAVE,
                                                      startDirectory=initDir, initialValue=self.settings['output']['PLY_file'],
                                                      changeCallback=self.OnChange)
         # must be called after all widgets are created
