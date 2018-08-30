@@ -59,6 +59,22 @@ class DashBoardRequests:
         data = res.json()
         return data[0]['playerId'], data[0]['playerName']
 
+    def create_player(self, name, eventId):
+        # check if player exists
+        ids, names = self.get_players(eventId)
+        for i, n in zip(ids, names):
+            if name == n:
+                return i, name
+        try:
+            res = requests.post(self.root + '/player', data='{{"name": "{n}"}}'.format(n=name), headers={"content-type": "application/json"})
+            res.raise_for_status()
+            pid = res.json()['_id']
+            res = requests.post(self.root + '/play', data='{{"locationId": {l}, "eventId": {e}, "playerId":"{pid}", "playerName": "{n}"}}'.format(n=name, pid=pid, e=eventId, l=self.locationId), headers={"content-type": "application/json"})
+            res.raise_for_status()
+            return pid, name
+        except requests.exceptions.HTTPError:
+            return None, None
+
     def get_data_barJson(self, eventId):
         try:
             res = requests.get(self.root + '/charts/bar/', params={'locationId': self.locationId, 'eventId': eventId})

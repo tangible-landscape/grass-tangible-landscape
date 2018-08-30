@@ -54,7 +54,7 @@ class PopsPanel(wx.Panel):
         self.timer = wx.Timer(self)
         self.speed = 1000  # 1 second per year
         self.resultsToDisplay = Queue.Queue()
-        self.playerByIds = self.playersByName = None
+        self.playersByIds = self.playersByName = None
         self.eventsByIds = self.eventsByName = None
         self.configFile = ''
         self.configuration = {}
@@ -66,7 +66,9 @@ class PopsPanel(wx.Panel):
         self.lastRecordedTreatment = ''
         self.lastDisplayedLayerAnim = ''
 
-        self.dashboard = DashBoardRequests()
+        self.dashboard = None
+        self.baselineValues = []
+        self.scenarios = {}
         self.radarBaseline = None
         self.barBaseline = None
         self.bar = None
@@ -80,90 +82,10 @@ class PopsPanel(wx.Panel):
         if 'POPS' not in self.settings:
             self.settings['POPS'] = {}
             self.settings['POPS']['config'] = ''
-            self.settings['POPS']['urlDashboard'] = ''
-            self.settings['POPS']['urlSteering'] = ''
         else:
             self.configFile = self.settings['POPS']['config']
-
-
-        self.infoBar = wx.InfoBar(self)
-        self.urlDashboard = wx.TextCtrl(self, value=self.settings['POPS']['urlDashboard'])
-        self.urlSteering = wx.TextCtrl(self, value=self.settings['POPS']['urlSteering'])
-        # config file
-        self.configFileCtrl = filebrowse.FileBrowseButton(self, labelText='Configuration:', changeCallback=self._loadConfiguration)
-        self.configFileCtrl.SetValue(self.configFile, 0)
-        btnConnect = wx.Button(self, label=u"\u21BB")
-        # events
-        self.eventsCtrl = wx.Choice(self, choices=[])
-        self.playersCtrl = wx.Choice(self, choices=[])
-        self.attemptCtrl = wx.Choice(self, choices=[])
-        self.deleteAttempt = wx.Button(self, label="Delete")
-        self.eventsCtrl.Bind(wx.EVT_CHOICE, self._onEventChanged)
-        self.playersCtrl.Bind(wx.EVT_CHOICE, self._onPlayerChanged)
-        self.deleteAttempt.Bind(wx.EVT_BUTTON, lambda evt: self.DeleteAttempt())
-        # study area
-        self.studySelect = Select(self, size=(-1, -1), type='raster')
-        baselineButton = wx.Button(self, label="Compute baseline")
-        # treatment area
-        self.treatmentSelect = Select(self, size=(-1, -1), type='region')
-        startTreatmentButton = wx.Button(self, label="Start")
-        stopTreatmentButton = wx.Button(self, label="Stop")
-
-        runBtn = wx.Button(self, label="Run simulation")
-        visualizationBtn = wx.Button(self, label="Switch visualization")
-
-        btnConnect.Bind(wx.EVT_BUTTON, lambda evt: self._connect())
-        runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
-        visualizationBtn.Bind(wx.EVT_BUTTON, lambda evt: self.ShowResults())
-        baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self.ComputeBaseline())
-        startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
-        stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
-        self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
-
-        self.Bind(wx.EVT_TIMER, self._displayResult, self.timer)
-        self.Bind(EVT_PROCESS_NEW_EVENT, self._processForDashboard)
-        self.Bind(EVT_PROCESS_BASELINE_NEW_EVENT, self._processBaseline)
-
-        self.mainSizer = wx.BoxSizer(wx.VERTICAL)
-        self.mainSizer.Add(self.infoBar, flag=wx.EXPAND)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Dashboard URL:"), flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(self.urlDashboard, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(wx.StaticText(self, label="Steering URL:"), flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(self.urlSteering, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(btnConnect, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.configFileCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Events:"), flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(self.eventsCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(wx.StaticText(self, label="Players:"), flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(self.playersCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(wx.StaticText(self, label="Attempts:"), flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(self.attemptCtrl, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(self.deleteAttempt, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Study area:"), proportion=1, flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(self.studySelect, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(baselineButton, proportion=2, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Treatment area:"), proportion=1, flag=wx.ALIGN_CENTER_VERTICAL)
-        sizer.Add(self.treatmentSelect, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(startTreatmentButton, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(stopTreatmentButton, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(runBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(visualizationBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
-        self.SetSizer(self.mainSizer)
-        self.mainSizer.Fit(self)
-
+            
+            
         if self.configFile:
             try:
                 with open(self.configFile, 'r') as f:
@@ -172,7 +94,91 @@ class PopsPanel(wx.Panel):
                     self.settings['analyses']['file'] = ''
                     self.speed = int(self.configuration['POPS']['animation_speed'])
             except IOError:
-                self.configFile = None
+                self.configFile = ''
+
+        dashBox = wx.StaticBox(self, wx.ID_ANY, "Dashboard")
+        modelingBox = wx.StaticBox(self, wx.ID_ANY, "Modeling")
+
+        self.infoBar = wx.InfoBar(self)
+        # config file
+        self.configFileCtrl = filebrowse.FileBrowseButton(self, labelText='Configuration:', changeCallback=self._loadConfiguration)
+        self.configFileCtrl.SetValue(self.configFile, 0)
+        # events
+        self.eventsCtrl = wx.Choice(dashBox, choices=[])
+        self.recordCtrl = wx.Choice(dashBox, choices=[])
+        self.deleteAttempt = wx.Button(dashBox, label="Delete")
+        self.eventsCtrl.Bind(wx.EVT_CHOICE, self._onEventChanged)
+        self.deleteAttempt.Bind(wx.EVT_BUTTON, lambda evt: self.DeleteAttempt())
+
+        baselineButton = wx.Button(modelingBox, label="Compute baseline")
+        # treatment area
+        self.treatmentSelect = Select(modelingBox, size=(-1, -1), type='region')
+        defaultRegion = wx.Button(modelingBox, label="Default")
+        startTreatmentButton = wx.Button(self, label="Start")
+        stopTreatmentButton = wx.Button(self, label="Stop")
+
+        runBtn = wx.Button(modelingBox, label="Run simulation")
+        visualizationBtn = wx.Button(modelingBox, label="Switch visualization")
+
+        runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
+        visualizationBtn.Bind(wx.EVT_BUTTON, lambda evt: self.ShowResults())
+        baselineButton.Bind(wx.EVT_BUTTON, lambda evt: self.ComputeBaseline())
+        startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
+        stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
+        self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
+        defaultRegion.Bind(wx.EVT_BUTTON, self._onDefaultRegion)
+
+        self.Bind(wx.EVT_TIMER, self._displayResult, self.timer)
+        self.Bind(EVT_PROCESS_NEW_EVENT, self._processForDashboard)
+        self.Bind(EVT_PROCESS_BASELINE_NEW_EVENT, self._processBaseline)
+
+        self.mainSizer = wx.BoxSizer(wx.VERTICAL)
+        self.mainSizer.Add(self.infoBar, flag=wx.EXPAND)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.configFileCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(startTreatmentButton, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(stopTreatmentButton, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+        boxSizer = wx.StaticBoxSizer(dashBox, wx.HORIZONTAL)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(wx.StaticText(dashBox, label="Events:"), flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(self.eventsCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(self.recordCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(self.deleteAttempt, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        boxSizer.Add(sizer, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+        self.mainSizer.Add(boxSizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+        boxSizer = wx.StaticBoxSizer(modelingBox, wx.VERTICAL)
+        if 'scenarios' in self.configuration['POPS']:
+            sizer = wx.BoxSizer(wx.HORIZONTAL)
+            sizer.Add(wx.StaticText(modelingBox, label="Scenarios:"), flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=10)
+            for scen in self.configuration['POPS']['scenarios']:
+                choices = self.configuration['POPS']['scenarios'][scen]['options']
+                self.scenarios[scen] = wx.Choice(modelingBox, choices=choices)
+                self.scenarios[scen].SetSelection(0)
+                sizer.Add(wx.StaticText(modelingBox, label=scen.title() + ':'), flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+                sizer.Add(self.scenarios[scen], proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+            boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(runBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(visualizationBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(baselineButton, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(wx.StaticText(modelingBox, label="Treatment area:"), flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(self.treatmentSelect, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(defaultRegion, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+        self.mainSizer.Add(boxSizer, flag=wx.EXPAND | wx.ALL, border=5)
+
+        self.SetSizer(self.mainSizer)
+        self.mainSizer.Fit(self)
 
         self._bindButtons()
 
@@ -182,17 +188,18 @@ class PopsPanel(wx.Panel):
     def _connect(self):
         self._connectDashboard()
         self._connectSteering()
-        self._loadBaseline()
-        self._loadCharts()
+        if self.dashboard:
+            self._loadBaseline()
+            self._loadCharts()
         self._bindButtons()
 
     def _connectSteering(self):
         if self.socket:
             return
-        urlS = self.urlSteering.GetValue()
+        urlS = self.configuration['POPS']['urlSteering']
         if not urlS:
             return
-        self.settings['POPS']['urlSteering'] = urlS
+        urlS = urlS.replace('http://', '')
         urlS = urlS.split(':')
         self.socket = socket.socket()
 #        self.s = ssl.wrap_socket(self.s, cert_reqs=ssl.CERT_REQUIRED,
@@ -212,45 +219,30 @@ class PopsPanel(wx.Panel):
 
     def _connectDashboard(self):
         # reload players
-        urlD = self.urlDashboard.GetValue()
+        self.dashboard = DashBoardRequests()
+        urlD = self.configuration['POPS']['urlDashboard']
         if urlD:
             if not urlD.startswith('http'):
                 urlD = 'http://' + urlD
-            self.settings['POPS']['urlDashboard'] = urlD
             self.dashboard.set_root_URL(urlD)
             self.eventsByIds = dict(zip(*self.dashboard.get_events()))
             self.eventsByName = dict(reversed(item) for item in self.eventsByIds.items())
             self.eventsCtrl.SetItems(self.eventsByIds.values())
-            eventId = self.dashboard.get_current_event()
-            if eventId:
-                self.eventsCtrl.SetStringSelection(self.eventsByIds[eventId])
-            else:
-                self.eventsCtrl.SetSelection(0)
-            self.playersByIds = dict(zip(*self.dashboard.get_players(self.eventsByName[self.eventsCtrl.GetStringSelection()])))
-            self.playersByName = dict(reversed(item) for item in self.playersByIds.items())
-            self.playersCtrl.SetItems(self.playersByIds.values())
-            playerId, name = self.dashboard.get_current_player()
-            if playerId:
-                self.playersCtrl.SetStringSelection(name)
-            else:
-                self.playersCtrl.SetSelection(0)
 
+            if self.eventsByIds:
+                self.eventsCtrl.SetStringSelection(self.eventsByIds[sorted(self.eventsByIds.keys())[-1]])
+                self.playersByIds = dict(zip(*self.dashboard.get_players(self.eventsByName[self.eventsCtrl.GetStringSelection()])))
+                self.playersByName = dict(reversed(item) for item in self.playersByIds.items())
+            else:
+                self.dashboard = None
+                wx.MessageBox(message="No event in dashboard", style=wx.ICON_WARNING)
+        else:
+            self.dashboard = None
 
     def _onEventChanged(self, event):
         selectedEventName = self.eventsCtrl.GetStringSelection()
         self.playersByIds = dict(zip(*self.dashboard.get_players(self.eventsByName[selectedEventName])))
         self.playersByName = dict(reversed(item) for item in self.playersByIds.items())
-        self.playersCtrl.SetItems(self.playersByIds.values())
-        self.playersCtrl.SetSelection(0)
-
-    def _onPlayerChanged(self, event):
-        selectedPlayer = self.playersCtrl.GetStringSelection()
-        attempts = []
-        if self.bar:
-            attempts = self.bar.getAllAttempts(selectedPlayer)
-        self.attemptCtrl.SetItems([str(a) for a in attempts])
-        if attempts:
-            self.attemptCtrl.SetStringSelection(str(max(attempts)))
 
     def OnDisplayUpdate(self, event):
         if not self.dashboardFrame:
@@ -263,12 +255,10 @@ class PopsPanel(wx.Panel):
             return
         self.timeDisplay.Update(event.value)
 
-
     def DeleteAttempt(self):
         event = self.eventsCtrl.GetStringSelection()
-        selectedPlayer = self.playersCtrl.GetStringSelection()
-        attempt = self.attemptCtrl.GetStringSelection()
-        if attempt != wx.NOT_FOUND:
+        try:
+            selectedPlayer, attempt = self.recordCtrl.GetStringSelection().split(':')
             if self.bar:
                 self.bar.removeAttempt(selectedPlayer, int(attempt))
                 jsonfile = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=event))
@@ -278,7 +268,12 @@ class PopsPanel(wx.Panel):
                 jsonfile = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=selectedPlayer, e=event))
                 self.dashboard.post_data_radar(jsonfile, self.eventsByName[event], self.playersByName[selectedPlayer])
 
-            self._onPlayerChanged(event=None)
+            self.recordCtrl.Delete(self.recordCtrl.GetSelection())
+            cnt = self.recordCtrl.GetCount()
+            if cnt > 0:
+                self.recordCtrl.SetSelection(self.recordCtrl.GetCount() - 1)
+        except AttributeError:
+            pass
 
     def _loadConfiguration(self, event):
         self.configFile = self.configFileCtrl.GetValue().strip()
@@ -286,7 +281,6 @@ class PopsPanel(wx.Panel):
             self.settings['POPS']['config'] = self.configFile
             with open(self.configFile, 'r') as f:
                 self.configuration = json.load(f)
-                self.studySelect.SetValue(self.configuration['tasks'][self.current]['base'])
         else:
             self.settings['activities']['config'] = ''
 
@@ -372,29 +366,41 @@ class PopsPanel(wx.Panel):
             self.switchCurrentResult = 0
 
     def ShowAnimation(self, event=None):
-        event = self.eventsCtrl.GetStringSelection()
-        name = self.playersCtrl.GetStringSelection()
-        attempt = self.attemptCtrl.GetStringSelection()
+        if self.dashboard:
+            event = self.eventsCtrl.GetStringSelection()
+            name, attempt = self.recordCtrl.GetStringSelection().split(':')
+        else:
+            event = 'tmpevent'
+            attempt = '1'
+            name = self._createPlayerName()
         self.AddLayersAsAnimation(etype='raster', pattern="{n}_{a}_{e}_*".format(n=name, e=event, a=attempt))
 
     def ShowProbability(self, event=None):
-        event = self.eventsCtrl.GetStringSelection()
-        name = self.playersCtrl.GetStringSelection()
-        attempt = self.attemptCtrl.GetStringSelection()
+        if self.dashboard:
+            event = self.eventsCtrl.GetStringSelection()
+            name, attempt = self.recordCtrl.GetStringSelection().split(':')
+        else:
+            event = 'tmpevent'
+            attempt = '1'
+            name = self._createPlayerName()
         name = self.configuration['POPS']['model']['probability'] + '_' + name + '_' + attempt + '_' + event
 
         gscript.run_command('r.colors', map=name, quiet=True,
                             rules=self.configuration['POPS']['color_probability'])
-        cmd = ['d.rast','values=0-10', 'flags=i', 'map={}'.format(name)]
+        cmd = ['d.rast', 'values=0-10', 'flags=i', 'map={}'.format(name)]
         self.RemoveAllResultsLayers()
         self.ShowTreatment()
         ll = self.giface.GetLayerList()
         ll.AddLayer('raster', name=name, checked=True, opacity=1, cmd=cmd)
 
     def ShowTreatment(self, event=None):
-        event = self.eventsCtrl.GetStringSelection()
-        name = self.playersCtrl.GetStringSelection()
-        attempt = self.attemptCtrl.GetStringSelection()
+        if self.dashboard:
+            event = self.eventsCtrl.GetStringSelection()
+            name, attempt = self.recordCtrl.GetStringSelection().split(':')
+        else:
+            event = 'tmpevent'
+            attempt = '1'
+            name = self._createPlayerName()
         name = self.configuration['POPS']['treatments'] + '_' + name + '_' + attempt + '_' + event
 
         env = get_environment(raster=name)
@@ -406,16 +412,23 @@ class PopsPanel(wx.Panel):
             ll = self.giface.GetLayerList()
             ll.AddLayer('vector', name=name + '_gen', checked=True, opacity=1, cmd=cmd)
 
+    def _createPlayerName(self):
+        playerName = []
+        for scen in self.scenarios:
+            option = self.scenarios[scen].GetStringSelection()
+            playerName.append(self.configuration['POPS']['scenarios'][scen]['alias'])
+            playerName.append(option)
+        return '_'.join(playerName)
+
     def _RunSimulation(self, event=None):
         print '_runSimulation'
         if self.switchCurrentResult == 0:
-            #it's allowed to interact now
+            # it's allowed to interact now
             # just to be sure remove results
             self.RemoveAllResultsLayers()
             wx.FutureCall(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
 
     def RunSimulation(self, event=None):
-        print 'run simulation'
         if not self.baselineValues:
             dlg = wx.MessageDialog(self, 'Compute baseline first',
                                    'Missing baseline',
@@ -431,13 +444,43 @@ class PopsPanel(wx.Panel):
 
         self._currentlyRunning = True
         self.infoBar.ShowMessage("Processing...")
+
+        playerName = self._createPlayerName()
+        if self.dashboard:
+            eventId = self.eventsByName[self.eventsCtrl.GetStringSelection()]
+            pid, _ = self.dashboard.create_player(playerName, eventId)
+            if not pid:
+                return
+            self.playersByIds[pid] = playerName
+            self.playersByName[playerName] = pid
+
+            attempts = []
+            if self.bar:
+                attempts = self.bar.getAllAttempts(playerName)
+            if not attempts:
+                attempts = [1]
+                new_attempt = '1'
+            else:
+                new_attempt = str(max(attempts) + 1)
+
+            attempt = "{p}:{a}".format(p=playerName, a=new_attempt)
+            self.recordCtrl.Append(attempt)
+            self.recordCtrl.SetStringSelection(attempt)
+
+        # update for scenarios:
+        for scen in self.scenarios:
+            option = self.scenarios[scen].GetStringSelection()
+            params = self.configuration['POPS']['scenarios'][scen]['values'].keys()
+            for param in params:
+                if param in self.configuration['POPS']:
+                    value = self.configuration['POPS']['scenarios'][scen]['values'][param][option]
+                    self.configuration['POPS'][param] = value
+
         # grab a new raster of conditions
         # process new input layer
         treatments = self.configuration['POPS']['treatments']
         treatments_resampled = treatments + '_resampled'
-        studyArea = self.studySelect.GetValue()
-        if not studyArea:
-            studyArea = self.configuration['tasks'][self.current]['base']
+        studyArea = self.configuration['tasks'][self.current]['base']
         species = self.configuration['POPS']['model']['species']
         infected = self.configuration['POPS']['model']['infected']
         species_treated = self.configuration['POPS']['species_treated']
@@ -447,6 +490,7 @@ class PopsPanel(wx.Panel):
         probability = self.configuration['POPS']['model']['probability']
         treatment_efficacy = self.configuration['POPS']['treatment_efficacy']
         price_function = self.configuration['POPS']['price']
+
         env = get_environment(raster=studyArea, align=species)
 
         self.treated_area = self.computeTreatmentArea(treatments)
@@ -476,29 +520,10 @@ class PopsPanel(wx.Panel):
 #        gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatments,
 #                        at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
 
-        # get current player and attempt
-        eventId = self.dashboard.get_current_event()
-        playerId, playerName = self.dashboard.get_current_player()
-        if not playerName:
-            print 'no player selected'
-            return
-
-        self.eventsCtrl.SetStringSelection(self.eventsByIds[eventId])
-        self._onEventChanged(event=None)
-        self.playersCtrl.SetStringSelection(playerName)
-        attempts = []
-        if self.bar:
-            attempts = self.bar.getAllAttempts(playerName)
-        if not attempts:
-            new_attempt = '1'
-            self.attemptCtrl.SetItems(['1'])
-            self.attemptCtrl.SetStringSelection(new_attempt)
+        if self.dashboard:
+            postfix = playerName + '_' + new_attempt + '_' + self.eventsByIds[eventId]
         else:
-            self.attemptCtrl.SetItems([str(a) for a in attempts] + [str(max(attempts) + 1)])
-            new_attempt = str(max(attempts) + 1)
-            self.attemptCtrl.SetStringSelection(new_attempt)
-
-        postfix = playerName + '_' + new_attempt + '_' + self.eventsByIds[eventId]
+            postfix = playerName + '_' + '1' + '_' + 'tmpevent'
         probability = probability + '_' + postfix
         # todo, save treatments
         gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix], env=env)
@@ -510,6 +535,14 @@ class PopsPanel(wx.Panel):
         model_params = self.configuration['POPS']['model'].copy()
         model_params.update({'output': postfix, 'output_series': postfix,
                              'probability': probability, 'species': species_treated})
+        # update for scenarios:
+        for scen in self.scenarios:
+            option = self.scenarios[scen].GetStringSelection()
+            params = self.configuration['POPS']['scenarios'][scen]['values'].keys()
+            for param in params:
+                if param in model_params:
+                    value = self.configuration['POPS']['scenarios'][scen]['values'][param][option]
+                    model_params.update({param: value})
         # run simulation
         message = 'cmd:start:'
         message += "region=" + region
@@ -561,9 +594,7 @@ class PopsPanel(wx.Panel):
 
     def ComputeBaseline(self):
         self.infoBar.ShowMessage("Computing baseline...")
-        studyArea = self.studySelect.GetValue()
-        if not studyArea:
-            studyArea = self.configuration['tasks'][self.current]['base']
+        studyArea = self.configuration['tasks'][self.current]['base']
         extent = gscript.raster_info(studyArea)
         species = self.configuration['POPS']['model']['species']
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
@@ -597,9 +628,7 @@ class PopsPanel(wx.Panel):
 
     def _loadCharts(self):
         # load charts from dashboard when starting
-        eventId = self.dashboard.get_current_event()
-        if not eventId:
-            return
+        eventId = self.eventsByName[self.eventsCtrl.GetStringSelection()]
         eventName = self.eventsByIds[eventId]
         json = self.dashboard.get_data_barJson(eventId)
         if json:
@@ -607,19 +636,23 @@ class PopsPanel(wx.Panel):
             self.bar = BarData(filePath=path)
             self.bar.setDataFromJson(json)
 
-            playerName = self.playersCtrl.GetStringSelection()
-            if playerName != wx.NOT_FOUND:
+            # recreate records:
+            records = []
+            playerIds, playerNames = self.dashboard.get_players(eventId)
+            for playerName in playerNames:
                 attempts = self.bar.getAllAttempts(playerName)
-                if attempts:
-                    self.attemptCtrl.SetItems([str(a) for a in attempts])
-                    self.attemptCtrl.SetStringSelection(str(max(attempts)))
+                for a in attempts:
+                    records.append(playerName + ':' + str(a))
+            self.recordCtrl.SetItems(records)
 
-        for playerId, playerName in self.playersByIds.iteritems():
+        playerIds, playerNames = self.dashboard.get_players(eventId)
+        for playerId, playerName in zip(playerIds, playerNames):
             json = self.dashboard.get_data_radarJson(eventId, playerId)
             if json:
                 path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
                 self.radar[playerName] = RadarData(filePath=path)
                 self.radar[playerName].setDataFromJson(json)
+        return True
 
     def _reloadAnalysisFile(self, funcPrefix):
         analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
@@ -653,19 +686,17 @@ class PopsPanel(wx.Panel):
             except (CalledModuleError, StandardError, ScriptError):
                 print traceback.print_exc()
 
-        path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
-        self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
-        self.dashboard.post_baseline_radar(path)
-        path = os.path.join(self.configuration['logDir'], 'barBaseline.json')
-        self.barBaseline = BarData(filePath=path, baseline=self.baselineValues)
-        self.dashboard.post_baseline_bar(path)
+        if self.dashboard:
+            path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
+            self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
+            self.dashboard.post_baseline_radar(path)
+            path = os.path.join(self.configuration['logDir'], 'barBaseline.json')
+            self.barBaseline = BarData(filePath=path, baseline=self.baselineValues)
+            self.dashboard.post_baseline_bar(path)
+
         self.infoBar.Dismiss()
 
     def _processForDashboard(self, event):
-        playerName = self.playersCtrl.GetStringSelection()
-        playerId = self.playersByName[playerName]
-        eventName = self.eventsCtrl.GetStringSelection()
-
         # run analyses for dashboard
         myanalyses, functions = self._reloadAnalysisFile(funcPrefix='pops')
         for func in functions:
@@ -679,18 +710,25 @@ class PopsPanel(wx.Panel):
             except (CalledModuleError, StandardError, ScriptError):
                 print traceback.print_exc()
 
-        path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
-        if playerName not in self.radar:
-            self.radar[playerName] = RadarData(filePath=path, baseline=self.baselineValues)
-        self.radar[playerName].addRecord(resultsRadar, resultsBar, baseline=False)
-        self.dashboard.post_data_radar(jsonfile=path, eventId=self.dashboard.get_current_event(), playerId=playerId)
+        if self.dashboard:
+            playerName = self.recordCtrl.GetStringSelection().split(':')[0]
+            playerId = self.playersByName[playerName]
+            eventName = self.eventsCtrl.GetStringSelection()
 
-#        record = (infected_cells * res * res, money, treated, crop_affected_area)
-        path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
-        if not self.bar:
-            self.bar = BarData(filePath=path, baseline=self.baselineValues)
-        self.bar.addRecord(resultsBar, playerName)
-        self.dashboard.post_data_bar(jsonfile=path, eventId=self.dashboard.get_current_event())
+            path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
+            if playerName not in self.radar:
+                self.radar[playerName] = RadarData(filePath=path, baseline=self.baselineValues)
+            self.radar[playerName].addRecord(resultsRadar, resultsBar, baseline=False)
+            eventId = self.eventsByName[self.eventsCtrl.GetStringSelection()]
+            self.dashboard.post_data_radar(jsonfile=path, eventId=eventId, playerId=playerId)
+
+    #        record = (infected_cells * res * res, money, treated, crop_affected_area)
+            path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
+            if not self.bar:
+                self.bar = BarData(filePath=path, baseline=self.baselineValues)
+            self.bar.addRecord(resultsBar, playerName)
+            self.dashboard.post_data_bar(jsonfile=path, eventId=eventId)
+
         self.infoBar.Dismiss()
         self._currentlyRunning = False
         self.switchCurrentResult = 1
@@ -726,6 +764,9 @@ class PopsPanel(wx.Panel):
         self.scaniface.changedInput = True
 
     def StartTreatment(self):
+        if self.timer.IsRunning():
+            return
+        self._connect()
         self._loadConfiguration(None)
         self.showDisplayChange = True
         self.switchCurrentResult = 0
@@ -835,6 +876,9 @@ class PopsPanel(wx.Panel):
             self.settings['scan']['region'] = region
             self.ZoomToRegion(region)
             self.scaniface.changedInput = True
+
+    def _onDefaultRegion(self, event):
+        self.treatmentSelect.SetValue('')
 
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
@@ -952,6 +996,7 @@ class PopsPanel(wx.Panel):
         self.timeDisplay.SetSize(size)
         self.timeDisplay.Show()
         self.timeDisplay.SetPosition(pos)
+
 
 class TimeDisplay(wx.Frame):
     def __init__(self, parent, fontsize):
