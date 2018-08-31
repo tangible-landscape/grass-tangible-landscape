@@ -80,7 +80,7 @@ class ActivitiesPanel(wx.Panel):
         self.buttonCalibrate = wx.Button(self, size=(150, -1), label='Calibrate')
         self.buttonStop = wx.Button(self, label='End activity')
         self.buttonStart.Bind(wx.EVT_BUTTON, self.OnStart)
-        self.buttonCalibrate.Bind(wx.EVT_BUTTON, self.OnCalibrate)
+        self.buttonCalibrate.Bind(wx.EVT_BUTTON, lambda evt: self.Calibrate(startTask=False))
         self.buttonStop.Bind(wx.EVT_BUTTON, self.OnStop)
         self.timeText = wx.StaticText(self, label='00:00', style=wx.ALIGN_CENTRE)
         self.timeText.SetFont(wx.Font(15, wx.FONTFAMILY_TELETYPE, wx.NORMAL, wx.FONTWEIGHT_BOLD))
@@ -178,11 +178,22 @@ class ActivitiesPanel(wx.Panel):
                     userScanOnceId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['scanOnce'], userScanOnceId))
                     topParent.Bind(wx.EVT_MENU, self.OnScanOnce, id=userScanOnceId)
+                elif eventName == 'taskNext':
+                    taskNextId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['taskNext'], taskNextId))
+                    topParent.Bind(wx.EVT_MENU, self.OnNextTask, id=taskNextId)
+                elif eventName == 'taskPrevious':
+                    taskPreviousId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['taskPrevious'], taskPreviousId))
+                    topParent.Bind(wx.EVT_MENU, self.OnPreviousTask, id=taskPreviousId)
+                elif eventName == 'startTask':
+                    startTaskId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['startTask'], startTaskId))
+                    topParent.Bind(wx.EVT_MENU, lambda evt: self.StartAutomated(), id=startTaskId)
                 else:
                     customId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events'][eventName], customId))
                     topParent.Bind(wx.EVT_MENU, lambda evt: self.CustomAction(eventName), id=customId)
-                    #topParent.Bind(wx.EVT_MENU, self.CustomAction, id=customId)
             accel_tbl = wx.AcceleratorTable(items)
             topParent.SetAcceleratorTable(accel_tbl)
             if 'userStopId' in self.configuration['keyboard_events']:
@@ -205,6 +216,16 @@ class ActivitiesPanel(wx.Panel):
                 exec('myanalyses.' + func + "(eventHandler=wx.GetTopLevelParent(self), env=env)")
             except (CalledModuleError, StandardError, ScriptError):
                 print traceback.print_exc()
+
+    def OnNextTask(self, event):
+        if self.timer.IsRunning():
+            self.OnStop(event=None)
+        self.OnForward(None)
+
+    def OnPreviousTask(self, event):
+        if self.timer.IsRunning():
+            self.OnStop(event=None)
+        self.OnBack(None)
 
     def _checkChangeTask(self):
         if self.timer.IsRunning():
@@ -240,7 +261,7 @@ class ActivitiesPanel(wx.Panel):
         self.slidesStatus.Show(bool('slides' in self.configuration and self.configuration['slides']))
         self.Layout()
 
-    def OnCalibrate(self, event):
+    def Calibrate(self, startTask):
         self._loadConfiguration(None)
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['output']['scan'] = 'scan_saved'
@@ -253,11 +274,13 @@ class ActivitiesPanel(wx.Panel):
         self.scaniface.filter['filter'] = False
         self._startScanning()
 
-        wx.CallLater(2000, self.OnCalibrationDone)
+        wx.CallLater(2000, lambda: self.CalibrationDone(startTask))
 
-    def OnCalibrationDone(self):
+    def CalibrationDone(self, startTask):
         self._stopScanning()
         wx.CallLater(4000, lambda: self.buttonCalibrate.SetLabel("Calibrate"))
+        if startTask:
+            wx.CallLater(4000, lambda: self.OnStart(None))
 
     def OnBack(self, event):
         if not self._checkChangeTask():
@@ -298,6 +321,14 @@ class ActivitiesPanel(wx.Panel):
         self.buttonCalibrate.Show('calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate'])
         self.Layout()
 
+    def StartAutomated(self):
+        # Doesn't implement slides
+        self._loadConfiguration(None)
+        if 'calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate']:
+            self.Calibrate(startTask=True)
+        else:
+            self._startTask()
+
     def OnStart(self, event):
         self._loadConfiguration(None)
         if 'slides' in self.configuration and self.configuration['slides']:
@@ -328,6 +359,9 @@ class ActivitiesPanel(wx.Panel):
             self.slidesStatus.SetLabel("Slide {}".format(slidenum))
 
     def _startTask(self):
+        if self.timer.IsRunning():
+            return
+
         self.currentSubtask = 0
         self._processingSubTask = False
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
@@ -355,13 +389,11 @@ class ActivitiesPanel(wx.Panel):
         # display
         if 'display' in self.tasks[self.current]:
             self.StartDisplay()
+        wx.GetTopLevelParent(self).SetFocus()
 
         self.startTime = datetime.datetime.now()
         self.endTime = 0
         self.timer.Start(100)
-
-#    def OnPause(self, event):
-#        pass
 
     def _closeAdditionalWindows(self):
         if self.slides:
@@ -392,22 +424,25 @@ class ActivitiesPanel(wx.Panel):
         self._closeAdditionalWindows()
         self._removeAllLayers()
         self.settings['analyses']['file'] = ''
-        self.LoadHandsOff()
-        # scan after hands off
-        if 'duration_handsoff' in self.configuration:
-            t = self.configuration['duration_handsoff']
+        if 'handsoff' in self.configuration:
+            self.LoadHandsOff()
+            # scan after hands off
+            if 'duration_handsoff' in self.configuration:
+                t = self.configuration['duration_handsoff']
+            else:
+                t = 1
+            wx.CallLater(t, self._stop)
         else:
-            t = 1
-        wx.CallLater(t, self._stop)
+            self._stop()
 
     def _stop(self):
         # pause scanning
         self._stopScanning()
         if 'duration_handsoff_after' in self.configuration:
             t = self.configuration['duration_handsoff_after']
+            wx.CallLater(t, self.PostProcessing)
         else:
-            t = 1
-        wx.CallLater(t, self.PostProcessing)
+            self.PostProcessing()
 
     def OnTimer(self, event):
         diff = datetime.datetime.now() - self.startTime
@@ -450,11 +485,10 @@ class ActivitiesPanel(wx.Panel):
         self.giface.GetMapWindow().ZoomToMap(layers=zoom)
 
     def LoadHandsOff(self):
-        if 'handsoff' in self.configuration:
-            ll = self.giface.GetLayerList()
-            cmd = self.configuration['handsoff']
-            self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
-                                        opacity=1.0, cmd=[])
+        ll = self.giface.GetLayerList()
+        cmd = self.configuration['handsoff']
+        self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
+                                    opacity=1.0, cmd=[])
 
     def PostProcessing(self, onDone=None):
         wx.BeginBusyCursor()
