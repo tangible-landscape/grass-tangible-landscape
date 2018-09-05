@@ -408,16 +408,13 @@ class ActivitiesPanel(wx.Panel):
 
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
-        zoom = []
         for i, cmd in enumerate(self.tasks[self.current]['layers']):
             opacity = 1.0
             if "layers_opacity" in self.tasks[self.current]:
                 opacity = float(self.tasks[self.current]['layers_opacity'][i])
             if cmd[0] == 'd.rast':
-                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
                                 opacity=opacity, cmd=cmd)
-                if cmd[1].split('=')[1] != 'scan':
-                    zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=opacity, cmd=cmd)
@@ -432,7 +429,9 @@ class ActivitiesPanel(wx.Panel):
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=1.0, cmd=cmd)
-        self.giface.GetMapWindow().ZoomToMap(layers=zoom)
+        base = self.tasks[self.current]['base']
+        self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
+        self.giface.GetMapWindow().UpdateMap()
 
     def LoadHandsOff(self):
         if 'handsoff' in self.configuration:
