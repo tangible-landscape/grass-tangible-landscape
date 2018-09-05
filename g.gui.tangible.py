@@ -138,7 +138,7 @@ class AnalysesPanel(wx.Panel):
         get_lib_path('g.gui.tangible')
         dlg = wx.FileDialog(self, message="Create a new file with analyses",
                             wildcard="Python source (*.py)|*.py",
-                            style=wx.SAVE | wx.FD_OVERWRITE_PROMPT)
+                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         if dlg.ShowModal() == wx.ID_OK:
             path = dlg.GetPath()
             orig = os.path.join(get_lib_path('g.gui.tangible'), 'current_analyses.py')
