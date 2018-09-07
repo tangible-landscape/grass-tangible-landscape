@@ -616,13 +616,13 @@ class PopsPanel(wx.Panel):
         json = self.dashboard.get_baseline_barJson()
         if json:
             path = os.path.join(self.configuration['logDir'], 'barBaseline.json')
-            self.barBaseline = BarData(filePath=path)
+            self.barBaseline = BarData(filePath=path, columns=self.configuration['POPS']['dashboard']['columns'])
             self.barBaseline.setDataFromJson(json)
             self.baselineValues = self.barBaseline.getBaseline()
         json = self.dashboard.get_baseline_radarJson()
         if json:
             path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
-            self.radarBaseline = RadarData(filePath=path)
+            self.radarBaseline = RadarData(filePath=path, columns=self.configuration['POPS']['dashboard']['columns'])
             self.radarBaseline.setDataFromJson(json)
             self.baselineScaledValues = self.radarBaseline.getBaselineScaledValues()
 
@@ -633,7 +633,7 @@ class PopsPanel(wx.Panel):
         json = self.dashboard.get_data_barJson(eventId)
         if json:
             path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))
-            self.bar = BarData(filePath=path)
+            self.bar = BarData(filePath=path, columns=self.configuration['POPS']['dashboard']['columns'])
             self.bar.setDataFromJson(json)
 
             # recreate records:
@@ -650,7 +650,7 @@ class PopsPanel(wx.Panel):
             json = self.dashboard.get_data_radarJson(eventId, playerId)
             if json:
                 path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
-                self.radar[playerName] = RadarData(filePath=path)
+                self.radar[playerName] = RadarData(filePath=path, columns=self.configuration['POPS']['dashboard']['columns'])
                 self.radar[playerName].setDataFromJson(json)
         return True
 
@@ -688,10 +688,11 @@ class PopsPanel(wx.Panel):
 
         if self.dashboard:
             path = os.path.join(self.configuration['logDir'], 'radarBaseline.json')
-            self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues)
+            self.radarBaseline = RadarData(filePath=path, baseline=self.baselineValues,
+                                           columns=self.configuration['POPS']['dashboard']['columns'])
             self.dashboard.post_baseline_radar(path)
             path = os.path.join(self.configuration['logDir'], 'barBaseline.json')
-            self.barBaseline = BarData(filePath=path, baseline=self.baselineValues)
+            self.barBaseline = BarData(filePath=path, baseline=self.baselineValues, columns=self.configuration['POPS']['dashboard']['columns'])
             self.dashboard.post_baseline_bar(path)
 
         self.infoBar.Dismiss()
@@ -717,7 +718,8 @@ class PopsPanel(wx.Panel):
 
             path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
             if playerName not in self.radar:
-                self.radar[playerName] = RadarData(filePath=path, baseline=self.baselineValues)
+                self.radar[playerName] = RadarData(filePath=path, baseline=self.baselineValues,
+                                                   columns=self.configuration['POPS']['dashboard']['columns'])
             self.radar[playerName].addRecord(resultsRadar, resultsBar, baseline=False)
             eventId = self.eventsByName[self.eventsCtrl.GetStringSelection()]
             self.dashboard.post_data_radar(jsonfile=path, eventId=eventId, playerId=playerId)
@@ -725,7 +727,7 @@ class PopsPanel(wx.Panel):
     #        record = (infected_cells * res * res, money, treated, crop_affected_area)
             path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
             if not self.bar:
-                self.bar = BarData(filePath=path, baseline=self.baselineValues)
+                self.bar = BarData(filePath=path, baseline=self.baselineValues, columns=self.configuration['POPS']['dashboard']['columns'])
             self.bar.addRecord(resultsBar, playerName)
             self.dashboard.post_data_bar(jsonfile=path, eventId=eventId)
 

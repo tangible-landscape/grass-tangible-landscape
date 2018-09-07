@@ -216,13 +216,13 @@ class DashBoardRequests:
 
 
 class RadarData:
-    def __init__(self, filePath, baseline=None):
-        self.columns = ["Infected Area (mi2)", "Money Spent", "Area Treated (mi2)", "Crop affected (mi2)"]
-        self.formatting = ["{:.1f}", "{:.0f} M", "{:.1f}", "{:.1f}"]
-        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7, 3.861e-7]
+    def __init__(self, filePath, columns, baseline=None):
+        self.columns = [col['name'] for col in columns]
+        self.formatting = [col['formatting'] for col in columns]
+        self.multiplication = [col['multiplication'] for col in columns]
         if not baseline:
-            baseline = [0, 0, 0, 0]
-        scaled = [10, 0, 0, 0]
+            baseline = [0] * len(columns)
+        scaled = [0] * len(columns)
         self._filePath = filePath
         self.attempts = [str(i) for i in range(1, 50)]
         self._data = [{'data': [], 'tableRows':[], 'attempt': None, "baseline": True}]
@@ -286,17 +286,17 @@ class RadarData:
 
 
 class BarData:
-    def __init__(self, filePath, baseline=None):
+    def __init__(self, filePath, columns, baseline=None):
         if not baseline:
-            baseline = [0, 0, 0, 0]
-        columns = ["Infected Area (mi2)", "Money Spent (M)", "Area Treated (mi2)", "Crop affected (mi2)"]
-        self.formatting = [lambda x: round(x, 1), int, lambda x: round(x, 1), lambda x: round(x, 1)]
-        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7, 3.861e-7]
+            baseline = [0] * len(columns)
+        self.columns = [col['name'] for col in columns]
+        self.multiplication = [col['multiplication'] for col in columns]
         self._filePath = filePath
         self._data = []
         i = 0
-        for each in columns:
-            col = {"axis": each, "options": False, "values": [{"value": self.formatting[i](baseline[i] * self.multiplication[i]), "playerName": "No treatment", "attempt": ""}]}
+        for each in self.columns:
+            col = {"axis": each, "options": False, "values": [{"value": baseline[i] * self.multiplication[i],
+                                                               "playerName": "No treatment", "attempt": ""}]}
             self._data.append(col)
             i += 1
         self.save()
@@ -317,7 +317,7 @@ class BarData:
 
     def addRecord(self, values, player):
         for i, value in enumerate(values):
-            self._addRecord(i, self.formatting[i](value * self.multiplication[i]), player)
+            self._addRecord(i, value * self.multiplication[i], player)
 
     def _addRecord(self, which, value, player):
         cnt_attempt = 1
