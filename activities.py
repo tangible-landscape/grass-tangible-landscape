@@ -358,6 +358,9 @@ class ActivitiesPanel(wx.Panel):
             self.slides.Next()
             self.slidesStatus.SetLabel("Slide {}".format(slidenum))
 
+    def _getTaskDir(self):
+        return self.configuration['taskDir'] if 'taskDir' in self.configuration else os.path.dirname(self.settings['activities']['config'])
+
     def _startTask(self):
         if self.timer.IsRunning():
             return
@@ -367,7 +370,7 @@ class ActivitiesPanel(wx.Panel):
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
-        self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
+        self.settings['analyses']['file'] = os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
         if 'scanning_params' in self.tasks[self.current]:
             for each in self.tasks[self.current]['scanning_params'].keys():
@@ -465,16 +468,13 @@ class ActivitiesPanel(wx.Panel):
 
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
-        zoom = []
         for i, cmd in enumerate(self.tasks[self.current]['layers']):
             opacity = 1.0
             if "layers_opacity" in self.tasks[self.current]:
                 opacity = float(self.tasks[self.current]['layers_opacity'][i])
             if cmd[0] == 'd.rast':
-                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
                                 opacity=opacity, cmd=cmd)
-                if cmd[1].split('=')[1] != 'scan':
-                    zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=opacity, cmd=cmd)
@@ -489,7 +489,9 @@ class ActivitiesPanel(wx.Panel):
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=1.0, cmd=cmd)
-        self.giface.GetMapWindow().ZoomToMap(layers=zoom)
+        base = self.tasks[self.current]['base']
+        self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
+        self.giface.GetMapWindow().UpdateMap()
 
     def LoadHandsOff(self):
         ll = self.giface.GetLayerList()
@@ -502,7 +504,7 @@ class ActivitiesPanel(wx.Panel):
         wx.SafeYield()
         env = get_environment(rast=self.settings['output']['scan'])
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -511,7 +513,7 @@ class ActivitiesPanel(wx.Panel):
         for func in functions:
             exec('del postprocess.' + func)
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
