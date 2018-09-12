@@ -389,11 +389,17 @@ class ActivitiesPanel(wx.Panel):
         # display
         if 'display' in self.tasks[self.current]:
             self.StartDisplay()
-        wx.GetTopLevelParent(self).SetFocus()
+
+        wx.CallLater(1000, self._setFocus)
 
         self.startTime = datetime.datetime.now()
         self.endTime = 0
         self.timer.Start(100)
+
+    def _setFocus(self):
+        topParent = wx.GetTopLevelParent(self)
+        topParent.Raise()
+        topParent.SetFocus()
 
     def _closeAdditionalWindows(self):
         if self.slides:
@@ -443,6 +449,7 @@ class ActivitiesPanel(wx.Panel):
             wx.CallLater(t, self.PostProcessing)
         else:
             self.PostProcessing()
+        self._setFocus()
 
     def OnTimer(self, event):
         diff = datetime.datetime.now() - self.startTime
