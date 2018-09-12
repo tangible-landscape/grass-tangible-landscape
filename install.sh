@@ -112,7 +112,7 @@ cat << EOF > /tmp/grass.desktop
 Version=1.0
 Name=GRASS GIS
 Comment=Start GRASS GIS
-Exec=${CDIR}/grass76_release/bin.x86_64-pc-linux-gnu/grass74
+Exec=${CDIR}/grass76_release/bin.x86_64-pc-linux-gnu/grass76
 Icon=${CDIR}/grass76_release/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
 Terminal=true
 Type=Application
