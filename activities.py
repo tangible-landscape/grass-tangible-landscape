@@ -166,45 +166,45 @@ class ActivitiesPanel(wx.Panel):
         self.title.Enable(enable)
 
     def _bindUserStop(self):
-        topParent = wx.GetTopLevelParent(self)
+        windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
+        windows.append(wx.GetTopLevelParent(self))
+        windows.append(self.giface.lmgr)
         if "keyboard_events" in self.configuration:
             items = []
             for eventName in self.configuration['keyboard_events']:
                 if eventName == 'stopTask':
                     userStopId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['stopTask'], userStopId))
-                    topParent.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
+                    for win in windows:
+                        win.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
                 elif eventName == 'scanOnce':
                     userScanOnceId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['scanOnce'], userScanOnceId))
-                    topParent.Bind(wx.EVT_MENU, self.OnScanOnce, id=userScanOnceId)
+                    for win in windows:
+                        win.Bind(wx.EVT_MENU, self.OnScanOnce, id=userScanOnceId)
                 elif eventName == 'taskNext':
                     taskNextId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['taskNext'], taskNextId))
-                    topParent.Bind(wx.EVT_MENU, self.OnNextTask, id=taskNextId)
+                    for win in windows:
+                        win.Bind(wx.EVT_MENU, self.OnNextTask, id=taskNextId)
                 elif eventName == 'taskPrevious':
                     taskPreviousId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['taskPrevious'], taskPreviousId))
-                    topParent.Bind(wx.EVT_MENU, self.OnPreviousTask, id=taskPreviousId)
+                    for win in windows:
+                        win.Bind(wx.EVT_MENU, self.OnPreviousTask, id=taskPreviousId)
                 elif eventName == 'startTask':
                     startTaskId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['startTask'], startTaskId))
-                    topParent.Bind(wx.EVT_MENU, lambda evt: self.StartAutomated(), id=startTaskId)
+                    for win in windows:
+                        win.Bind(wx.EVT_MENU, lambda evt: self.StartAutomated(), id=startTaskId)
                 else:
                     customId = wx.NewId()
                     items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events'][eventName], customId))
-                    topParent.Bind(wx.EVT_MENU, lambda evt: self.CustomAction(eventName), id=customId)
+                    for win in windows:
+                        win.Bind(wx.EVT_MENU, lambda evt: self.CustomAction(eventName), id=customId)
             accel_tbl = wx.AcceleratorTable(items)
-            topParent.SetAcceleratorTable(accel_tbl)
-            if 'userStopId' in self.configuration['keyboard_events']:
-                # Map displays
-                for mapw in self.giface.GetAllMapDisplays():
-                    mapw.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-                    mapw.SetAcceleratorTable(accel_tbl)
-                # Layer Manager
-                lm = self.giface.lmgr
-                lm.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-                lm.SetAcceleratorTable(accel_tbl)
+            for win in windows:
+                win.SetAcceleratorTable(accel_tbl)
 
 
     def CustomAction(self, eventName):
