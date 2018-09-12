@@ -10,7 +10,7 @@ CDIR=`pwd`
 # package dependencies
 sudo apt-get update && sudo apt-get install -y \
    build-essential cmake pkg-config git wget\
-   libusb-1.0-0-dev libturbojpeg libjpeg-turbo8-dev libglfw3-dev \
+   libusb-1.0-0-dev libturbojpeg0-dev libglfw3-dev \
    libboost-all-dev libeigen3-dev libflann-dev libopencv-dev \
    flex make bison gcc libgcc1 g++ ccache \
    python python-dev \
@@ -30,7 +30,7 @@ sudo apt-get update && sudo apt-get install -y \
    libboost-thread-dev libboost-program-options-dev liblas-c-dev \
    resolvconf \
    subversion \
-   libav-tools libavutil-dev ffmpeg2theora \
+   libavutil-dev ffmpeg2theora \
    libffmpegthumbnailer-dev \
    libavcodec-dev \
    libxmu-dev \
@@ -68,8 +68,8 @@ sudo make -j2 install
 cd ../..
 
 # GRASS GIS
-svn checkout https://svn.osgeo.org/grass/grass/branches/releasebranch_7_4 grass74_release
-cd grass74_release
+svn checkout https://svn.osgeo.org/grass/grass/branches/releasebranch_7_6 grass76_release
+cd grass76_release
 CFLAGS="-O2 -Wall" LDFLAGS="-s" ./configure \
   --enable-largefile=yes \
   --with-nls \
@@ -92,8 +92,8 @@ cd ..
 # r.in.kinect
 git clone https://github.com/tangible-landscape/r.in.kinect.git
 cd r.in.kinect
-make MODULE_TOPDIR=../grass74_release
-make install MODULE_TOPDIR=../grass74_release
+make MODULE_TOPDIR=../grass76_release
+make install MODULE_TOPDIR=../grass76_release
 cd ..
 
 # TL plugin
@@ -102,8 +102,8 @@ cd ..
 # this is for the development of grass-tangible-landscape
 git clone https://github.com/tangible-landscape/grass-tangible-landscape.git
 cd grass-tangible-landscape
-make MODULE_TOPDIR=../grass74_release
-make install MODULE_TOPDIR=../grass74_release
+make MODULE_TOPDIR=../grass76_release
+make install MODULE_TOPDIR=../grass76_release
 cd ..
 
 # set up GRASS GIS icon in dash
@@ -112,8 +112,8 @@ cat << EOF > /tmp/grass.desktop
 Version=1.0
 Name=GRASS GIS
 Comment=Start GRASS GIS
-Exec=${CDIR}/grass74_release/bin.x86_64-pc-linux-gnu/grass74
-Icon=${CDIR}/grass74_release/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
+Exec=${CDIR}/grass76_release/bin.x86_64-pc-linux-gnu/grass74
+Icon=${CDIR}/grass76_release/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
 Terminal=true
 Type=Application
 Categories=GIS;Application;
