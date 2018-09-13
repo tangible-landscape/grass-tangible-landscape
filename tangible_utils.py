@@ -23,6 +23,7 @@ updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
 addLayers, EVT_ADD_LAYERS = wx.lib.newevent.NewEvent()
 removeLayers, EVT_REMOVE_LAYERS = wx.lib.newevent.NewEvent()
 checkLayers, EVT_CHECK_LAYERS = wx.lib.newevent.NewEvent()
+selectLayers, EVT_SELECT_LAYERS = wx.lib.newevent.NewEvent()
 
 
 def get_show_layer_icon():
@@ -118,7 +119,10 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     except CalledModuleError:
         print 'error in r.info'
         return
-    if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
+    try:
+        if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
+            return
+    except ZeroDivisionError:
         return
     env = get_environment(rast=scan_name)
     if not analysesFile or not os.path.exists(analysesFile):
