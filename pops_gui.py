@@ -66,6 +66,12 @@ class PopsPanel(wx.Panel):
         self.lastRecordedTreatment = ''
         self.lastDisplayedLayerAnim = ''
 
+        # steering
+        self.visualizationMode = ['singlerun', 'probability']
+        self.currentYear = None
+        self._threadingEvent = threading.Event()
+        self.model_running = False
+
         self.dashboard = None
         self.baselineValues = []
         self.scenarios = {}
@@ -84,8 +90,8 @@ class PopsPanel(wx.Panel):
             self.settings['POPS']['config'] = ''
         else:
             self.configFile = self.settings['POPS']['config']
-            
-            
+
+
         if self.configFile:
             try:
                 with open(self.configFile, 'r') as f:
@@ -214,7 +220,7 @@ class PopsPanel(wx.Panel):
             return
 
         self.isRunningClientThread = True
-        self.clientthread = threading.Thread(target=self._client, args=(self.resultsToDisplay, ))
+        self.clientthread = threading.Thread(target=self._client, args=(self.resultsToDisplay, self._threadingEvent))
         self.clientthread.start()
 
     def _connectDashboard(self):
@@ -284,7 +290,12 @@ class PopsPanel(wx.Panel):
         else:
             self.settings['activities']['config'] = ''
 
-    def _client(self, resultsToDisplay):
+    def _debug(self, msg):
+        with open('/tmp/debug.txt', 'a+') as f:
+            f.write(':'.join(msg))
+            f.write('\n')
+
+    def _client(self, resultsToDisplay, event):
         while self.isRunningClientThread:
             data = self.socket.recv(1024)
             if not data:
@@ -292,8 +303,10 @@ class PopsPanel(wx.Panel):
                 # finish while loop
                 self.socket.close()
                 continue
+            self._debug(msg=['starts'])
             message = data.split(':')
             if message[0] == 'clientfile':
+                self._debug(message)
                 _, fsize, path = message
                 with open(message[2], 'rb') as f:
                     data = f.read()
@@ -302,6 +315,7 @@ class PopsPanel(wx.Panel):
                     except socket.error:
                         print 'erroro sending file'
             elif message[0] == 'serverfile':
+                self._debug(message)
                 # receive file
                 fsize, path = int(message[1]), message[2]
                 self.socket.sendall(data)
@@ -343,10 +357,19 @@ class PopsPanel(wx.Panel):
 
                 ##########
             elif message[0] == 'info':
+                self._debug(message)
                 if message[1] == 'last':
                     name = message[2]
                     evt = ProcessForDashboardEvent(result=name)
                     wx.PostEvent(self, evt)
+                elif message[1] == 'received':
+                    print "event.set()"
+                    event.set()
+                elif message[1] == 'model_running':
+                    self.model_running = True if message[2] == 'yes' else False
+                    event.set()
+
+
 
     def ShowResults(self, event=None):
         # clear the queue to stop animation
@@ -389,11 +412,11 @@ class PopsPanel(wx.Panel):
                             rules=self.configuration['POPS']['color_probability'])
         cmd = ['d.rast', 'values=0-10', 'flags=i', 'map={}'.format(name)]
         self.RemoveAllResultsLayers()
-        self.ShowTreatment()
+        self.ShowTreatment(self.currentYear)
         ll = self.giface.GetLayerList()
         ll.AddLayer('raster', name=name, checked=True, opacity=1, cmd=cmd)
 
-    def ShowTreatment(self, event=None):
+    def ShowTreatment(self, year):
         if self.dashboard:
             event = self.eventsCtrl.GetStringSelection()
             name, attempt = self.recordCtrl.GetStringSelection().split(':')
@@ -401,16 +424,18 @@ class PopsPanel(wx.Panel):
             event = 'tmpevent'
             attempt = '1'
             name = self._createPlayerName()
-        name = self.configuration['POPS']['treatments'] + '_' + name + '_' + attempt + '_' + event
+        name = self.configuration['POPS']['treatments'] + '_' + name + '_' + attempt + '_' + event + '_' + str(year)
 
-        env = get_environment(raster=name)
-        gscript.run_command('r.to.vect', flags='st', input=name, output=name, type='area', env=env)
-        gscript.run_command('v.generalize', input=name, output=name + '_gen', method='snakes', threshold=10, env=env)
-        # test if vector exists (if any treatment was done)
-        if gscript.find_file(name=name + '_gen', element='vector')['fullname']:
-            cmd = ['d.vect', 'map={}'.format(name + '_gen'), 'color=none', 'fill_color=144:238:144']
+        if gscript.find_file(name=name, element='raster')['fullname']:
+            env = get_environment(raster=name)
+            gscript.run_command('r.to.vect', flags='st', input=name, output=name, type='area', env=env)
+        #gscript.run_command('v.generalize', input=name, output=name + '_gen', method='snakes', threshold=10, env=env)
+#            cmd = ['d.vect', 'map={}'.format(name + '_gen'), 'color=none', 'fill_color=144:238:144']
+#            ll = self.giface.GetLayerList()
+#            ll.AddLayer('vector', name=name + '_gen', checked=True, opacity=1, cmd=cmd)
+            cmd = ['d.vect', 'map={}'.format(name), 'color=none', 'fill_color=144:238:144']
             ll = self.giface.GetLayerList()
-            ll.AddLayer('vector', name=name + '_gen', checked=True, opacity=1, cmd=cmd)
+            ll.AddLayer('vector', name=name, checked=True, opacity=1, cmd=cmd)
 
     def _createPlayerName(self):
         playerName = []
@@ -497,6 +522,15 @@ class PopsPanel(wx.Panel):
         price_per_m2 = eval(price_function.format(treatment_efficacy))
         self.money_spent = self.treated_area * price_per_m2
 
+        if self.dashboard:
+            postfix = playerName + '_' + new_attempt + '_' + self.eventsByIds[eventId]
+        else:
+            postfix = playerName + '_' + '1' + '_' + 'tmpevent'
+        probability = probability + '_' + postfix
+        # todo, save treatments
+        gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix + '_' + str(self.currentYear)], env=env)
+        self.lastRecordedTreatment = treatments + '_' + postfix
+
         # compute proportion
         if gscript.raster_info(treatments)['ewres'] < gscript.raster_info(species)['ewres']:
             gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
@@ -507,52 +541,49 @@ class PopsPanel(wx.Panel):
             gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='average', env=env)
             gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
 
-        if self.treated_area:
-            gscript.mapcalc("{s} = int({l} - {l} * {t} * {e})".format(s=species_treated, t=treatments_resampled,
-                                                                   i=infected, l=species, e=treatment_efficacy), env=env)
-        else:  # when there is no treatment
-            gscript.mapcalc("{s} = int(if ({i} == 0, {l}, max(1, {l})))".format(s=species_treated, i=infected, l=species), env=env)
+        self.applyTreatments(species=species, species_treated=species_treated, efficacy=treatment_efficacy,
+                             treatment_prefix=treatments + '_' + postfix, env=env)
 
         gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=species_treated, ni=inf_treated), env=env)
-        # this is not used in pops
-        gscript.mapcalc("{att} = round({at} - ({s} - {st}))".format(at=all_trees, att=all_trees_treated, st=species_treated, s=species), env=env)
 
-#        gscript.mapcalc("{att} = if(isnull({tr}), {at}, if ({at} - ({sp} - {st}) < 0, 1, {at} - ({sp} - {st})))".format(tr=treatments,
-#                        at=all_trees, att=all_trees_treated, st=species_treated, sp=species), env=env)
+        # export treatments file to server
+        pack_path = os.path.join(TMP_DIR, species_treated + '.pack')
+        gscript.run_command('r.pack', input=species_treated, output=pack_path, env=env)
+        self.socket.sendall('clientfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+        self._threadingEvent.clear()
+        self._threadingEvent.wait(2000)
 
-        if self.dashboard:
-            postfix = playerName + '_' + new_attempt + '_' + self.eventsByIds[eventId]
+        self.socket.sendall('info:model_running')
+        self._threadingEvent.clear()
+        self._threadingEvent.wait(2000)
+
+        if self.model_running:
+            self.socket.sendall('cmd:play')
         else:
-            postfix = playerName + '_' + '1' + '_' + 'tmpevent'
-        probability = probability + '_' + postfix
-        # todo, save treatments
-        gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix], env=env)
-        self.lastRecordedTreatment = treatments + '_' + postfix
-        extent = gscript.raster_info(studyArea)
-        region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
-                                              w=extent['west'], e=extent['east'], a=species)
+            extent = gscript.raster_info(studyArea)
+            region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
+                                                  w=extent['west'], e=extent['east'], a=species)
 
-        model_params = self.configuration['POPS']['model'].copy()
-        model_params.update({'output': postfix, 'output_series': postfix,
-                             'probability': probability, 'species': species_treated})
-        # update for scenarios:
-        for scen in self.scenarios:
-            option = self.scenarios[scen].GetStringSelection()
-            params = self.configuration['POPS']['scenarios'][scen]['values'].keys()
-            for param in params:
-                if param in model_params:
-                    value = self.configuration['POPS']['scenarios'][scen]['values'][param][option]
-                    model_params.update({param: value})
-        # run simulation
-        message = 'cmd:start:'
-        message += "region=" + region
-        for key in model_params:
-            message += '|'
-            message += '{k}={v}'.format(k=key, v=model_params[key])
+            model_params = self.configuration['POPS']['model'].copy()
+            model_params.update({'output': postfix, 'output_series': postfix,
+                                 'probability': probability, 'species': species_treated})
+            # update for scenarios:
+            for scen in self.scenarios:
+                option = self.scenarios[scen].GetStringSelection()
+                params = self.configuration['POPS']['scenarios'][scen]['values'].keys()
+                for param in params:
+                    if param in model_params:
+                        value = self.configuration['POPS']['scenarios'][scen]['values'][param][option]
+                        model_params.update({param: value})
+            # run simulation
+            message = 'cmd:start:'
+            message += "region=" + region
+            for key in model_params:
+                message += '|'
+                message += '{k}={v}'.format(k=key, v=model_params[key])
+            self.socket.sendall(message)
 
         self.RemoveAllResultsLayers()
-
-        self.socket.sendall(message)
 
     def computeTreatmentArea(self, treatments):
         env = get_environment(raster=treatments)
@@ -562,6 +593,21 @@ class PopsPanel(wx.Panel):
         else:
             res = gscript.region(env=env)
             return float(univar['n']) * res['nsres'] * res['ewres']
+
+    def applyTreatments(self, species, species_treated, efficacy, treatment_prefix, env):
+        if self.treated_area:
+            treatments = gscript.list_grouped(type='raster', pattern=treatment_prefix + '_*')[gscript.gisenv()['MAPSET']]
+            treatments = [tr for tr in treatments if int(tr.split('_')[-1]) <= self.currentYear]
+            if len(treatments) >= 2:
+                gscript.run_command('r.patch', input=treatments, output='treatments_patched', env=env)
+                t = 'treatments_patched'
+            elif len(treatments) == 1:
+                t = treatments[0]
+
+            gscript.mapcalc("{s} = int({l} - {l} * {t} * {e})".format(s=species_treated, t=t,
+                                                                      l=species, e=efficacy), env=env)
+        else:  # when there is no treatment
+            gscript.run_command('g.copy', raster=[species, species_treated], env=env)
 
     def _run(self):
         self.socket.sendall('cmd:play')
@@ -591,6 +637,7 @@ class PopsPanel(wx.Panel):
                 year = res.group().strip('_')
                 evt2 = updateTimeDisplay(value=year)
                 self.scaniface.postEvent(self, evt2)
+                self.currentYear = int(year)
 
     def ComputeBaseline(self):
         self.infoBar.ShowMessage("Computing baseline...")
@@ -768,6 +815,7 @@ class PopsPanel(wx.Panel):
             return
         self._connect()
         self._loadConfiguration(None)
+        self.currentYear = self.configuration['POPS']['model']['start_time']
         self.showDisplayChange = True
         self.switchCurrentResult = 0
         self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS']}
@@ -829,15 +877,23 @@ class PopsPanel(wx.Panel):
         topParent = wx.GetTopLevelParent(self)
         if "keyboard_events" in self.configuration:
             items = []
-            simulateId = animateId = None
-            if 'simulate' in self.configuration['keyboard_events']:
-                simulateId = wx.NewId()
-                items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['simulate'], simulateId))
-                topParent.Bind(wx.EVT_MENU, self._RunSimulation, id=simulateId)
-            if 'animate' in self.configuration['keyboard_events']:
-                animateId = wx.NewId()
-                items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['animate'], animateId))
-                topParent.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
+            for eventName in self.configuration['keyboard_events']:
+                if eventName == 'simulate':
+                    simulateId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['simulate'], simulateId))
+                    topParent.Bind(wx.EVT_MENU, self._RunSimulation, id=simulateId)
+                elif eventName == 'animate':
+                    animateId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['animate'], animateId))
+                    topParent.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
+                elif eventName == 'stepforward':
+                    stepforwardId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['stepforward'], stepforwardId))
+                    topParent.Bind(wx.EVT_MENU, self.StepForward, id=stepforwardId)
+                elif eventName == 'stepback':
+                    stepbackId = wx.NewId()
+                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['stepback'], stepbackId))
+                    topParent.Bind(wx.EVT_MENU, self.StepBack, id=stepbackId)
             accel_tbl = wx.AcceleratorTable(items)
             topParent.SetAcceleratorTable(accel_tbl)
             # Map displays
@@ -854,6 +910,50 @@ class PopsPanel(wx.Panel):
             if animateId:
                 lm.Bind(wx.EVT_MENU, self.ShowResults, id=animateId)
             lm.SetAcceleratorTable(accel_tbl)
+
+    def StepBack(self, event):
+        self.Step(forward=False)
+
+    def StepForward(self, event):
+        self.Step(forward=True)
+
+    def Step(self, forward=True):
+        # update time display
+        if not self.timeDisplay:
+            return
+        start = self.configuration['POPS']['model']['start_time']
+        end = self.configuration['POPS']['model']['end_time']
+        if forward and self.currentYear >= end:
+            return
+        if not forward and self.currentYear <= start:
+            return
+        self.currentYear = self.currentYear + 1 if forward else self.currentYear - 1
+        self.timeDisplay.Update(self.currentYear)
+
+        # change layers
+        if self.recordCtrl.GetSelection() != wx.NOT_FOUND:  # check if any simulation was computed
+            if self.dashboard:
+                event = self.eventsCtrl.GetStringSelection()
+                name, attempt = self.recordCtrl.GetStringSelection().split(':')
+            else:
+                event = 'tmpevent'
+                attempt = '1'
+                name = self._createPlayerName()
+            etype = 'raster'
+            pattern = "{n}_{a}_{e}_*".format(n=name, e=event, a=attempt)
+
+            if self.visualizationMode == 'singlerun':
+                pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
+            elif self.visualizationMode == 'probability':
+                pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
+            else:
+                pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
+
+            self.RemoveAllResultsLayers()
+            self.ShowTreatment(self.currentYear)
+            for name in pattern_layers:
+                if str(self.currentYear) in name:
+                    self.resultsToDisplay.put(name)
 
     def ChangeRegion(self):
         region = self.treatmentSelect.GetValue()
@@ -967,7 +1067,7 @@ class PopsPanel(wx.Panel):
 
         self.RemoveAllResultsLayers()
         self.lastDisplayedLayerAnim = ''
-        self.ShowTreatment()
+        self.ShowTreatment(self.currentYear)
         for name in all_layers:
             self.resultsToDisplay.put(name)
 
