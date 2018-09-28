@@ -152,7 +152,7 @@ class PopsPanel(wx.Panel):
         self.mainSizer.Add(boxSizer, flag=wx.EXPAND | wx.ALL, border=5)
 
         boxSizer = wx.StaticBoxSizer(modelingBox, wx.VERTICAL)
-        if 'scenarios' in self.configuration['POPS']:
+        if self.configuration and 'scenarios' in self.configuration['POPS']:
             sizer = wx.BoxSizer(wx.HORIZONTAL)
             sizer.Add(wx.StaticText(modelingBox, label="Scenarios:"), flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=10)
             for scen in self.configuration['POPS']['scenarios']:
@@ -513,6 +513,7 @@ class PopsPanel(wx.Panel):
         else:  # when there is no treatment
             gscript.mapcalc("{s} = int(if ({i} == 0, {l}, max(1, {l})))".format(s=species_treated, i=infected, l=species), env=env)
 
+        # TODO: revisit this
         gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=species_treated, ni=inf_treated), env=env)
         # this is not used in pops
         gscript.mapcalc("{att} = round({at} - ({s} - {st}))".format(at=all_trees, att=all_trees_treated, st=species_treated, s=species), env=env)

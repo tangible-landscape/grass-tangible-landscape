@@ -311,8 +311,10 @@ class BarData:
 
     def getBaseline(self):
         baseline = []
+        i = 0
         for each in self._data:
-            baseline.append(each['values'][0]['value'])
+            baseline.append(each['values'][0]['value'] / self.multiplication[i])
+            i += 1
         return baseline
 
     def addRecord(self, values, player):
