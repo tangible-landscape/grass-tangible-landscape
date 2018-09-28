@@ -913,6 +913,9 @@ class PopsPanel(wx.Panel):
             elif cmd[0] == 'd.northarrow':
                 l = ll.AddLayer('northarrow', name=cmd[1].split('=')[1], checked=checked,
                                 opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.barscale':
+                l = ll.AddLayer('barscale', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
             else:
                 l = ll.AddLayer('command', name=' '.join(cmd), checked=checked,
                                 opacity=opacity, cmd=[])
