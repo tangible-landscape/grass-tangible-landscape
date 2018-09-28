@@ -48,7 +48,7 @@ connections = {}
 
 
 def run_baseline(settings):
-    model = 'r.spread.sod'
+    model = 'r.spread.pest'
     params = {}
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
@@ -64,7 +64,7 @@ def run_baseline(settings):
 
 
 def run_model(settings):
-    model = 'r.spread.sod'
+    model = 'r.spread.pest'
     params = {}
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
@@ -83,7 +83,7 @@ def run_model(settings):
     return name
 
 def run_model_nonblocking(settings):
-    model = 'r.spread.sod'
+    model = 'r.spread.pest'
     params = {}
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
@@ -205,10 +205,8 @@ def clientGUI(conn, connections, event):
 
 
 def checkOutput(connection, basename, sod_process, event):
-    old_found = []
-    event.set()
-    while sod_process.poll() is None:
-        time.sleep(0.1)
+
+    def send_output():
         found = gscript.list_grouped(type='raster', pattern=basename + '_*')[gscript.gisenv()['MAPSET']]
         for each in found:
             if each not in old_found:
@@ -218,8 +216,20 @@ def checkOutput(connection, basename, sod_process, event):
                 event.clear()
                 connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
                 old_found.append(each)
+
+    old_found = []
+    event.set()
+    while sod_process.poll() is None:
+        time.sleep(0.1)
+        send_output()
+
     sod_process.wait()
     sod_process = None
+
+    # finish any model outputs outputted between packing and end of the simulation
+    event.wait(2000)
+    send_output()
+
     pack_path = TMP_DIR + basename + '.pack'
     gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
     event.wait(2000)
