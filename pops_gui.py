@@ -36,6 +36,16 @@ updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
 updateTimeDisplay, EVT_UPDATE_TIME_DISPLAY = wx.lib.newevent.NewEvent()
 
 TMP_DIR = '/tmp/test_SOD/'
+try:
+    os.mkdir(TMP_DIR)
+except OSError:
+    pass
+
+
+### naming scheme for outputs: ###
+# event__scenario/player__mainAttempt_subAttmpt__year_month_day
+# probability__event__scenario/player__mainAttempt_subAttmpt__year_month_day
+
 
 
 class PopsPanel(wx.Panel):
@@ -69,6 +79,8 @@ class PopsPanel(wx.Panel):
         # steering
         self.visualizationMode = ['singlerun', 'probability']
         self.currentYear = None
+        self.checkpoints = []
+        self.attempt = Attempt()
         self._threadingEvent = threading.Event()
         self.model_running = False
 
@@ -259,18 +271,18 @@ class PopsPanel(wx.Panel):
     def OnTimeDisplayUpdate(self, event):
         if not self.timeDisplay:
             return
-        self.timeDisplay.Update(event.value)
+        self.timeDisplay.Update(*event.date)
 
     def DeleteAttempt(self):
         event = self.eventsCtrl.GetStringSelection()
         try:
             selectedPlayer, attempt = self.recordCtrl.GetStringSelection().split(':')
             if self.bar:
-                self.bar.removeAttempt(selectedPlayer, int(attempt))
+                self.bar.removeAttempt(selectedPlayer, attempt)
                 jsonfile = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=event))
                 self.dashboard.post_data_bar(jsonfile=jsonfile, eventId=self.eventsByName[event])
             if self.radar:
-                self.radar[selectedPlayer].removeAttempt(int(attempt))
+                self.radar[selectedPlayer].removeAttempt(attempt)
                 jsonfile = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=selectedPlayer, e=event))
                 self.dashboard.post_data_radar(jsonfile, self.eventsByName[event], self.playersByName[selectedPlayer])
 
@@ -350,8 +362,9 @@ class PopsPanel(wx.Panel):
                     gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
                     name = os.path.basename(path).replace('.pack', '')
                     # avoid showing aggregate result
-                    # player_attempt_event_year_month_day
+                    # event_player_year_month_day
                     if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
+                        print name
                         resultsToDisplay.put(name)
                         print 'display'
 
@@ -362,6 +375,8 @@ class PopsPanel(wx.Panel):
                     name = message[2]
                     evt = ProcessForDashboardEvent(result=name)
                     wx.PostEvent(self, evt)
+                    # rename layers to save unique scenario
+                    self._renameAllAfterSimulation(name)
                 elif message[1] == 'received':
                     print "event.set()"
                     event.set()
@@ -369,7 +384,16 @@ class PopsPanel(wx.Panel):
                     self.model_running = True if message[2] == 'yes' else False
                     event.set()
 
-
+    def _renameAllAfterSimulation(self, name):
+        event, player, date = name.split('__')
+        a1, a2 = self.attempt.getCurrent()
+        pattern = "{e}__{n}__[0-9]{{4}}_[0-9]{{2}}_[0-9]{{2}}".format(n=player, e=event)
+        pattern_layers = gscript.list_grouped(type='raster', pattern=pattern, flag='e')[gscript.gisenv()['MAPSET']]
+        if pattern_layers:
+            for layer in pattern_layers:
+                components = layer.split('__')
+                new_name = '__'.join(components[:-1] + ['{a1}_{a2}'.format(a1=a1, a2=a2)] + components[-1:])
+                gscript.run_command('g.copy', raster=[layer, new_name])
 
     def ShowResults(self, event=None):
         # clear the queue to stop animation
@@ -392,21 +416,23 @@ class PopsPanel(wx.Panel):
         if self.dashboard:
             event = self.eventsCtrl.GetStringSelection()
             name, attempt = self.recordCtrl.GetStringSelection().split(':')
+            attempt = '_'.join(attempt.split('.'))
         else:
             event = 'tmpevent'
             attempt = '1'
             name = self._createPlayerName()
-        self.AddLayersAsAnimation(etype='raster', pattern="{n}_{a}_{e}_*".format(n=name, e=event, a=attempt))
+        self.AddLayersAsAnimation(etype='raster', pattern="{e}__{n}__{a}_*".format(n=name, e=event, a=attempt))
 
     def ShowProbability(self, event=None):
         if self.dashboard:
             event = self.eventsCtrl.GetStringSelection()
             name, attempt = self.recordCtrl.GetStringSelection().split(':')
+            attempt = '_'.join(attempt.split('.'))
         else:
             event = 'tmpevent'
             attempt = '1'
             name = self._createPlayerName()
-        name = self.configuration['POPS']['model']['probability'] + '_' + name + '_' + attempt + '_' + event
+        name = self.configuration['POPS']['model']['probability'] + '__' + event + '__' + name + '__' + attempt
 
         gscript.run_command('r.colors', map=name, quiet=True,
                             rules=self.configuration['POPS']['color_probability'])
@@ -420,13 +446,15 @@ class PopsPanel(wx.Panel):
         if self.dashboard:
             event = self.eventsCtrl.GetStringSelection()
             name, attempt = self.recordCtrl.GetStringSelection().split(':')
+            attempt = '_'.join(attempt.split('.'))
         else:
             event = 'tmpevent'
             attempt = '1'
             name = self._createPlayerName()
-        name = self.configuration['POPS']['treatments'] + '_' + name + '_' + attempt + '_' + event + '_' + str(year)
-
+        name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt, str(year)])
+        print name
         if gscript.find_file(name=name, element='raster')['fullname']:
+            print 'found'
             env = get_environment(raster=name)
             gscript.run_command('r.to.vect', flags='st', input=name, output=name, type='area', env=env)
         #gscript.run_command('v.generalize', input=name, output=name + '_gen', method='snakes', threshold=10, env=env)
@@ -453,22 +481,12 @@ class PopsPanel(wx.Panel):
             self.RemoveAllResultsLayers()
             wx.FutureCall(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
 
-    def RunSimulation(self, event=None):
-        if not self.baselineValues:
-            dlg = wx.MessageDialog(self, 'Compute baseline first',
-                                   'Missing baseline',
-                                   wx.OK | wx.ICON_WARNING)
-            dlg.ShowModal()
-            dlg.Destroy()
-            return
+    def EndSimulation(self):
+        if self._isModelRunning():
+            self.socket.sendall('cmd:end')
 
-        if self._currentlyRunning:
-            return
-
-        self.showDisplayChange = False
-
-        self._currentlyRunning = True
-        self.infoBar.ShowMessage("Processing...")
+    def InitSimulation(self):
+        self.infoBar.ShowMessage("Initializing...")
 
         playerName = self._createPlayerName()
         if self.dashboard:
@@ -479,19 +497,6 @@ class PopsPanel(wx.Panel):
             self.playersByIds[pid] = playerName
             self.playersByName[playerName] = pid
 
-            attempts = []
-            if self.bar:
-                attempts = self.bar.getAllAttempts(playerName)
-            if not attempts:
-                attempts = [1]
-                new_attempt = '1'
-            else:
-                new_attempt = str(max(attempts) + 1)
-
-            attempt = "{p}:{a}".format(p=playerName, a=new_attempt)
-            self.recordCtrl.Append(attempt)
-            self.recordCtrl.SetStringSelection(attempt)
-
         # update for scenarios:
         for scen in self.scenarios:
             option = self.scenarios[scen].GetStringSelection()
@@ -500,6 +505,70 @@ class PopsPanel(wx.Panel):
                 if param in self.configuration['POPS']:
                     value = self.configuration['POPS']['scenarios'][scen]['values'][param][option]
                     self.configuration['POPS'][param] = value
+
+        # grab a new raster of conditions
+        # process new input layer
+        studyArea = self.configuration['tasks'][self.current]['base']
+        species = self.configuration['POPS']['model']['species']
+        probability = self.configuration['POPS']['model']['probability']
+
+        if self.dashboard:
+            postfix = self.eventsByIds[eventId] + '__' + playerName + '_'
+        else:
+            postfix = 'tmpevent' + '__' + playerName + '_'
+        probability = probability + '__' + postfix
+
+        extent = gscript.raster_info(studyArea)
+        region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
+                                              w=extent['west'], e=extent['east'], a=species)
+
+        model_params = self.configuration['POPS']['model'].copy()
+        model_params.update({'output': postfix, 'output_series': postfix,
+                             'probability': probability, 'species': species})
+        # update for scenarios:
+        for scen in self.scenarios:
+            option = self.scenarios[scen].GetStringSelection()
+            params = self.configuration['POPS']['scenarios'][scen]['values'].keys()
+            for param in params:
+                if param in model_params:
+                    value = self.configuration['POPS']['scenarios'][scen]['values'][param][option]
+                    model_params.update({param: value})
+        # run simulation
+        message = 'cmd:start:'
+        message += "region=" + region
+        for key in model_params:
+            message += '|'
+            message += '{k}={v}'.format(k=key, v=model_params[key])
+        self.socket.sendall(message)
+
+        self.attempt.increaseMajor()
+        self.RemoveAllResultsLayers()
+        self.infoBar.Dismiss()
+
+    def RunSimulation(self, event=None):
+        if not self.baselineValues:
+            dlg = wx.MessageDialog(self, 'Compute baseline first',
+                                   'Missing baseline',
+                                   wx.OK | wx.ICON_WARNING)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+        if not self._isModelRunning():
+            self.InitSimulation()
+
+        self.showDisplayChange = False
+
+#        self._currentlyRunning = True
+        self.infoBar.ShowMessage("Running...")
+
+        playerName = self._createPlayerName()
+        self.attempt.increaseMinor()
+        new_attempt = self.attempt.getCurrent()
+        print new_attempt
+        attempt = "{p}:{a1}.{a2}".format(p=playerName, a1=new_attempt[0], a2=new_attempt[1])
+        self.recordCtrl.Append(attempt)
+        self.recordCtrl.SetStringSelection(attempt)
+
 
         # grab a new raster of conditions
         # process new input layer
@@ -523,12 +592,16 @@ class PopsPanel(wx.Panel):
         self.money_spent = self.treated_area * price_per_m2
 
         if self.dashboard:
-            postfix = playerName + '_' + new_attempt + '_' + self.eventsByIds[eventId]
+            eventId = self.eventsByName[self.eventsCtrl.GetStringSelection()]
+            event = self.eventsByIds[eventId]
+            postfix = event + '__' + playerName + '_'  # the last _ is hack, use GRASS_BASENAME_SEPARATOR
         else:
-            postfix = playerName + '_' + '1' + '_' + 'tmpevent'
-        probability = probability + '_' + postfix
+            event = 'tmpevent'
+            postfix = 'tmpevent' + '__' + playerName + '_'
+        probability = probability + '__' + postfix
         # todo, save treatments
-        gscript.run_command('g.copy', raster=[treatments, treatments + '_' + postfix + '_' + str(self.currentYear)], env=env)
+        tr_name = '__'.join([treatments, event, playerName, "{a1}_{a2}".format(a1=new_attempt[0], a2=new_attempt[1]), str(self.currentYear)])
+        gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
         self.lastRecordedTreatment = treatments + '_' + postfix
 
         # compute proportion
@@ -542,7 +615,7 @@ class PopsPanel(wx.Panel):
             gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
 
         self.applyTreatments(species=species, species_treated=species_treated, efficacy=treatment_efficacy,
-                             treatment_prefix=treatments + '_' + postfix, env=env)
+                             treatment_prefix=treatments + '__' + postfix, env=env)
 
         gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=species_treated, ni=inf_treated), env=env)
 
@@ -552,36 +625,15 @@ class PopsPanel(wx.Panel):
         self.socket.sendall('clientfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
         self._threadingEvent.clear()
         self._threadingEvent.wait(2000)
-
-        self.socket.sendall('info:model_running')
+        self.socket.sendall('cmd:goto:' + str(self.currentYear))
+        self._threadingEvent.clear()
+        self._threadingEvent.wait(2000)
+        # load new data here
+        self.socket.sendall('load:' + species_treated)
         self._threadingEvent.clear()
         self._threadingEvent.wait(2000)
 
-        if self.model_running:
-            self.socket.sendall('cmd:play')
-        else:
-            extent = gscript.raster_info(studyArea)
-            region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
-                                                  w=extent['west'], e=extent['east'], a=species)
-
-            model_params = self.configuration['POPS']['model'].copy()
-            model_params.update({'output': postfix, 'output_series': postfix,
-                                 'probability': probability, 'species': species_treated})
-            # update for scenarios:
-            for scen in self.scenarios:
-                option = self.scenarios[scen].GetStringSelection()
-                params = self.configuration['POPS']['scenarios'][scen]['values'].keys()
-                for param in params:
-                    if param in model_params:
-                        value = self.configuration['POPS']['scenarios'][scen]['values'][param][option]
-                        model_params.update({param: value})
-            # run simulation
-            message = 'cmd:start:'
-            message += "region=" + region
-            for key in model_params:
-                message += '|'
-                message += '{k}={v}'.format(k=key, v=model_params[key])
-            self.socket.sendall(message)
+        self.socket.sendall('cmd:play')
 
         self.RemoveAllResultsLayers()
 
@@ -597,13 +649,13 @@ class PopsPanel(wx.Panel):
     def applyTreatments(self, species, species_treated, efficacy, treatment_prefix, env):
         if self.treated_area:
             treatments = gscript.list_grouped(type='raster', pattern=treatment_prefix + '_*')[gscript.gisenv()['MAPSET']]
-            treatments = [tr for tr in treatments if int(tr.split('_')[-1]) <= self.currentYear]
+            treatments = [tr for tr in treatments if int(tr.split('__')[-1]) <= self.currentYear]
             if len(treatments) >= 2:
                 gscript.run_command('r.patch', input=treatments, output='treatments_patched', env=env)
                 t = 'treatments_patched'
             elif len(treatments) == 1:
                 t = treatments[0]
-
+            gscript.run_command('r.null', map=t, null=0, env=env)
             gscript.mapcalc("{s} = int({l} - {l} * {t} * {e})".format(s=species_treated, t=t,
                                                                       l=species, e=efficacy), env=env)
         else:  # when there is no treatment
@@ -614,6 +666,12 @@ class PopsPanel(wx.Panel):
 
     def _stop(self):
         self.socket.sendall('cmd:end')
+
+    def _isModelRunning(self):
+        self.socket.sendall('info:model_running')
+        self._threadingEvent.clear()
+        self._threadingEvent.wait(2000)
+        return self.model_running
 
     def _displayResult(self, event):
         if not self.resultsToDisplay.empty():
@@ -632,12 +690,13 @@ class PopsPanel(wx.Panel):
             self.lastDisplayedLayerAnim = name
             self.scaniface.postEvent(self.scaniface, evt)
             # update year
-            res = re.search("_20[0-9]{2}_", name)
+            res = re.search("_[0-9]{4}_[0-9]{2}_[0-9]{2}", name)
             if res:
-                year = res.group().strip('_')
-                evt2 = updateTimeDisplay(value=year)
+                year, month, day = res.group().strip('_').split('_')
+                self.currentYear = int(year) - self.configuration['POPS']['model']['start_time'] + 1
+                self.checkpoints[self.currentYear] = (int(year), int(month), int(day))
+                evt2 = updateTimeDisplay(date=(year, month, day))
                 self.scaniface.postEvent(self, evt2)
-                self.currentYear = int(year)
 
     def ComputeBaseline(self):
         self.infoBar.ShowMessage("Computing baseline...")
@@ -761,11 +820,12 @@ class PopsPanel(wx.Panel):
             playerName = self.recordCtrl.GetStringSelection().split(':')[0]
             playerId = self.playersByName[playerName]
             eventName = self.eventsCtrl.GetStringSelection()
+            attempt = self.attempt.getCurrent()
 
             path = os.path.join(self.configuration['logDir'], 'radar_{p}_{e}.json'.format(p=playerName, e=eventName))
             if playerName not in self.radar:
                 self.radar[playerName] = RadarData(filePath=path, baseline=self.baselineValues)
-            self.radar[playerName].addRecord(resultsRadar, resultsBar, baseline=False)
+            self.radar[playerName].addRecord(resultsRadar, resultsBar, "{a1}.{a1}".format(a1=attempt[0], a2=attempt[1]), baseline=False)
             eventId = self.eventsByName[self.eventsCtrl.GetStringSelection()]
             self.dashboard.post_data_radar(jsonfile=path, eventId=eventId, playerId=playerId)
 
@@ -773,7 +833,7 @@ class PopsPanel(wx.Panel):
             path = os.path.join(self.configuration['logDir'], 'bar_{e}.json'.format(e=eventName))  # maybe named with event
             if not self.bar:
                 self.bar = BarData(filePath=path, baseline=self.baselineValues)
-            self.bar.addRecord(resultsBar, playerName)
+            self.bar.addRecord(resultsBar, playerName, attempt="{a1}.{a2}".format(a1=attempt[0], a2=attempt[1]))
             self.dashboard.post_data_bar(jsonfile=path, eventId=eventId)
 
         self.infoBar.Dismiss()
@@ -815,13 +875,27 @@ class PopsPanel(wx.Panel):
             return
         self._connect()
         self._loadConfiguration(None)
-        self.currentYear = self.configuration['POPS']['model']['start_time']
+
+        self.currentYear = 0
+        start = self.configuration['POPS']['model']['start_time']
+        end = self.configuration['POPS']['model']['end_time']
+        self.checkpoints.append((start, 1, 1))
+        year = start
+        while year <= end:
+            self.checkpoints.append((year, 12, 31))
+            year += 1
+
         self.showDisplayChange = True
         self.switchCurrentResult = 0
         self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS']}
         self.LoadLayers()
         if self.treatmentSelect.GetValue():
             self.ChangeRegion()
+        if self.dashboard:
+            event = self.eventsCtrl.GetStringSelection()
+        else:
+            event = 'tmpevent'
+        self.attempt.initialize(event, player=self._createPlayerName())
 
         self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
@@ -872,6 +946,7 @@ class PopsPanel(wx.Panel):
         self.settings['analyses']['file'] = ''
         self._stopScanning()
         self.timer.Stop()
+        self.EndSimulation()
 
     def _bindButtons(self):
         topParent = wx.GetTopLevelParent(self)
@@ -921,26 +996,28 @@ class PopsPanel(wx.Panel):
         # update time display
         if not self.timeDisplay:
             return
-        start = self.configuration['POPS']['model']['start_time']
-        end = self.configuration['POPS']['model']['end_time']
+        start = 0
+        end = self.configuration['POPS']['model']['end_time'] - self.configuration['POPS']['model']['start_time'] + 1
         if forward and self.currentYear >= end:
             return
         if not forward and self.currentYear <= start:
             return
         self.currentYear = self.currentYear + 1 if forward else self.currentYear - 1
-        self.timeDisplay.Update(self.currentYear)
+        displayTime = self.checkpoints[self.currentYear]
+        self.timeDisplay.Update(*displayTime)
 
         # change layers
         if self.recordCtrl.GetSelection() != wx.NOT_FOUND:  # check if any simulation was computed
             if self.dashboard:
                 event = self.eventsCtrl.GetStringSelection()
                 name, attempt = self.recordCtrl.GetStringSelection().split(':')
+                attempt = attempt.replace('.', '_')
             else:
                 event = 'tmpevent'
                 attempt = '1'
                 name = self._createPlayerName()
             etype = 'raster'
-            pattern = "{n}_{a}_{e}_*".format(n=name, e=event, a=attempt)
+            pattern = "{e}__{n}__{a}__*".format(n=name, e=event, a=attempt)
 
             if self.visualizationMode == 'singlerun':
                 pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
@@ -952,7 +1029,7 @@ class PopsPanel(wx.Panel):
             self.RemoveAllResultsLayers()
             self.ShowTreatment(self.currentYear)
             for name in pattern_layers:
-                if str(self.currentYear) in name:
+                if "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2]) in name:
                     self.resultsToDisplay.put(name)
 
     def ChangeRegion(self):
@@ -1109,5 +1186,38 @@ class TimeDisplay(wx.Frame):
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
-    def Update(self, value):
-        self.label.SetLabel(str(value))
+    def Update(self, year, month, day):
+        # TODO: datetime
+        label = "{m}/{y}".format(m=month, y=year)
+        self.label.SetLabel(label)
+
+
+class Attempt(object):
+    def __init__(self):
+        self._currentAttempt = None
+
+    def initialize(self, event, player):
+        pattern = "{e}__{n}__[0-9]+_[0-9]+__[0-9]{{4}}_[0-9]{{2}}_[0-9]{{2}}".format(n=player, e=event)
+        pattern_layers = gscript.list_grouped(type='raster', pattern=pattern, flag='e')[gscript.gisenv()['MAPSET']]
+        if pattern_layers:
+            # starting GUI, taking previous saved results - recovering
+            name = gscript.natural_sort(pattern_layers)[-1]
+            attempt_main, attempt_sub = name.split('__')[-2].split('_')
+            # keep main attempt number, sub attempt will be 0
+            self._currentAttempt = [int(attempt_main), 0]
+        else:
+            # fresh, no previous attempts
+            self._currentAttempt = [0, 0]
+
+    def increaseMajor(self):
+        assert self._currentAttempt is not None
+        self._currentAttempt[0] += 1
+        self._currentAttempt[1] = 0
+
+    def increaseMinor(self):
+        assert self._currentAttempt is not None
+        self._currentAttempt[1] += 1
+
+    def getCurrent(self):
+        assert self._currentAttempt is not None
+        return self._currentAttempt

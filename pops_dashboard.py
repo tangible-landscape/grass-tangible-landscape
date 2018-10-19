@@ -253,17 +253,8 @@ class RadarData:
         with open(self._filePath, 'w') as f:
             f.write(json.dumps(self._data, indent=4))
 
-    def addRecord(self, radarValues, tableValues, baseline=False):
-        att_indx = -1
-        for each in self._data:
-            if each['attempt'] is None:
-                continue
-            tmp = self.attempts.index(each['attempt'])
-            if tmp > att_indx:
-                att_indx = tmp
-        att_indx += 1
-
-        self._data.append({'data': [], 'tableRows': [], 'attempt': str(self.attempts[att_indx]), "baseline": False})
+    def addRecord(self, radarValues, tableValues, attempt, baseline=False):
+        self._data.append({'data': [], 'tableRows': [], 'attempt': attempt, "baseline": False})
         i = 0
         for c, f, m in zip(self.columns, self.formatting, self.multiplication):
             self._data[-1]['data'].append({'axis': c, 'value': radarValues[i]})
@@ -277,7 +268,7 @@ class RadarData:
         found = False
         for each in self._data:
             i += 1
-            if each['attempt'] == self.attempts[attempt - 1]:
+            if each['attempt'] == attempt:
                 found = True
                 break
         if found:
@@ -315,16 +306,16 @@ class BarData:
             baseline.append(each['values'][0]['value'])
         return baseline
 
-    def addRecord(self, values, player):
+    def addRecord(self, values, player, attempt):
         for i, value in enumerate(values):
-            self._addRecord(i, self.formatting[i](value * self.multiplication[i]), player)
+            self._addRecord(i, self.formatting[i](value * self.multiplication[i]), player, attempt)
 
-    def _addRecord(self, which, value, player):
-        cnt_attempt = 1
-        for each in self._data[which]['values']:
-            if player == each['playerName']:
-                cnt_attempt += 1
-        dictionary = {"value": value, "playerName": player, "attempt": cnt_attempt}
+    def _addRecord(self, which, value, player, attempt):
+#        cnt_attempt = 1
+#        for each in self._data[which]['values']:
+#            if player == each['playerName']:
+#                cnt_attempt += 1
+        dictionary = {"value": value, "playerName": player, "attempt": attempt}
         self._data[which]['values'].append(dictionary)
         self.save()
 
@@ -332,7 +323,7 @@ class BarData:
         attempts = []
         for each in self._data[0]['values']:
             if playerName == each['playerName']:
-                attempts.append(int(each['attempt']))
+                attempts.append(each['attempt'])
         return attempts
 
     def removeAttempt(self, playerName, attempt):

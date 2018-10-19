@@ -17,6 +17,10 @@ PORT = 8888  # Arbitrary non-privileged port
 PORT_C = 8000
 
 TMP_DIR = '/tmp/server'
+try:
+    os.mkdir(TMP_DIR)
+except OSError:
+    pass
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s_c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -123,7 +127,7 @@ def clientGUI(conn, connections, event):
             f.close()
             gscript.run_command('r.unpack', input=server_path, output=name, overwrite=True)
             if 'computation' in connections:
-                connections['computation'].sendall('load:{}'.format(name))
+                connections['computation'].sendall('load:{}'.format(name) + ';')
             conn.sendall('info:received')
         if message[0] == 'serverfile':
             fsize, path = int(message[1]), message[2]
@@ -135,6 +139,7 @@ def clientGUI(conn, connections, event):
                     print 'erroro sending file'
                 event.set()
         if message[0] == 'cmd':
+            print message
                 # series
 #                pack_path = TMP_DIR + params['output_series']
 #                gscript.run_command('t.rast.export', input=name, output=pack_path, format='pack', quiet=True, overwrite=True)
@@ -156,6 +161,7 @@ def clientGUI(conn, connections, event):
                 if 'computation' not in connections:
                     sod_process = run_model_nonblocking(params)
             elif message[1] == 'baseline':
+                print message
                 if len(message) == 3:  # additional parameters
                     params = {}
                     for each in message[2].split('|'):
@@ -165,7 +171,7 @@ def clientGUI(conn, connections, event):
                         except ValueError:
                             params[key] = val
                     name = run_baseline(params)
-                    pack_path = TMP_DIR + name + '.pack'
+                    pack_path = os.path.join(TMP_DIR, name + '.pack')
                     gscript.run_command('r.pack', input=name, output=pack_path, overwrite=True)
                     if 'GUI' in connections:
                         connections['GUI'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
@@ -173,30 +179,35 @@ def clientGUI(conn, connections, event):
                 print "server: get stop from GUI"
                 if 'computation' in connections:
                     print "server: send stop from GUI to SOD"
-                    connections['computation'].sendall('cmd:stop')
+                    connections['computation'].sendall('cmd:stop;')
                     sod_process.wait()
                     sod_process = None
+                    
                     connections['computation'].close()
                     del connections['computation']
             elif message[1] == 'play':
                 if 'computation' in connections:
-                    connections['computation'].sendall('cmd:play')
+                    connections['computation'].sendall('cmd:play;')
             elif message[1] == 'pause':
                 if 'computation' in connections:
-                    connections['computation'].sendall('cmd:pause')
+                    connections['computation'].sendall('cmd:pause;')
             elif message[1] == 'stepf':
                 if 'computation' in connections:
-                    connections['computation'].sendall('cmd:stepf')
+                    connections['computation'].sendall('cmd:stepf;')
             elif message[1] == 'stepb':
                 if 'computation' in connections:
-                    connections['computation'].sendall('cmd:stepb')
+                    connections['computation'].sendall('cmd:stepb;')
+            elif message[1] == 'goto':
+                connections['computation'].sendall('goto:' + message[2] + ';')
+                conn.sendall('info:received')
         elif message[0] == 'load':
             if 'computation' in connections:
-                connections['computation'].sendall('load:' + message[1])
+                connections['computation'].sendall('load:' + message[1] + ';')
+                conn.sendall('info:received')
         elif message[0] == 'info':
             if message[1] == 'model_running':
                 if 'GUI' in connections:
-                    if sod_process and sod_process.poll() is None:
+                    if sod_process :
                         connections['GUI'].sendall('info:model_running:yes')
                     else:
                         connections['GUI'].sendall('info:model_running:no')
@@ -219,14 +230,14 @@ def checkOutput(connection, basename, sod_process, event):
         for each in found:
             if each not in old_found:
                 event.wait(2000)
-                pack_path = TMP_DIR + each + '.pack'
+                pack_path = os.path.join(TMP_DIR, each + '.pack')
                 gscript.run_command('r.pack', input=each, output=pack_path, overwrite=True)
                 event.clear()
                 connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
                 old_found.append(each)
     sod_process.wait()
     sod_process = None
-    pack_path = TMP_DIR + basename + '.pack'
+    pack_path = os.path.join(TMP_DIR, basename + '.pack')
     gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
     event.wait(2000)
     event.clear()
@@ -250,7 +261,7 @@ def clientComputation(conn, connections, event):
             event.wait(2000)
             if lm[0] == 'output':
                 # r.pack
-                pack_path = TMP_DIR + lm[1] + '.pack'
+                pack_path = os.path.join(TMP_DIR, lm[1] + '.pack')
                 gscript.run_command('r.pack', input=lm[1], output=pack_path, overwrite=True)
                 if 'GUI' in connections:
                     event.clear()
