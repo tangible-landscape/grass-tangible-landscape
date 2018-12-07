@@ -50,7 +50,7 @@ connections = {}
 
 
 def run_baseline(settings):
-    model = 'r.spread.sod.steering'
+    model = 'r.spread.pest.steering'
     params = {}
     params['nprocs'] = 10
 #    params['ip_address'] = 'localhost'
@@ -66,7 +66,7 @@ def run_baseline(settings):
 
 
 def run_model(settings):
-    model = 'r.spread.sod.steering'
+    model = 'r.spread.pest.steering'
     params = {}
     params['nprocs'] = 10
     params['ip_address'] = 'localhost'
@@ -86,7 +86,7 @@ def run_model(settings):
 
 
 def run_model_nonblocking(settings):
-    model = 'r.spread.sod.steering'
+    model = 'r.spread.pest.steering'
     params = {}
     params['nprocs'] = 10
     params['ip_address'] = 'localhost'
@@ -126,8 +126,8 @@ def clientGUI(conn, connections, event):
                 f.write(data)
             f.close()
             gscript.run_command('r.unpack', input=server_path, output=name, overwrite=True)
-            if 'computation' in connections:
-                connections['computation'].sendall('load:{}'.format(name) + ';')
+#            if 'computation' in connections:
+#                connections['computation'].sendall('load:{}'.format(name) + ';')
             conn.sendall('info:received')
         if message[0] == 'serverfile':
             fsize, path = int(message[1]), message[2]
@@ -185,6 +185,24 @@ def clientGUI(conn, connections, event):
                     
                     connections['computation'].close()
                     del connections['computation']
+            elif message[1] == 'restart':
+                print "server: get restart from GUI"
+                if 'computation' in connections:
+                    print "server: send stop from GUI to SOD"
+                    connections['computation'].sendall('cmd:stop;')
+                    sod_process.wait()
+                    sod_process = None
+                    connections['computation'].close()
+                    del connections['computation']
+                # start again
+                params = {}
+                for each in message[2].split('|'):
+                    key, val = each.split('=')
+                    try:
+                        params[key] = float(val)
+                    except ValueError:
+                        params[key] = val
+                sod_process = run_model_nonblocking(params)
             elif message[1] == 'play':
                 if 'computation' in connections:
                     connections['computation'].sendall('cmd:play;')
@@ -200,9 +218,12 @@ def clientGUI(conn, connections, event):
             elif message[1] == 'goto':
                 connections['computation'].sendall('goto:' + message[2] + ';')
                 conn.sendall('info:received')
+            elif message[1] == 'sync':
+                connections['computation'].sendall('sync;')
+                conn.sendall('info:received')
         elif message[0] == 'load':
             if 'computation' in connections:
-                connections['computation'].sendall('load:' + message[1] + ';')
+                connections['computation'].sendall('load:' + message[1] + ':' + message[2] + ';')
                 conn.sendall('info:received')
         elif message[0] == 'info':
             if message[1] == 'model_running':
