@@ -394,7 +394,7 @@ class PopsPanel(wx.Panel):
                 if self.visualizationModes[self.visualizationMode] == 'probability':
                     # TODO r.colors should be moved
                     gscript.run_command('r.colors', map=name, quiet=True, rules=self.configuration['POPS']['color_probability'])
-                    cmd = ['d.rast', 'values=0-10', 'flags=i', 'map={}'.format(name)]
+                    cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
                 elif self.visualizationModes[self.visualizationMode] == 'singlerun':
                     cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
                 ll.AddLayer('raster', name=name, checked=True, opacity=1, cmd=cmd)
@@ -464,7 +464,6 @@ class PopsPanel(wx.Panel):
         if self._isModelRunning():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentYear == 0:
-                self.attempt.increaseMajor()
                 self.RestartSimulation()
             else:
                 self.attempt.increaseMinor()
@@ -472,6 +471,8 @@ class PopsPanel(wx.Panel):
             self.InitSimulation()
 
         self.showDisplayChange = False
+        # vis mode should be single run, not probability
+        self.visualizationMode = 0
 
         self.infoBar.ShowMessage("Running...")
         playerName = self._createPlayerName()
@@ -764,7 +765,7 @@ class PopsPanel(wx.Panel):
         windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
         windows.append(wx.GetTopLevelParent(self))
         windows.append(self.giface.lmgr)
-        bindings = {'simulate': self._RunSimulation, 'animate': self.ShowResults,
+        bindings = {'simulate': self._RunSimulation, 'animate': lambda evt: self.ShowResults(),
                     'stepforward': self.StepForward, 'stepback': self.StepBack}
         if "keyboard_events" in self.configuration:
             items = []

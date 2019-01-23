@@ -30,14 +30,14 @@ print 'Sockets created'
 try:
     s.bind((HOST, PORT))
 except socket.error as msg:
-    print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+    print 'Bind ' + str(PORT) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
     sys.exit()
 
 # Bind socket to local host and port
 try:
     s_c.bind((HOST, PORT_C))
 except socket.error as msg:
-    print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+    print 'Bind ' + str(PORT_C) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
     sys.exit()
 
 print 'Sockets bind complete'
