@@ -436,7 +436,7 @@ class PopsPanel(wx.Panel):
         # grab a new raster of conditions
         # process new input layer
         studyArea = self.configuration['tasks'][self.current]['base']
-        species = self.configuration['POPS']['model']['species']
+        host = self.configuration['POPS']['model']['host']
         probability = self.configuration['POPS']['model']['probability_series']
 
         postfix = 'tmpevent' + '__' + playerName + '_'
@@ -444,7 +444,7 @@ class PopsPanel(wx.Panel):
 
         extent = gscript.raster_info(studyArea)
         region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
-                                              w=extent['west'], e=extent['east'], a=species)
+                                              w=extent['west'], e=extent['east'], a=host)
 
         model_params = self.configuration['POPS']['model'].copy()
         model_params.update({'output_series': postfix,
@@ -485,17 +485,17 @@ class PopsPanel(wx.Panel):
         treatments = self.configuration['POPS']['treatments']
         treatments_resampled = treatments + '_resampled'
         studyArea = self.configuration['tasks'][self.current]['base']
-        species = self.configuration['POPS']['model']['species']
+        host = self.configuration['POPS']['model']['host']
         infected = self.configuration['POPS']['model']['infected']
-        species_treated = self.configuration['POPS']['species_treated']
-        all_trees = self.configuration['POPS']['model']['lvtree']
+        host_treated = self.configuration['POPS']['host_treated']
+        all_trees = self.configuration['POPS']['model']['total_plants']
         all_trees_treated = self.configuration['POPS']['all_trees_treated']
         inf_treated = self.configuration['POPS']['infected_treated']
         probability = self.configuration['POPS']['model']['probability_series']
         treatment_efficacy = self.configuration['POPS']['treatment_efficacy']
         price_function = self.configuration['POPS']['price']
 
-        env = get_environment(raster=studyArea, align=species)
+        env = get_environment(raster=studyArea, align=host)
 
         self.treated_area = self.computeTreatmentArea(treatments)
         price_per_m2 = eval(price_function.format(treatment_efficacy))
@@ -515,7 +515,7 @@ class PopsPanel(wx.Panel):
         # compute proportion
         treatments_as_float = False
         if treatments_as_float:
-            if gscript.raster_info(treatments)['ewres'] < gscript.raster_info(species)['ewres']:
+            if gscript.raster_info(treatments)['ewres'] < gscript.raster_info(host)['ewres']:
                 gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
                 maxvalue = gscript.raster_info(treatments_resampled)['max']
                 gscript.mapcalc("{p} = if(isnull({t}), 0, {t} / {m})".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue), env=env)
@@ -526,11 +526,11 @@ class PopsPanel(wx.Panel):
         else:
             gscript.run_command('r.null', map=treatments, null=0, env=env)
 
-#        self.applyTreatments(species=species, species_treated=species_treated, efficacy=treatment_efficacy,
+#        self.applyTreatments(host=host, host_treated=host_treated, efficacy=treatment_efficacy,
 #                             treatment_prefix=treatments + '__' + postfix, env=env)
                                      
 
-        gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=species_treated, ni=inf_treated), env=env)
+        gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=host_treated, ni=inf_treated), env=env)
 
         # export treatments file to server
         pack_path = os.path.join(TMP_DIR, treatments + '.pack')
@@ -586,7 +586,7 @@ class PopsPanel(wx.Panel):
             res = gscript.region(env=env)
             return float(univar['n']) * res['nsres'] * res['ewres']
 
-    def applyTreatments(self, species, species_treated, efficacy, treatment_prefix, env):
+    def applyTreatments(self, host, host_treated, efficacy, treatment_prefix, env):
         if self.treated_area:
             treatments = gscript.list_grouped(type='raster', pattern=treatment_prefix + '_*')[gscript.gisenv()['MAPSET']]
             treatments = [tr for tr in treatments if int(tr.split('__')[-1]) <= self.currentYear]
@@ -596,10 +596,10 @@ class PopsPanel(wx.Panel):
             elif len(treatments) == 1:
                 t = treatments[0]
             gscript.run_command('r.null', map=t, null=0, env=env)
-            gscript.mapcalc("{s} = int({l} - {l} * {t} * {e})".format(s=species_treated, t=t,
-                                                                      l=species, e=efficacy), env=env)
+            gscript.mapcalc("{s} = int({l} - {l} * {t} * {e})".format(s=host_treated, t=t,
+                                                                      l=host, e=efficacy), env=env)
         else:  # when there is no treatment
-            gscript.run_command('g.copy', raster=[species, species_treated], env=env)
+            gscript.run_command('g.copy', raster=[host, host_treated], env=env)
 
     def _run(self):
         self.socket.sendall('cmd:play')
