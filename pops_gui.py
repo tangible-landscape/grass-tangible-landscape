@@ -574,7 +574,9 @@ class PopsPanel(wx.Panel):
             gscript.run_command('r.patch', input=to_patch, output=name, flags='z', env=env)
         else:
             gscript.run_command('g.copy', raster=[lastTreatment + '__' + postfix, name], env=env)
-        gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
+        gscript.run_command('r.to.vect', input=name, output=name + '_tmp', flags='vt', type='area', env=env)
+        # for nicer look
+        gscript.run_command('v.generalize', input=name + '_tmp', output=name, method='snakes', threshold=10, env=env)
 
     def computeTreatmentArea(self, treatments):
         env = get_environment(raster=treatments)
