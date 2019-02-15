@@ -506,7 +506,7 @@ class PopsPanel(wx.Panel):
         probability = probability + '__' + postfix
         # todo, save treatments
         tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
-                             str(max(1, self.currentYear))])
+                             str(max(0, self.currentYear))])
         gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
         self.lastRecordedTreatment = treatments + '_' + postfix
         # create treatment vector of all used treatments in that scenario
@@ -560,22 +560,23 @@ class PopsPanel(wx.Panel):
 
     def createTreatmentVector(self, lastTreatment, env):
         tr, evt, plr, attempt, year = lastTreatment.split('__')
-        gscript.write_command('r.reclass', input=lastTreatment, output=lastTreatment + 'tmp', rules='-',
-                              stdin='1 = {y}'.format(y=int(year) - 1 + self.configuration['POPS']['model']['start_time']), env=env)
-        gscript.run_command('r.to.vect', input=lastTreatment + 'tmp', output=lastTreatment, flags='vt', type='area', env=env)
-        gscript.run_command('g.remove', type='raster', name=lastTreatment + 'tmp', flags='f', env=env)
-        pattern = '__'.join([tr, evt, plr, attempt, '*'])
-        layers = gscript.list_grouped(type='vector', pattern=pattern)[gscript.gisenv()['MAPSET']]
+        postfix = 'cat_year'
+        gscript.write_command('r.reclass', input=lastTreatment, output=lastTreatment + '__' + postfix, rules='-',
+                              stdin='1 = {y}'.format(y=int(year) + self.configuration['POPS']['model']['start_time']), env=env)
+        pattern = '__'.join([tr, evt, plr, attempt, '*', postfix])
+        layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
         to_patch = []
         for layer in layers:
-            y = int(layer.split('__')[-1])
+            y = int(layer.split('__')[-2])
             if y <= int(year):
                 to_patch.append(layer)
         name = '__'.join([tr, evt, plr, attempt])
         if len(to_patch) >= 2:
-            gscript.run_command('v.patch', input=to_patch, output=name, env=env)
+            to_patch = gscript.natural_sort(to_patch)[::-1]
+            gscript.run_command('r.patch', input=to_patch, output=name, flags='z', env=env)
         else:
-            gscript.run_command('g.copy', vector=[lastTreatment, name], env=env)
+            gscript.run_command('g.copy', raster=[lastTreatment + '__' + postfix, name], env=env)
+        gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
 
     def computeTreatmentArea(self, treatments):
         env = get_environment(raster=treatments)
@@ -789,7 +790,7 @@ class PopsPanel(wx.Panel):
         if not self.timeDisplay:
             return
         start = 0
-        end = self.configuration['POPS']['model']['end_time'] - self.configuration['POPS']['model']['start_time'] + 1
+        end = self.configuration['POPS']['model']['end_time'] - self.configuration['POPS']['model']['start_time']
         if forward and self.currentYear >= end:
             return
         if not forward and self.currentYear <= start:
