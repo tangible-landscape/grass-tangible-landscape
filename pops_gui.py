@@ -77,7 +77,7 @@ class PopsPanel(wx.Panel):
         # steering
         self.visualizationModes = ['singlerun', 'probability']
         self.visualizationMode = 0
-        self.currentYear = None
+        self.currentCheckpoint = None
         self.checkpoints = []
         self.attempt = Attempt()
         self._threadingEvent = threading.Event()
@@ -361,8 +361,8 @@ class PopsPanel(wx.Panel):
 #        pattern_layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
 #
 #        self.RemoveAllResultsLayers()
-#        self.ShowTreatment(self.currentYear)
-#        displayTime = self.checkpoints[self.currentYear]
+#        self.ShowTreatment(self.currentCheckpoint)
+#        displayTime = self.checkpoints[self.currentCheckpoint]
 #        for name in pattern_layers:
 #            if "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2]) in name:
 #                gscript.run_command('r.colors', map=name, quiet=True,
@@ -386,8 +386,8 @@ class PopsPanel(wx.Panel):
             pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
 
         self.RemoveAllResultsLayers()
-        self.ShowTreatment(self.currentYear)
-        displayTime = self.checkpoints[self.currentYear]
+        self.ShowTreatment(self.currentCheckpoint)
+        displayTime = self.checkpoints[self.currentCheckpoint]
         ll = self.giface.GetLayerList()
         for name in pattern_layers:
             if "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2]) in name:
@@ -463,7 +463,7 @@ class PopsPanel(wx.Panel):
     def RunSimulation(self, event=None):
         if self._isModelRunning():
             # if simulation in the beginning, increase major version and restart the simulation
-            if self.currentYear == 0:
+            if self.currentCheckpoint == 0:
                 self.RestartSimulation()
             else:
                 self.attempt.increaseMinor()
@@ -506,7 +506,7 @@ class PopsPanel(wx.Panel):
         probability = probability + '__' + postfix
         # todo, save treatments
         tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
-                             str(max(0, self.currentYear))])
+                             str(max(0, self.currentCheckpoint))])
         gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
         self.lastRecordedTreatment = treatments + '_' + postfix
         # create treatment vector of all used treatments in that scenario
@@ -539,14 +539,12 @@ class PopsPanel(wx.Panel):
         self._threadingEvent.clear()
         self._threadingEvent.wait(2000)
         # load new data here
-        # in the beginning it would be start -1, but should be start
-        tr_year = max(self.configuration['POPS']['model']['start_time'],
-                      self.currentYear + self.configuration['POPS']['model']['start_time'] - 1)
+        tr_year = self.configuration['POPS']['model']['start_time'] + self.currentCheckpoint
         self.socket.sendall('load:' + str(tr_year) + ':' + treatments)
         self._threadingEvent.clear()
         self._threadingEvent.wait(2000)
 
-        self.socket.sendall('cmd:goto:' + str(self.currentYear))
+        self.socket.sendall('cmd:goto:' + str(self.currentCheckpoint))
         self._threadingEvent.clear()
         self._threadingEvent.wait(2000)
 
@@ -590,7 +588,7 @@ class PopsPanel(wx.Panel):
     def applyTreatments(self, host, host_treated, efficacy, treatment_prefix, env):
         if self.treated_area:
             treatments = gscript.list_grouped(type='raster', pattern=treatment_prefix + '_*')[gscript.gisenv()['MAPSET']]
-            treatments = [tr for tr in treatments if int(tr.split('__')[-1]) <= self.currentYear]
+            treatments = [tr for tr in treatments if int(tr.split('__')[-1]) <= self.currentCheckpoint]
             if len(treatments) >= 2:
                 gscript.run_command('r.patch', input=treatments, output='treatments_patched', env=env)
                 t = 'treatments_patched'
@@ -634,8 +632,8 @@ class PopsPanel(wx.Panel):
             res = re.search("_[0-9]{4}_[0-9]{2}_[0-9]{2}", name)
             if res:
                 year, month, day = res.group().strip('_').split('_')
-                self.currentYear = int(year) - self.configuration['POPS']['model']['start_time'] + 1
-                self.checkpoints[self.currentYear] = (int(year), int(month), int(day))
+                self.currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
+                self.checkpoints[self.currentCheckpoint] = (int(year), int(month), int(day))
                 evt2 = updateTimeDisplay(date=(year, month, day))
                 self.scaniface.postEvent(self, evt2)
 
@@ -692,7 +690,7 @@ class PopsPanel(wx.Panel):
         self._connect()
         self._loadConfiguration(None)
 
-        self.currentYear = 0
+        self.currentCheckpoint = 0
         start = self.configuration['POPS']['model']['start_time']
         end = self.configuration['POPS']['model']['end_time']
         self.checkpoints.append((start, 1, 1))
@@ -791,12 +789,12 @@ class PopsPanel(wx.Panel):
             return
         start = 0
         end = self.configuration['POPS']['model']['end_time'] - self.configuration['POPS']['model']['start_time']
-        if forward and self.currentYear >= end:
+        if forward and self.currentCheckpoint >= end:
             return
-        if not forward and self.currentYear <= start:
+        if not forward and self.currentCheckpoint <= start:
             return
-        self.currentYear = self.currentYear + 1 if forward else self.currentYear - 1
-        displayTime = self.checkpoints[self.currentYear]
+        self.currentCheckpoint = self.currentCheckpoint + 1 if forward else self.currentCheckpoint - 1
+        displayTime = self.checkpoints[self.currentCheckpoint]
         self.timeDisplay.Update(*displayTime)
 
         self.ShowResults()
@@ -913,7 +911,7 @@ class PopsPanel(wx.Panel):
 
         self.RemoveAllResultsLayers()
         self.lastDisplayedLayerAnim = ''
-        self.ShowTreatment(self.currentYear)
+        self.ShowTreatment(self.currentCheckpoint)
         for name in all_layers:
             self.resultsToDisplay.put(name)
 
