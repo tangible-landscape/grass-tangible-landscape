@@ -581,8 +581,8 @@ class ActivitiesPanel(wx.Panel):
             print 'WARNING: DEM profile is not available, requires matplotlib library'
             return
         self.profileFrame = ProfileFrame(self)
-        pos = self.tasks[self.current]['profile']['position']
-        size = self.tasks[self.current]['profile']['size']
+        pos = self._getDashboardPosition(key='profile')
+        size = self._getDashboardSize(key='profile')
         self.profileFrame.SetPosition(pos)
         self.profileFrame.SetSize(size)
         self.profileFrame.set_ticks(self.tasks[self.current]['profile']['ticks'])
@@ -610,12 +610,44 @@ class ActivitiesPanel(wx.Panel):
                                                      title=title, formatting_string=formatting_string, vertical=vertical)
         else:
             self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
-        pos = self.tasks[self.current]['display']['position']
-        size = self.tasks[self.current]['display']['size']
+
+
+        pos = self._getDashboardPosition(key='display')
+        size = self._getDashboardSize(key='display')
         self.dashboardFrame.SetSize(size)
         self.dashboardFrame.Show()
         self.dashboardFrame.SetPosition(pos)
 
+    def _getDashboardPosition(self, key):
+        if 'position' in self.tasks[self.current][key]:
+            pos = self.tasks[self.current][key]['position']
+        elif 'relative_position' in self.tasks[self.current][key]:
+            relPos = self.tasks[self.current][key]['relative_position']
+            pos = self._getPosFromRelative(relPos)
+        else:
+            pos = self._getPosFromRelative((1.01, 0.5))
+        return pos
+
+    def _getDashboardSize(self, key):
+        if 'size' in self.tasks[self.current][key]:
+            size = self.tasks[self.current][key]['size']
+        elif 'relative_size' in self.tasks[self.current][key]:
+            relSize = self.tasks[self.current][key]['relative_size']
+            size = self._getSizeFromRelative(relSize)
+        else:
+            size = self._getSizeFromRelative((0.3, 0.3))
+        return size
+
+    def _getPosFromRelative(self, pos):
+        md = self.giface.GetMapDisplay()
+        mdSize = md.GetSize()
+        mdPos = md.GetPosition()
+        return (mdPos[0] + pos[0] * mdSize[0], mdPos[1] + pos[1] * mdSize[1])
+
+    def _getSizeFromRelative(self, size):
+        md = self.giface.GetMapDisplay()
+        mdSize = md.GetSize()
+        return (size[0] * mdSize[0], size[1] * mdSize[1])
 
     def OnDisplayUpdate(self, event):
         if not self.dashboardFrame:
