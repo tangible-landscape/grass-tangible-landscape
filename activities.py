@@ -16,6 +16,7 @@ import traceback
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
+from wx.lib.wordwrap import wordwrap
 
 from grass.exceptions import CalledModuleError, ScriptError
 from grass.pydispatch.signal import Signal
@@ -90,6 +91,8 @@ class ActivitiesPanel(wx.Panel):
         self.buttonNext = wx.Button(self, label='Next')
         self.buttonNext.Bind(wx.EVT_BUTTON, self.OnSubtask)
 
+        self.instructions = wx.StaticText(self)
+
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnTimer)
 
@@ -114,6 +117,9 @@ class ActivitiesPanel(wx.Panel):
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.buttonNext, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.instructions, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         self.SetSizer(self.mainSizer)
         self.mainSizer.Fit(self)
@@ -146,6 +152,7 @@ class ActivitiesPanel(wx.Panel):
             self.buttonForward.Enable(True)
             self.timeText.SetLabel('00:00')
             self.slidesStatus.Show(bool('slides' in self.configuration and self.configuration['slides']))
+            self.instructions.SetLabel(self._getInstructions())
         else:
             self._enableGUI(False)
         if self.configFile:
@@ -164,6 +171,7 @@ class ActivitiesPanel(wx.Panel):
         self.slidesStatus.Enable(enable)
         self.timeText.Enable(enable)
         self.title.Enable(enable)
+        self.instructions.Show(enable)
 
     def _bindUserStop(self):
         windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
@@ -222,6 +230,7 @@ class ActivitiesPanel(wx.Panel):
                     self.configuration = json.load(f)
                     self.tasks = self.configuration['tasks']
                     self.title.SetLabel(self.tasks[self.current]['title'])
+                    self.instructions.SetLabel(self._getInstructions())
                 except ValueError:
                     self.configuration = {}
                     self.settings['activities']['config'] = ''
@@ -281,6 +290,7 @@ class ActivitiesPanel(wx.Panel):
         self.timeText.SetLabel('00:00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.buttonCalibrate.Show('calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate'])
+        self.instructions.SetLabel(self._getInstructions())
         self.Layout()
 
     def OnForward(self, event):
@@ -300,6 +310,7 @@ class ActivitiesPanel(wx.Panel):
         self.timeText.SetLabel('00:00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.buttonCalibrate.Show('calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate'])
+        self.instructions.SetLabel(self._getInstructions())
         self.Layout()
 
     def StartAutomated(self):
@@ -341,6 +352,10 @@ class ActivitiesPanel(wx.Panel):
 
     def _getTaskDir(self):
         return self.configuration['taskDir'] if 'taskDir' in self.configuration else os.path.dirname(self.settings['activities']['config'])
+
+    def _getInstructions(self):
+        instr = self.configuration['tasks'][self.current]['instructions'] if 'instructions' in self.configuration['tasks'][self.current] else ''
+        return wordwrap(instr, self.GetClientSize()[0], wx.ClientDC(self))
 
     def _hideToolbarStatusbar(self):
         """Hide toolbar and statusbar of active Map Display"""
