@@ -336,10 +336,17 @@ class ActivitiesPanel(wx.Panel):
     def _getTaskDir(self):
         return self.configuration['taskDir'] if 'taskDir' in self.configuration else os.path.dirname(self.settings['activities']['config'])
 
+    def _hideToolbarStatusbar(self):
+        """Hide toolbar and statusbar of active Map Display"""
+        self.giface.ShowAllToolbars(False)
+        self.giface.ShowStatusbar(False)
+        wx.CallLater(1000, self.giface.GetMapDisplay().PostSizeEvent)
+
     def _startTask(self):
         if self.timer.IsRunning():
             return
 
+        self._hideToolbarStatusbar()
         self.currentSubtask = 0
         self._processingSubTask = False
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
