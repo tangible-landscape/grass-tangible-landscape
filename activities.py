@@ -236,14 +236,20 @@ class ActivitiesPanel(wx.Panel):
         self.slidesStatus.Show(bool('slides' in self.configuration and self.configuration['slides']))
         self.Layout()
 
+    def _loadScanningParams(self, key):
+        if key in self.tasks[self.current]:
+            for each in self.tasks[self.current][key].keys():
+                self.settings['scan'][each] = self.tasks[self.current][key][each]
+
     def Calibrate(self, startTask):
         self._loadConfiguration(None)
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['output']['scan'] = 'scan_saved'
         self.settings['analyses']['file'] = ''
-        if 'scanning_params' in self.tasks[self.current]:
-            for each in self.tasks[self.current]['scanning_params'].keys():
-                self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
+        self._loadScanningParams(key='scanning_params')
+        # just update whatever was not set with 'scanning_params'
+        self._loadScanningParams(key='calibration_scanning_params')
+
         # resume scanning
         self.buttonCalibrate.SetLabel("Calibrating...")
         self.scaniface.filter['filter'] = False
@@ -354,9 +360,8 @@ class ActivitiesPanel(wx.Panel):
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['analyses']['file'] = os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
-        if 'scanning_params' in self.tasks[self.current]:
-            for each in self.tasks[self.current]['scanning_params'].keys():
-                self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
+        self._loadScanningParams(key='scanning_params')
+
         # resume scanning
         if 'filter' in self.tasks[self.current]:
             self.scaniface.filter['filter'] = True
