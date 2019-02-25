@@ -1,6 +1,6 @@
 # Documentation of JSON config file for designing activities
 
-Specification of directory where to find Python files with activity worflow for all activities. This is _required_.
+Specification of directory where to find Python files with activity worflow for all activities. By default, it is the directory where this configuration file is.
 
 ```json
    "taskDir": "/path/to/my/activities/",
@@ -49,7 +49,23 @@ Color, font size, position and text can be specified. This is optional, if not s
   "duration_handsoff_after": 5000,
 ```
 
-Key bindings for specific actions. In wxPython wx.WXK_F5 is 344 and so on.
+Key bindings for specific actions. In wxPython, for example, `wx.WXK_F5` is 344 and so on.
+You can find a list of key event names [here](https://wxpython.org/Phoenix/docs/html/wx.KeyCode.enumeration.html#wx-keycode).
+Available actions are `stopTask` (user can stop activity this way, for example using a button),
+`scanOnce` (used in cases when we don't need to run analysis continuously during
+the activity, but need to capture and analyze the scan just when the user needs it),
+`taskNext`
+This is optional, you can use any of them.
+
+| Action | Description |
+| --- | ----------- |
+| scanOnce | Used in cases when we don't need to run analysis continuously during the activity, but need to capture and analyze the scan just when the user needs it |
+| startTask | Start currently selected task|
+| taskNext | Switch to next task (stop currently running one) |
+| taskPrevious | Switch to previous task (stop currently running one)|
+| stopTask | User can stop activity this way, for example using a button, or a slide advancer with extra button |
+| mycustomTask | User can define custom task, the task is then defined in the Python file of the activity in a function with name starting with 'mycustomTask' (whatever you specified in the config file) |
+
 
 ```json
     "keyboard_events": {"stopTask": 344, "scanOnce": 370},
@@ -86,7 +102,7 @@ This describes the activities (explained further below):
 ```
 
 Specification of GIS layers which should be loaded when the activity starts.
-The display will zoom to capture all these layers. The layer list can be empty if needed.
+The display will zoom to capture all these layers. The layer list can be empty if needed. Special d.* commands (d.legend, d.northarrow, d.barscale, d.rgb, d.shade, d.labels) are supported as well.
 
 ```json
       "layers": [
@@ -102,14 +118,21 @@ The display will zoom to capture all these layers. The layer list can be empty i
 ```
 
 This specifies the semitransparency of the layers (1 is opaque).
-The length of the list should be the same as the number of loaded layers.
+The length of the list should be the same as the number of loaded layers. Optional.
 
 ```json
  "layers_opacity": [1.0, 0.5], 
 ```
 
+This specifies the whether the layers should be checked (by default they are all checked).
+The length of the list should be the same as the number of loaded layers. Optional.
+
+```json
+ "layers_checked": [true, false], 
+```
+
 Sometimes it's necessary to capture the topography shape before the start of the activity,
-for example for detection of markers. Specifying 'true' will result in creating a 'calibrate' button for the activity.
+for example for detection of markers. Specifying 'true' will result in creating a 'calibrate' button for the activity. When calibrating a raster called 'scan_saved' is created. See also 'calibration_scanning_params'.
 This is optional.
 
 ```json
@@ -128,11 +151,12 @@ Specifies time limit for each activity (useful for experiments). This is optiona
  "time_limit": 300,
 ```
 
-Specifies scanning parameters. This is optional, however the settings stay for next
-tasks unless other settings is specified there:
+Item 'scanning_params' specifies scanning parameters. This is optional, however the settings stay for next
+tasks unless other settings is specified there. Item 'calibration_scanning_params' set scanning parameter specifically for calibration phase: first 'scanning_params' are set and then 'calibration_scanning_params' are set (so in this example we end up with `{"smooth": 10, "numscans": 2, "zexag": 1, "interpolate": true}` for calibration).
 
 ```json
- "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
+ "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1, "interpolate": false},
+ "calibration_scanning_params": {"interpolate": true},
 ```
 
 File with Python workflow for the activity (and postprocessing if desired).
@@ -170,9 +194,32 @@ what is its size, position, limit on axes, and raster used for computing the pro
 "profile": {"size": [400, 140], "position": [4272, 660],
             "limitx": [0, 350], "limity": [90, 190], "ticks": 10, "raster": "freeplay_scan"},
  ```
- 
+
+Specifies whether dashboard widget should be displayed:
+```json
+"display": {"multiple": true, "average": 2, "size": [600, 180], "position": [2800, 900],
+            "fontsize": 12, "maximum": [100, 20, 6, 60, 2.5, 8],
+            "formatting_string": ["{:.0f} %", "{:g}", "{:g}","{:.1f}","{:.2f}","{:.1f}"],
+            "title": ["Remediated", "Patch #", "Richness", "Mean size", "Shannon", "Shape ind." ]}
+    },
+```
+
+In both cases (profile and widget), size and position can be specified in absolute or relative coordinates. 
+
+|  | Size |Position | Description|
+| --- | ----------- | --- | --- |
+| Absolute | "size" | "position" | (x, y)/(width, height) screen coordinates |
+| Relative | "relative_size" | "relative_position" | coordinates relative to map display from 0-1 , origin is TL corner|
+
 Specifies title of the activity:
 
 ```json
  "title": "Task 0: Freeplay"
 ```
+
+Specifies the instructions for the activity:
+
+```json
+ "instructions": "Place marker to create viewshed"
+```
+
