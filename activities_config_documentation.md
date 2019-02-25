@@ -108,6 +108,7 @@ This describes the activities (explained further below):
       "title": "Task 0: Freeplay"
     }
    ]
+```
 
 ### Title and instructions
 Specifies title of the activity:
@@ -124,7 +125,6 @@ Specifies the instructions for the activity:
 
 
 ### Layers
-```
 
 Specification of GIS layers which should be loaded when the activity starts.
 The specification of the symbology is given using
