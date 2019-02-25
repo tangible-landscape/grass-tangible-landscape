@@ -1,11 +1,16 @@
 # Documentation of JSON config file for designing activities
 
+## General settings
+The following settings do not depend on the activities.
+
+### Path to workflow files
 Specification of directory where to find Python files with activity worflow for all activities. By default, it is the directory where this configuration file is.
 
 ```json
    "taskDir": "/path/to/my/activities/",
 ```
 
+### Logging and postprocessing
 Specification of directory where to write log files after each activity ends (useful for running experiments).
 This postprocessing is done inside the Python files describing the activity workflow in Python function
 starting with `post_...`. This is optional.
@@ -13,7 +18,8 @@ starting with `post_...`. This is optional.
 ```json
   "logDir": "/path/to/logs/",
 ```
-  
+
+### Slides
 Specifies whether HTML (specifically [reveal.js](http://lab.hakim.se/reveal-js/)) slides
 should be used during the activity (useful for running experiments).
 This has 2 items, one specifies directory where html slides are to be found,
@@ -27,6 +33,7 @@ and the second determines the position where the window with slides will be open
     },
 ```
 
+### Show sign to remove hands
 Specifies whether to show a sign after completeing each activity to indicate
 that users need to remove hands so that the scanner can capture final result (useful for experiments).
 Color, font size, position and text can be specified. This is optional.
@@ -49,6 +56,7 @@ Color, font size, position and text can be specified. This is optional, if not s
   "duration_handsoff_after": 5000,
 ```
 
+### Key bindings
 Key bindings for specific actions. In wxPython, for example, `wx.WXK_F5` is 344 and so on.
 You can find a list of key event names [here](https://wxpython.org/Phoenix/docs/html/wx.KeyCode.enumeration.html#wx-keycode).
 Available actions are `stopTask` (user can stop activity this way, for example using a button),
@@ -71,6 +79,7 @@ This is optional, you can use any of them.
     "keyboard_events": {"stopTask": 344, "scanOnce": 370},
 ```
 
+## Activity description
 This describes the activities (explained further below):
 
 ```json
@@ -99,6 +108,22 @@ This describes the activities (explained further below):
       "title": "Task 0: Freeplay"
     }
    ]
+
+### Title and instructions
+Specifies title of the activity:
+
+```json
+ "title": "Task 0: Freeplay"
+```
+
+Specifies the instructions for the activity:
+
+```json
+ "instructions": "Place marker to create viewshed"
+```
+
+
+### Layers
 ```
 
 Specification of GIS layers which should be loaded when the activity starts.
@@ -137,6 +162,22 @@ The length of the list should be the same as the number of loaded layers. Option
  "layers_checked": [true, false], 
 ```
 
+Specifies a raster map used for georeferencing, _required_.
+
+```json
+ "base": "cutfill1_dem1",
+```
+
+### Processing
+
+File with Python workflow for the activity (and postprocessing if desired).
+The directory is specified in 'taskDir' above. This is _required_.
+
+```json
+ "analyses": "experiment_freeplay.py", 
+```
+
+
 Sometimes it's necessary to capture the topography shape before the start of the activity,
 for example for detection of markers. Specifying 'true' will result in creating a 'calibrate' button for the activity. When calibrating a raster called 'scan_saved' is created. See also 'calibration_scanning_params'.
 This is optional.
@@ -145,17 +186,6 @@ This is optional.
  "calibration": false,
 ```
 
-Specifies a raster map used for georeferencing, _required_.
-
-```json
- "base": "cutfill1_dem1",
-```
-
-Specifies time limit for each activity (useful for experiments). This is optional.
-
-```json
- "time_limit": 300,
-```
 
 Item 'scanning_params' specifies scanning parameters. This is optional, however the settings stay for next
 tasks unless other settings is specified there. Item 'calibration_scanning_params' set scanning parameter specifically for calibration phase: first 'scanning_params' are set and then 'calibration_scanning_params' are set (so in this example we end up with `{"smooth": 10, "numscans": 2, "zexag": 1, "interpolate": true}` for calibration).
@@ -165,11 +195,10 @@ tasks unless other settings is specified there. Item 'calibration_scanning_param
  "calibration_scanning_params": {"interpolate": true},
 ```
 
-File with Python workflow for the activity (and postprocessing if desired).
-The directory is specified in 'taskDir' above. This is _required_.
+Allows to have activities which use continuous scanning (false) or just single scan (optional):
 
 ```json
- "analyses": "experiment_freeplay.py", 
+"single_scan": true,
 ```
 
 Specifies filtering of scans to avoid scans with captured hands based on the range of elevation values of each scan.
@@ -179,19 +208,8 @@ Debug=true outputs the elevation range in normal case without hands and allows i
  "filter" : {"threshold": 200, "debug": true},
 ```
 
-Allows to have activities which use continuous scanning (false) or just single scan (optional):
+### Additional widgets
 
-```json
-"single_scan": true,
-```
-
-Specifies details of the slides for each activity (when to switch slides and which html file to use).
-'Switch' is a list of numbers telling the application when to switch to next slide,
-in this case next slide is switched after 93s and 174 s (from the beginning of the activity). 
-
-```json
-"slides": {"switch": [93, 174], "file": "freeplay.html"},
-```
 
 Specifies whether profile widget should be displayed,
 what is its size, position, limit on axes, and raster used for computing the profile:
@@ -228,15 +246,25 @@ In both cases (profile and widget), size and position can be specified in absolu
 | Absolute | "size" | "position" | (x, y)/(width, height) screen coordinates |
 | Relative | "relative_size" | "relative_position" | coordinates relative to map display from 0-1 , origin is TL corner|
 
-Specifies title of the activity:
+
+### Misc
+
+Specifies time limit for each activity (useful for experiments). This is optional.
 
 ```json
- "title": "Task 0: Freeplay"
+ "time_limit": 300,
 ```
 
-Specifies the instructions for the activity:
+
+
+Specifies details of the slides for each activity (when to switch slides and which html file to use).
+'Switch' is a list of numbers telling the application when to switch to next slide,
+in this case next slide is switched after 93s and 174 s (from the beginning of the activity). 
 
 ```json
- "instructions": "Place marker to create viewshed"
+"slides": {"switch": [93, 174], "file": "freeplay.html"},
 ```
+
+
+
 
