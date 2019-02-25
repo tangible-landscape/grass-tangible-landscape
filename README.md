@@ -1,6 +1,6 @@
 Tangible Landscape
 ==================
-This README describes the installation of Tangible Landscape which runs on Linux (Ubuntu) and Mac. This repository contains also older, unsupported, version running solely on MS Windows.
+This README describes the installation of Tangible Landscape which runs on Linux (tested with Ubuntu) and MacOS. The software is not tested on MS Windows (contributions are welcome). This repository contains also older, unsupported, version running solely on MS Windows.
 
 Dependencies:
 -------------

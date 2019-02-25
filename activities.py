@@ -16,6 +16,7 @@ import traceback
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
+from wx.lib.wordwrap import wordwrap
 
 from grass.exceptions import CalledModuleError, ScriptError
 from grass.pydispatch.signal import Signal
@@ -80,7 +81,7 @@ class ActivitiesPanel(wx.Panel):
         self.buttonCalibrate = wx.Button(self, size=(150, -1), label='Calibrate')
         self.buttonStop = wx.Button(self, label='End activity')
         self.buttonStart.Bind(wx.EVT_BUTTON, self.OnStart)
-        self.buttonCalibrate.Bind(wx.EVT_BUTTON, self.OnCalibrate)
+        self.buttonCalibrate.Bind(wx.EVT_BUTTON, lambda evt: self.Calibrate(startTask=False))
         self.buttonStop.Bind(wx.EVT_BUTTON, self.OnStop)
         self.timeText = wx.StaticText(self, label='00:00', style=wx.ALIGN_CENTRE)
         self.timeText.SetFont(wx.Font(15, wx.FONTFAMILY_TELETYPE, wx.NORMAL, wx.FONTWEIGHT_BOLD))
@@ -89,6 +90,8 @@ class ActivitiesPanel(wx.Panel):
 
         self.buttonNext = wx.Button(self, label='Next')
         self.buttonNext.Bind(wx.EVT_BUTTON, self.OnSubtask)
+
+        self.instructions = wx.StaticText(self)
 
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnTimer)
@@ -114,6 +117,9 @@ class ActivitiesPanel(wx.Panel):
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.buttonNext, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.instructions, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         self.SetSizer(self.mainSizer)
         self.mainSizer.Fit(self)
@@ -146,6 +152,7 @@ class ActivitiesPanel(wx.Panel):
             self.buttonForward.Enable(True)
             self.timeText.SetLabel('00:00')
             self.slidesStatus.Show(bool('slides' in self.configuration and self.configuration['slides']))
+            self.instructions.SetLabel(self._getInstructions())
         else:
             self._enableGUI(False)
         if self.configFile:
@@ -164,37 +171,24 @@ class ActivitiesPanel(wx.Panel):
         self.slidesStatus.Enable(enable)
         self.timeText.Enable(enable)
         self.title.Enable(enable)
+        self.instructions.Show(enable)
 
     def _bindUserStop(self):
-        topParent = wx.GetTopLevelParent(self)
+        windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
+        windows.append(wx.GetTopLevelParent(self))
+        windows.append(self.giface.lmgr)
+        bindings = {"stopTask": self.OnUserStop, 'scanOnce': self.OnScanOnce, 'taskNext': self.OnNextTask,
+                    'taskPrevious': self.OnPreviousTask, 'startTask': self.StartAutomated}
         if "keyboard_events" in self.configuration:
             items = []
             for eventName in self.configuration['keyboard_events']:
-                if eventName == 'stopTask':
-                    userStopId = wx.NewId()
-                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['stopTask'], userStopId))
-                    topParent.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-                elif eventName == 'scanOnce':
-                    userScanOnceId = wx.NewId()
-                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events']['scanOnce'], userScanOnceId))
-                    topParent.Bind(wx.EVT_MENU, self.OnScanOnce, id=userScanOnceId)
-                else:
-                    customId = wx.NewId()
-                    items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events'][eventName], customId))
-                    topParent.Bind(wx.EVT_MENU, lambda evt: self.CustomAction(eventName), id=customId)
-                    #topParent.Bind(wx.EVT_MENU, self.CustomAction, id=customId)
+                eventId = wx.NewId()
+                items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events'][eventName], eventId))
+                for win in windows:
+                    win.Bind(wx.EVT_MENU, bindings.get(eventName, lambda evt: self.CustomAction(eventName)), id=eventId)
             accel_tbl = wx.AcceleratorTable(items)
-            topParent.SetAcceleratorTable(accel_tbl)
-            if 'userStopId' in self.configuration['keyboard_events']:
-                # Map displays
-                for mapw in self.giface.GetAllMapDisplays():
-                    mapw.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-                    mapw.SetAcceleratorTable(accel_tbl)
-                # Layer Manager
-                lm = self.giface.lmgr
-                lm.Bind(wx.EVT_MENU, self.OnUserStop, id=userStopId)
-                lm.SetAcceleratorTable(accel_tbl)
-
+            for win in windows:
+                win.SetAcceleratorTable(accel_tbl)
 
     def CustomAction(self, eventName):
         env = get_environment(rast=self.settings['output']['scan'])
@@ -205,6 +199,16 @@ class ActivitiesPanel(wx.Panel):
                 exec('myanalyses.' + func + "(eventHandler=wx.GetTopLevelParent(self), env=env)")
             except (CalledModuleError, StandardError, ScriptError):
                 print traceback.print_exc()
+
+    def OnNextTask(self, event):
+        if self.timer.IsRunning():
+            self.OnStop(event=None)
+        self.OnForward(None)
+
+    def OnPreviousTask(self, event):
+        if self.timer.IsRunning():
+            self.OnStop(event=None)
+        self.OnBack(None)
 
     def _checkChangeTask(self):
         if self.timer.IsRunning():
@@ -226,6 +230,7 @@ class ActivitiesPanel(wx.Panel):
                     self.configuration = json.load(f)
                     self.tasks = self.configuration['tasks']
                     self.title.SetLabel(self.tasks[self.current]['title'])
+                    self.instructions.SetLabel(self._getInstructions())
                 except ValueError:
                     self.configuration = {}
                     self.settings['activities']['config'] = ''
@@ -240,24 +245,32 @@ class ActivitiesPanel(wx.Panel):
         self.slidesStatus.Show(bool('slides' in self.configuration and self.configuration['slides']))
         self.Layout()
 
-    def OnCalibrate(self, event):
+    def _loadScanningParams(self, key):
+        if key in self.tasks[self.current]:
+            for each in self.tasks[self.current][key].keys():
+                self.settings['scan'][each] = self.tasks[self.current][key][each]
+
+    def Calibrate(self, startTask):
         self._loadConfiguration(None)
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         self.settings['output']['scan'] = 'scan_saved'
         self.settings['analyses']['file'] = ''
-        if 'scanning_params' in self.tasks[self.current]:
-            for each in self.tasks[self.current]['scanning_params'].keys():
-                self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
+        self._loadScanningParams(key='scanning_params')
+        # just update whatever was not set with 'scanning_params'
+        self._loadScanningParams(key='calibration_scanning_params')
+
         # resume scanning
         self.buttonCalibrate.SetLabel("Calibrating...")
         self.scaniface.filter['filter'] = False
         self._startScanning()
 
-        wx.CallLater(2000, self.OnCalibrationDone)
+        wx.CallLater(2000, lambda: self.CalibrationDone(startTask))
 
-    def OnCalibrationDone(self):
+    def CalibrationDone(self, startTask):
         self._stopScanning()
         wx.CallLater(4000, lambda: self.buttonCalibrate.SetLabel("Calibrate"))
+        if startTask:
+            wx.CallLater(4000, lambda: self.OnStart(None))
 
     def OnBack(self, event):
         if not self._checkChangeTask():
@@ -277,6 +290,7 @@ class ActivitiesPanel(wx.Panel):
         self.timeText.SetLabel('00:00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.buttonCalibrate.Show('calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate'])
+        self.instructions.SetLabel(self._getInstructions())
         self.Layout()
 
     def OnForward(self, event):
@@ -296,7 +310,16 @@ class ActivitiesPanel(wx.Panel):
         self.timeText.SetLabel('00:00')
         self.buttonNext.Show('sublayers' in self.tasks[self.current])
         self.buttonCalibrate.Show('calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate'])
+        self.instructions.SetLabel(self._getInstructions())
         self.Layout()
+
+    def StartAutomated(self):
+        # Doesn't implement slides
+        self._loadConfiguration(None)
+        if 'calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate']:
+            self.Calibrate(startTask=True)
+        else:
+            self._startTask()
 
     def OnStart(self, event):
         self._loadConfiguration(None)
@@ -327,17 +350,33 @@ class ActivitiesPanel(wx.Panel):
             self.slides.Next()
             self.slidesStatus.SetLabel("Slide {}".format(slidenum))
 
+    def _getTaskDir(self):
+        return self.configuration['taskDir'] if 'taskDir' in self.configuration else os.path.dirname(self.settings['activities']['config'])
+
+    def _getInstructions(self):
+        instr = self.configuration['tasks'][self.current]['instructions'] if 'instructions' in self.configuration['tasks'][self.current] else ''
+        return wordwrap(instr, self.GetClientSize()[0] - 10, wx.ClientDC(self))
+
+    def _hideToolbarStatusbar(self):
+        """Hide toolbar and statusbar of active Map Display"""
+        self.giface.ShowAllToolbars(False)
+        self.giface.ShowStatusbar(False)
+        wx.CallLater(1000, self.giface.GetMapDisplay().PostSizeEvent)
+
     def _startTask(self):
+        if self.timer.IsRunning():
+            return
+
+        self._hideToolbarStatusbar()
         self.currentSubtask = 0
         self._processingSubTask = False
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
         self.LoadLayers()
         self.settings['scan']['elevation'] = self.tasks[self.current]['base']
-        self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses'])
+        self.settings['analyses']['file'] = os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
-        if 'scanning_params' in self.tasks[self.current]:
-            for each in self.tasks[self.current]['scanning_params'].keys():
-                self.settings['scan'][each] = self.tasks[self.current]['scanning_params'][each]
+        self._loadScanningParams(key='scanning_params')
+
         # resume scanning
         if 'filter' in self.tasks[self.current]:
             self.scaniface.filter['filter'] = True
@@ -356,12 +395,16 @@ class ActivitiesPanel(wx.Panel):
         if 'display' in self.tasks[self.current]:
             self.StartDisplay()
 
+        wx.CallLater(1000, self._setFocus)
+
         self.startTime = datetime.datetime.now()
         self.endTime = 0
         self.timer.Start(100)
 
-#    def OnPause(self, event):
-#        pass
+    def _setFocus(self):
+        topParent = wx.GetTopLevelParent(self)
+        topParent.Raise()
+        topParent.SetFocus()
 
     def _closeAdditionalWindows(self):
         if self.slides:
@@ -392,22 +435,26 @@ class ActivitiesPanel(wx.Panel):
         self._closeAdditionalWindows()
         self._removeAllLayers()
         self.settings['analyses']['file'] = ''
-        self.LoadHandsOff()
-        # scan after hands off
-        if 'duration_handsoff' in self.configuration:
-            t = self.configuration['duration_handsoff']
+        if 'handsoff' in self.configuration:
+            self.LoadHandsOff()
+            # scan after hands off
+            if 'duration_handsoff' in self.configuration:
+                t = self.configuration['duration_handsoff']
+            else:
+                t = 1
+            wx.CallLater(t, self._stop)
         else:
-            t = 1
-        wx.CallLater(t, self._stop)
+            self._stop()
 
     def _stop(self):
         # pause scanning
         self._stopScanning()
         if 'duration_handsoff_after' in self.configuration:
             t = self.configuration['duration_handsoff_after']
+            wx.CallLater(t, self.PostProcessing)
         else:
-            t = 1
-        wx.CallLater(t, self.PostProcessing)
+            self.PostProcessing()
+        self._setFocus()
 
     def OnTimer(self, event):
         diff = datetime.datetime.now() - self.startTime
@@ -423,22 +470,58 @@ class ActivitiesPanel(wx.Panel):
 
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
-        zoom = []
-        for i, cmd in enumerate(self.tasks[self.current]['layers']):
+        for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
             opacity = 1.0
-            if "layers_opacity" in self.tasks[self.current]:
-                opacity = float(self.tasks[self.current]['layers_opacity'][i])
+            checked = True
+            if "layers_opacity" in self.configuration['tasks'][self.current]:
+                opacity_list = self.configuration['tasks'][self.current]['layers_opacity']
+                if i < len(opacity_list):
+                    opacity = float(opacity_list[i])
+                else:
+                    self.giface.WriteWarning("Number of layers is larger than the number of opacity values in config file")
+            if "layers_checked" in self.configuration['tasks'][self.current]:
+                checked_list = self.configuration['tasks'][self.current]['layers_checked']
+                if i < len(checked_list):
+                    checked = checked_list[i]
+                else:
+                    self.giface.WriteWarning("Number of layers is larger than the number of checked values in config file")
             if cmd[0] == 'd.rast':
-                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=True,
+                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=checked,
                                 opacity=opacity, cmd=cmd)
-                if cmd[1].split('=')[1] != 'scan':
-                    zoom.append(l.maplayer)
             elif cmd[0] == 'd.vect':
-                ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
-                            opacity=opacity, cmd=cmd)
+                l = ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.labels':
+                l = ll.AddLayer('labels', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.shade':
+                l = ll.AddLayer('shaded', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.rgb':
+                l = ll.AddLayer('rgb', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.legend':
+                l = ll.AddLayer('rastleg', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.northarrow':
+                l = ll.AddLayer('northarrow', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.barscale':
+                l = ll.AddLayer('barscale', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
             else:
-                ll.AddLayer('command', name=' '.join(cmd), checked=True,
-                            opacity=opacity, cmd=[])
+                l = ll.AddLayer('command', name=' '.join(cmd), checked=checked,
+                                opacity=opacity, cmd=[])
+            if not checked:
+                # workaround: in not checked the order of layers is wrong
+                try:
+                    for each in ll:
+                        ll.SelectLayer(each, False)
+                    ll.SelectLayer(l, True)
+                except AttributeError:
+                    # SelectLayer introduced in r73097, for cases before:
+                    ll._tree.Unselect()
+                    ll._tree.SelectItem(l._layer, True)
         if 'sublayers' in self.tasks[self.current]:
             cmd = self.tasks[self.current]['sublayers'][0]
             if cmd[0] == 'd.rast':
@@ -447,21 +530,27 @@ class ActivitiesPanel(wx.Panel):
             elif cmd[0] == 'd.vect':
                 ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=True,
                             opacity=1.0, cmd=cmd)
-        self.giface.GetMapWindow().ZoomToMap(layers=zoom)
+
+        # zoom to base map
+        self.ZoomToBase()
+
+    def ZoomToBase(self):
+        base = self.configuration['tasks'][self.current]['base']
+        self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
+        self.giface.GetMapWindow().UpdateMap()
 
     def LoadHandsOff(self):
-        if 'handsoff' in self.configuration:
-            ll = self.giface.GetLayerList()
-            cmd = self.configuration['handsoff']
-            self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
-                                        opacity=1.0, cmd=[])
+        ll = self.giface.GetLayerList()
+        cmd = self.configuration['handsoff']
+        self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
+                                    opacity=1.0, cmd=[])
 
     def PostProcessing(self, onDone=None):
         wx.BeginBusyCursor()
         wx.SafeYield()
         env = get_environment(rast=self.settings['output']['scan'])
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -470,7 +559,7 @@ class ActivitiesPanel(wx.Panel):
         for func in functions:
             exec('del postprocess.' + func)
         try:
-            postprocess = imp.load_source('postprocess', os.path.join(self.configuration['taskDir'], self.tasks[self.current]['analyses']))
+            postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
             print e
             return
@@ -500,8 +589,8 @@ class ActivitiesPanel(wx.Panel):
             print 'WARNING: DEM profile is not available, requires matplotlib library'
             return
         self.profileFrame = ProfileFrame(self)
-        pos = self.tasks[self.current]['profile']['position']
-        size = self.tasks[self.current]['profile']['size']
+        pos = self._getDashboardPosition(key='profile')
+        size = self._getDashboardSize(key='profile')
         self.profileFrame.SetPosition(pos)
         self.profileFrame.SetSize(size)
         self.profileFrame.set_ticks(self.tasks[self.current]['profile']['ticks'])
@@ -529,12 +618,44 @@ class ActivitiesPanel(wx.Panel):
                                                      title=title, formatting_string=formatting_string, vertical=vertical)
         else:
             self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
-        pos = self.tasks[self.current]['display']['position']
-        size = self.tasks[self.current]['display']['size']
+
+
+        pos = self._getDashboardPosition(key='display')
+        size = self._getDashboardSize(key='display')
         self.dashboardFrame.SetSize(size)
         self.dashboardFrame.Show()
         self.dashboardFrame.SetPosition(pos)
 
+    def _getDashboardPosition(self, key):
+        if 'position' in self.tasks[self.current][key]:
+            pos = self.tasks[self.current][key]['position']
+        elif 'relative_position' in self.tasks[self.current][key]:
+            relPos = self.tasks[self.current][key]['relative_position']
+            pos = self._getPosFromRelative(relPos)
+        else:
+            pos = self._getPosFromRelative((1.01, 0.5))
+        return pos
+
+    def _getDashboardSize(self, key):
+        if 'size' in self.tasks[self.current][key]:
+            size = self.tasks[self.current][key]['size']
+        elif 'relative_size' in self.tasks[self.current][key]:
+            relSize = self.tasks[self.current][key]['relative_size']
+            size = self._getSizeFromRelative(relSize)
+        else:
+            size = self._getSizeFromRelative((0.3, 0.3))
+        return size
+
+    def _getPosFromRelative(self, pos):
+        md = self.giface.GetMapDisplay()
+        mdSize = md.GetSize()
+        mdPos = md.GetPosition()
+        return (mdPos[0] + pos[0] * mdSize[0], mdPos[1] + pos[1] * mdSize[1])
+
+    def _getSizeFromRelative(self, size):
+        md = self.giface.GetMapDisplay()
+        mdSize = md.GetSize()
+        return (size[0] * mdSize[0], size[1] * mdSize[1])
 
     def OnDisplayUpdate(self, event):
         if not self.dashboardFrame:
@@ -630,7 +751,7 @@ class ActivitiesPanel(wx.Panel):
         self.scaniface.changedInput = True
 
     def _reloadAnalysisFile(self, funcPrefix):
-        analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
+        analysesFile = os.path.join(self._getTaskDir(), self.configuration['tasks'][self.current]['analyses'])
         try:
             myanalyses = imp.load_source('myanalyses', analysesFile)
         except StandardError:
