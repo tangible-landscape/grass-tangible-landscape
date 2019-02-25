@@ -102,7 +102,13 @@ This describes the activities (explained further below):
 ```
 
 Specification of GIS layers which should be loaded when the activity starts.
-The display will zoom to capture all these layers. The layer list can be empty if needed. Special d.* commands (d.legend, d.northarrow, d.barscale, d.rgb, d.shade, d.labels) are supported as well.
+The specification of the symbology is given using
+[d.rast](https://grass.osgeo.org/grass74/manuals/d.rast.html) and
+[d.vect](https://grass.osgeo.org/grass74/manuals/d.vect.html) GRASS GIS modules.
+Note that the specified layers must exist when the activity starts,
+otherwise the loading will fail.
+This is __required__, however the layer list can be empty if needed.
+Special d.* commands (d.legend, d.northarrow, d.barscale, d.rgb, d.shade, d.labels) are supported as well.
 
 ```json
       "layers": [
@@ -194,6 +200,17 @@ what is its size, position, limit on axes, and raster used for computing the pro
 "profile": {"size": [400, 140], "position": [4272, 660],
             "limitx": [0, 350], "limity": [90, 190], "ticks": 10, "raster": "freeplay_scan"},
  ```
+
+This is how the profile gets updated from a Python workflow file:
+
+ ```python
+ from activities import updateProfile
+
+def run_freeplay(scanned_elev, eventHandler, env, **kwargs):
+     event = updateProfile(points=[(640026, 223986), (640334, 223986)])
+     eventHandler.postEvent(receiver=eventHandler.activities_panel, event=event)
+ ```
+
 
 Specifies whether dashboard widget should be displayed:
 ```json
