@@ -474,9 +474,13 @@ class ActivitiesPanel(wx.Panel):
             opacity = 1.0
             checked = True
             if "layers_opacity" in self.configuration['tasks'][self.current]:
-                opacity = float(self.configuration['tasks'][self.current]['layers_opacity'][i])
+                opacity_list = self.configuration['tasks'][self.current]['layers_opacity']
+                opacity = float(opacity_list[i]) if i < len(opacity_list) else 1.
+                self.giface.WriteWarning("Number of layers does not match number of opacity values in config file")
             if "layers_checked" in self.configuration['tasks'][self.current]:
-                checked = float(self.configuration['tasks'][self.current]['layers_checked'][i])
+                checked_list = self.configuration['tasks'][self.current]['layers_checked']
+                checked = checked_list[i] if i < len(checked_list) else True
+                self.giface.WriteWarning("Number of layers does not match number of checked values in config file")
             if cmd[0] == 'd.rast':
                 l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=checked,
                                 opacity=opacity, cmd=cmd)
