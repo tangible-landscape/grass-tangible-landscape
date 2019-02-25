@@ -355,7 +355,7 @@ class ActivitiesPanel(wx.Panel):
 
     def _getInstructions(self):
         instr = self.configuration['tasks'][self.current]['instructions'] if 'instructions' in self.configuration['tasks'][self.current] else ''
-        return wordwrap(instr, self.GetClientSize()[0], wx.ClientDC(self))
+        return wordwrap(instr, self.GetClientSize()[0] - 10, wx.ClientDC(self))
 
     def _hideToolbarStatusbar(self):
         """Hide toolbar and statusbar of active Map Display"""
