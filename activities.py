@@ -751,7 +751,7 @@ class ActivitiesPanel(wx.Panel):
         self.scaniface.changedInput = True
 
     def _reloadAnalysisFile(self, funcPrefix):
-        analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
+        analysesFile = os.path.join(self._getTaskDir(), self.configuration['tasks'][self.current]['analyses'])
         try:
             myanalyses = imp.load_source('myanalyses', analysesFile)
         except StandardError:
