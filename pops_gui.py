@@ -101,6 +101,7 @@ class PopsPanel(wx.Panel):
             try:
                 with open(self.configFile, 'r') as f:
                     self.configuration = json.load(f)
+                    self.tasks = self.configuration['tasks']
                     # this should reset the analysis file only when configuration is successfully loaded
                     self.settings['analyses']['file'] = ''
                     self.speed = int(self.configuration['POPS']['animation_speed'])
@@ -217,6 +218,7 @@ class PopsPanel(wx.Panel):
             self.settings['POPS']['config'] = self.configFile
             with open(self.configFile, 'r') as f:
                 self.configuration = json.load(f)
+                self.tasks = self.configuration['tasks']
         else:
             self.settings['activities']['config'] = ''
 
@@ -350,7 +352,7 @@ class PopsPanel(wx.Panel):
             pattern = self.configuration['POPS']['model']['probability_series'] + '__' + pattern
             pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
 
-        self.ShowTreatment(self.currentCheckpoint)
+        self.ShowTreatment()
         displayTime = self.checkpoints[self.currentCheckpoint]
         found = False
         for name in pattern_layers:
@@ -369,7 +371,7 @@ class PopsPanel(wx.Panel):
             self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
                                      name=self.empty_placeholders['results'], resultType='results', useEvent=False)
 
-    def ShowTreatment(self, year):
+    def ShowTreatment(self):
         event = self.getEventName()
         attempt = str(self.attempt.getCurrent()[0])
         name = self._createPlayerName()
@@ -513,6 +515,7 @@ class PopsPanel(wx.Panel):
         self.socket.sendall('cmd:play')
 
         self.HideResultsLayers()
+        self.ShowTreatment()
 
     def createTreatmentVector(self, lastTreatment, env):
         tr, evt, plr, attempt, year = lastTreatment.split('__')
@@ -796,9 +799,17 @@ class PopsPanel(wx.Panel):
             opacity = 1.0
             checked = True
             if "layers_opacity" in self.configuration['tasks'][self.current]:
-                opacity = float(self.configuration['tasks'][self.current]['layers_opacity'][i])
+                opacity_list = self.configuration['tasks'][self.current]['layers_opacity']
+                if i < len(opacity_list):
+                    opacity = float(opacity_list[i])
+                else:
+                    self.giface.WriteWarning("Number of layers is larger than the number of opacity values in config file")
             if "layers_checked" in self.configuration['tasks'][self.current]:
-                checked = float(self.configuration['tasks'][self.current]['layers_checked'][i])
+                checked_list = self.configuration['tasks'][self.current]['layers_checked']
+                if i < len(checked_list):
+                    checked = checked_list[i]
+                else:
+                    self.giface.WriteWarning("Number of layers is larger than the number of checked values in config file")
             if cmd[0] == 'd.rast':
                 l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=checked,
                                 opacity=opacity, cmd=cmd)
@@ -819,6 +830,9 @@ class PopsPanel(wx.Panel):
                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.northarrow':
                 l = ll.AddLayer('northarrow', name=cmd[1].split('=')[1], checked=checked,
+                                opacity=opacity, cmd=cmd)
+            elif cmd[0] == 'd.barscale':
+                l = ll.AddLayer('barscale', name=cmd[1].split('=')[1], checked=checked,
                                 opacity=opacity, cmd=cmd)
             else:
                 l = ll.AddLayer('command', name=' '.join(cmd), checked=checked,
@@ -891,32 +905,67 @@ class PopsPanel(wx.Panel):
 
         self.HideResultsLayers()
         self.lastDisplayedLayerAnim = ''
-        self.ShowTreatment(self.currentCheckpoint)
+        self.ShowTreatment()
         for name in all_layers:
             self.resultsToDisplay.put(name)
 
     def StartDisplay(self):
-        multiple = False if 'multiple' not in self.configuration['tasks'][self.current]['display'] else self.configuration['tasks'][self.current]['display']['multiple']
-        title = None if 'title' not in self.configuration['tasks'][self.current]['display'] else self.configuration['tasks'][self.current]['display']['title']
-        fontsize = self.configuration['tasks'][self.current]['display']['fontsize']
-        average = self.configuration['tasks'][self.current]['display']['average']
-        maximum = self.configuration['tasks'][self.current]['display']['maximum']
-        formatting_string = self.configuration['tasks'][self.current]['display']['formatting_string']
+        multiple = False if 'multiple' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['multiple']
+        title = None if 'title' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['title']
+        vertical = False if 'vertical' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['vertical']
+        fontsize = self.tasks[self.current]['display']['fontsize']
+        average = self.tasks[self.current]['display']['average']
+        maximum = self.tasks[self.current]['display']['maximum']
+        formatting_string = self.tasks[self.current]['display']['formatting_string']
         if multiple:
             self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
-                                                     title=title, formatting_string=formatting_string)
+                                                     title=title, formatting_string=formatting_string, vertical=vertical)
         else:
             self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
-        pos = self.configuration['tasks'][self.current]['display']['position']
-        size = self.configuration['tasks'][self.current]['display']['size']
+
+
+        pos = self._getDashboardPosition(key='display')
+        size = self._getDashboardSize(key='display')
         self.dashboardFrame.SetSize(size)
         self.dashboardFrame.Show()
         self.dashboardFrame.SetPosition(pos)
 
+    def _getDashboardPosition(self, key):
+        if 'position' in self.tasks[self.current][key]:
+            pos = self.tasks[self.current][key]['position']
+        elif 'relative_position' in self.tasks[self.current][key]:
+            relPos = self.tasks[self.current][key]['relative_position']
+            pos = self._getPosFromRelative(relPos)
+        else:
+            pos = self._getPosFromRelative((1.01, 0.5))
+        return pos
+
+    def _getDashboardSize(self, key):
+        if 'size' in self.tasks[self.current][key]:
+            size = self.tasks[self.current][key]['size']
+        elif 'relative_size' in self.tasks[self.current][key]:
+            relSize = self.tasks[self.current][key]['relative_size']
+            size = self._getSizeFromRelative(relSize)
+        else:
+            size = self._getSizeFromRelative((0.3, 0.3))
+        return size
+
+    def _getPosFromRelative(self, pos):
+        md = self.giface.GetMapDisplay()
+        mdSize = md.GetSize()
+        mdPos = md.GetPosition()
+        return (mdPos[0] + pos[0] * mdSize[0], mdPos[1] + pos[1] * mdSize[1])
+
+    def _getSizeFromRelative(self, size):
+        md = self.giface.GetMapDisplay()
+        mdSize = md.GetSize()
+        return (size[0] * mdSize[0], size[1] * mdSize[1])
+
     def StartTimeDisplay(self):
         self.timeDisplay = TimeDisplay(self, fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'])
-        pos = self.configuration['tasks'][self.current]['time_display']['position']
-        size = self.configuration['tasks'][self.current]['time_display']['size']
+        
+        pos = self._getDashboardPosition(key='time_display')
+        size = self._getDashboardSize(key='time_display')
         self.timeDisplay.SetSize(size)
         self.timeDisplay.Show()
         self.timeDisplay.SetPosition(pos)
