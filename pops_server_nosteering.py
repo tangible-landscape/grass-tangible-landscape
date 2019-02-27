@@ -66,7 +66,7 @@ def run_baseline(settings):
 
 
 def run_model(settings):
-    model = 'r.spread.pest.steering'
+    model = 'r.pops.spread'
     params = {}
     params['nprocs'] = 10
     params['ip_address'] = 'localhost'
@@ -86,7 +86,7 @@ def run_model(settings):
 
 
 def run_model_nonblocking(settings):
-    model = 'r.spread.pest.steering'
+    model = 'r.pops.spread'
     params = {}
     params['nprocs'] = 10
     params['ip_address'] = 'localhost'

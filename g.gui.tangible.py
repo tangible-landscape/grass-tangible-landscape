@@ -26,7 +26,7 @@ from grass.exceptions import CalledModuleError
 
 
 from tangible_utils import get_environment, run_analyses, updateGUIEvt, EVT_UPDATE_GUI
-from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS, EVT_SELECT_LAYERS
+from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS, EVT_SELECT_LAYERS, EVT_CHANGE_LAYER
 from drawing import DrawingPanel
 
 from export import OutputPanel
@@ -531,6 +531,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.Bind(EVT_REMOVE_LAYERS, self.OnRemoveLayers)
         self.Bind(EVT_CHECK_LAYERS, self.OnCheckLayers)
         self.Bind(EVT_SELECT_LAYERS, self.OnSelectLayers)
+        self.Bind(EVT_CHANGE_LAYER, self.OnChangeLayer)
 
         self.Bind(wx.EVT_CLOSE, self.pops_panel.OnClose)
 
@@ -842,6 +843,20 @@ class TangibleLandscapePlugin(wx.Dialog):
             return
         for each in event.layers:
             ll.SelectLayer(each, select=event.select)
+
+    def OnChangeLayer(self, event):
+        ll = self.giface.GetLayerList()
+        if not hasattr(ll, 'ChangeLayer'):
+            print "Changing layer in Layer Manager requires GRASS GIS version > 7.8"
+            return
+        params = {}
+        if hasattr(event, 'ltype'):
+            params['ltype'] = event.ltype
+        if hasattr(event, 'cmd'):
+            params['cmd'] = event.cmd
+        if hasattr(event, 'opacity'):
+            params['opacity'] = event.opacity
+        ll.ChangeLayer(event.layer, **params)
 
 
 def main(giface=None):
