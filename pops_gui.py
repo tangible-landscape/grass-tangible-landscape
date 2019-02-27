@@ -448,7 +448,6 @@ class PopsPanel(wx.Panel):
         playerName = self._createPlayerName()
         new_attempt = self.attempt.getCurrent()
         print new_attempt
-        attempt = "{p}:{a1}.{a2}".format(p=playerName, a1=new_attempt[0], a2=new_attempt[1])
 
         # grab a new raster of conditions
         # process new input layer
@@ -456,11 +455,6 @@ class PopsPanel(wx.Panel):
         treatments_resampled = treatments + '_resampled'
         studyArea = self.configuration['tasks'][self.current]['base']
         host = self.configuration['POPS']['model']['host']
-        infected = self.configuration['POPS']['model']['infected']
-        host_treated = self.configuration['POPS']['host_treated']
-        all_trees = self.configuration['POPS']['model']['total_plants']
-        all_trees_treated = self.configuration['POPS']['all_trees_treated']
-        inf_treated = self.configuration['POPS']['infected_treated']
         probability = self.configuration['POPS']['model']['probability_series']
         treatment_efficacy = self.configuration['POPS']['treatment_efficacy']
         price_function = self.configuration['POPS']['price']
@@ -495,12 +489,6 @@ class PopsPanel(wx.Panel):
                 gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
         else:
             gscript.run_command('r.null', map=treatments, null=0, env=env)
-
-#        self.applyTreatments(host=host, host_treated=host_treated, efficacy=treatment_efficacy,
-#                             treatment_prefix=treatments + '__' + postfix, env=env)
-                                     
-
-        gscript.mapcalc("{ni} = min({i}, {st})".format(i=infected, st=host_treated, ni=inf_treated), env=env)
 
         # export treatments file to server
         pack_path = os.path.join(TMP_DIR, treatments + '.pack')
