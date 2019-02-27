@@ -24,6 +24,7 @@ addLayers, EVT_ADD_LAYERS = wx.lib.newevent.NewEvent()
 removeLayers, EVT_REMOVE_LAYERS = wx.lib.newevent.NewEvent()
 checkLayers, EVT_CHECK_LAYERS = wx.lib.newevent.NewEvent()
 selectLayers, EVT_SELECT_LAYERS = wx.lib.newevent.NewEvent()
+changeLayer, EVT_CHANGE_LAYER = wx.lib.newevent.NewEvent()
 
 
 def get_show_layer_icon():
