@@ -24,7 +24,7 @@ import grass.script as gscript
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError, ScriptError
 
-from tangible_utils import addLayers, get_environment, removeLayers, checkLayers
+from tangible_utils import addLayers, get_environment, removeLayers, checkLayers, changeLayer
 
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
@@ -77,6 +77,8 @@ class PopsPanel(wx.Panel):
         # steering
         self.visualizationModes = ['singlerun', 'probability']
         self.visualizationMode = 0
+        self.empty_placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
+        self.placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self.currentCheckpoint = None
         self.checkpoints = []
         self.attempt = Attempt()
@@ -311,26 +313,6 @@ class PopsPanel(wx.Panel):
                 components = layer.split('__')
                 new_name = '__'.join(components[:-1] + ['{a1}_{a2}'.format(a1=a1, a2=a2)] + components[-1:])
                 gscript.run_command('g.copy', raster=[layer, new_name], quiet=True, overwrite=True)
-#
-#    def ShowResults(self, event=None):
-#        # clear the queue to stop animation
-#        with self.resultsToDisplay.mutex:
-#            self.resultsToDisplay.queue.clear()
-#
-#        if self.switchCurrentResult == 0:
-#            self.visualizationMode = 'animation'
-#            self.ShowAnimation()
-#        elif self.switchCurrentResult == 1:
-#            self.ShowProbability()
-#            self.visualizationMode = 'probability'
-#        elif self.switchCurrentResult == 2:
-#            self.RemoveAllResultsLayers()
-#            self.showDisplayChange = True
-#            self.visualizationMode = 'singlerun'
-#
-#        self.switchCurrentResult += 1
-#        if self.switchCurrentResult >= 3:
-#            self.switchCurrentResult = 0
 
     def SwitchVizMode(self, event=None):
         # clear the queue to stop animation
@@ -354,24 +336,6 @@ class PopsPanel(wx.Panel):
         name = self._createPlayerName()
         self.AddLayersAsAnimation(etype='raster', pattern="{e}__{n}__{a}_*".format(n=name, e=event, a=attempt))
 
-#    def ShowProbability(self, event=None):
-#        event = self.getEventName()
-#        attempt = self.attempt.getCurrentFormatted(delim='_')
-#        name = self._createPlayerName()
-#        pattern = self.configuration['POPS']['model']['probability_series'] + '__' + event + '__' + name + '__' + attempt + '*'
-#        pattern_layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
-#
-#        self.RemoveAllResultsLayers()
-#        self.ShowTreatment(self.currentCheckpoint)
-#        displayTime = self.checkpoints[self.currentCheckpoint]
-#        for name in pattern_layers:
-#            if "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2]) in name:
-#                gscript.run_command('r.colors', map=name, quiet=True,
-#                                    rules=self.configuration['POPS']['color_probability'])
-#                cmd = ['d.rast', 'values=0-10', 'flags=i', 'map={}'.format(name)]
-#                ll = self.giface.GetLayerList()
-#                ll.AddLayer('raster', name=name, checked=True, opacity=1, cmd=cmd)
-
     def ShowResults(self):
         # change layers
         event = 'tmpevent'
@@ -386,19 +350,24 @@ class PopsPanel(wx.Panel):
             pattern = self.configuration['POPS']['model']['probability_series'] + '__' + pattern
             pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
 
-        self.RemoveAllResultsLayers()
         self.ShowTreatment(self.currentCheckpoint)
         displayTime = self.checkpoints[self.currentCheckpoint]
-        ll = self.giface.GetLayerList()
+        found = False
         for name in pattern_layers:
             if "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2]) in name:
+                found = True
                 if self.visualizationModes[self.visualizationMode] == 'probability':
                     # TODO r.colors should be moved
                     gscript.run_command('r.colors', map=name, quiet=True, rules=self.configuration['POPS']['color_probability'])
                     cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
                 elif self.visualizationModes[self.visualizationMode] == 'singlerun':
                     cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-                ll.AddLayer('raster', name=name, checked=True, opacity=1, cmd=cmd)
+                # assuming it is there, should test
+                self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=False)
+        if not found:
+            # display empty raster
+            self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
+                                     name=self.empty_placeholders['results'], resultType='results', useEvent=False)
 
     def ShowTreatment(self, year):
         event = self.getEventName()
@@ -406,15 +375,15 @@ class PopsPanel(wx.Panel):
         name = self._createPlayerName()
         name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt])
         cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'label_color=black', 'label_size=10', 'xref=center']
-        ll = self.giface.GetLayerList()
-        ll.AddLayer('vector', name=name, checked=True, opacity=1, cmd=cmd)
+
+        self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
     def _RunSimulation(self, event=None):
         print '_runSimulation'
         if self.switchCurrentResult == 0:
             # it's allowed to interact now
             # just to be sure remove results
-            self.RemoveAllResultsLayers()
+            self.HideResultsLayers()
             wx.FutureCall(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
 
     def EndSimulation(self):
@@ -424,12 +393,12 @@ class PopsPanel(wx.Panel):
     def InitSimulation(self):
         self._initSimulation(restart=False)
         self.attempt.increaseMajor()
-        self.RemoveAllResultsLayers()
+        self.HideResultsLayers()
 
     def RestartSimulation(self):
         self._initSimulation(restart=True)
         self.attempt.increaseMajor()
-        self.RemoveAllResultsLayers()
+        self.HideResultsLayers()
         
     def _initSimulation(self, restart):
         playerName = self._createPlayerName()
@@ -555,7 +524,7 @@ class PopsPanel(wx.Panel):
 
         self.socket.sendall('cmd:play')
 
-        self.RemoveAllResultsLayers()
+        self.HideResultsLayers()
 
     def createTreatmentVector(self, lastTreatment, env):
         tr, evt, plr, attempt, year = lastTreatment.split('__')
@@ -621,16 +590,7 @@ class PopsPanel(wx.Panel):
             gscript.run_command('r.colors', map=name, quiet=True,
                                 rules=self.configuration['POPS']['color_trees'])
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-            evt = addLayers(layerSpecs=[dict(ltype='raster', name=name, cmd=cmd, checked=True), ])
-            # uncheck previous one (lethal temperature can remove infection)
-            if self.lastDisplayedLayerAnim:
-                ll = self.giface.GetLayerList()
-                found = ll.GetLayersByName(self.lastDisplayedLayerAnim)
-                if found:
-                    evtCheck = checkLayers(layers=found, checked=False)
-                    self.scaniface.postEvent(self.scaniface, evtCheck)
-            self.lastDisplayedLayerAnim = name
-            self.scaniface.postEvent(self.scaniface, evt)
+            self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=True)
             # update year
             res = re.search("_[0-9]{4}_[0-9]{2}_[0-9]{2}", name)
             if res:
@@ -706,6 +666,7 @@ class PopsPanel(wx.Panel):
         self.switchCurrentResult = 0
         self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS']}
         self.LoadLayers()
+        self.AddTempLayers()
         if self.treatmentSelect.GetValue():
             self.ChangeRegion()
 
@@ -827,6 +788,20 @@ class PopsPanel(wx.Panel):
     def _onDefaultRegion(self, event):
         self.treatmentSelect.SetValue('')
 
+    def AddTempLayers(self):
+        # create empty placeholders
+        f = gscript.find_file(name=self.placeholders['results'], element='raster')
+        if not f['fullname']:
+            env = get_environment(raster=self.configuration['tasks'][self.current]['base'])
+            gscript.mapcalc(self.empty_placeholders['results'] + " = null()", env=env)
+            gscript.run_command('v.edit', tool='create', map=self.empty_placeholders['treatments'], env=env)
+
+        ll = self.giface.GetLayerList()
+        ll.AddLayer('raster', name=self.empty_placeholders['results'],
+                    cmd=['d.rast', 'map=' + self.empty_placeholders['results']], checked=True)
+        ll.AddLayer('vector', name=self.empty_placeholders['treatments'],
+                    cmd=['d.vect', 'map=' + self.empty_placeholders['treatments']], checked=True)
+
     def LoadLayers(self):
         ll = self.giface.GetLayerList()
         for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
@@ -883,11 +858,25 @@ class PopsPanel(wx.Panel):
         self.giface.GetMapWindow().Map.GetRegion(regionName=region, update=True)
         self.giface.GetMapWindow().UpdateMap()
 
-    def RemoveAllResultsLayers(self):
-        event = self.getEventName()
-        pattern_layers_r = gscript.list_grouped(type='raster', pattern="*{}*".format(event))[gscript.gisenv()['MAPSET']]
-        pattern_layers_v = gscript.list_grouped(type='vector', pattern="*{}*".format(event))[gscript.gisenv()['MAPSET']]
-        self.RemoveLayers(layers=pattern_layers_r + pattern_layers_v)
+    def _changeResultsLayer(self, cmd, name, resultType, useEvent):
+        ll = self.giface.GetLayerList()
+        if not hasattr(ll, 'ChangeLayer'):
+            print "Changing layer in Layer Manager requires GRASS GIS version > 7.8"
+            return
+        # TODO: check there is exactly one layer
+        pl_layer = ll.GetLayersByName(self.placeholders[resultType])[0]
+        if useEvent:
+            evt = changeLayer(layer=pl_layer, cmd=cmd)
+            self.scaniface.postEvent(self.scaniface, evt)
+        else:
+            ll.ChangeLayer(pl_layer, cmd=cmd)
+        self.placeholders[resultType] = name
+
+    def HideResultsLayers(self, useEvent=False):
+        self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
+                                 name=self.empty_placeholders['results'], resultType='results', useEvent=useEvent)
+        self._changeResultsLayer(cmd=['d.vect', 'map=' + self.empty_placeholders['treatments']],
+                                 name=self.empty_placeholders['treatments'], resultType='treatments', useEvent=useEvent)
 
     def RemoveLayers(self, etype='raster', pattern=None, layers=None):
         # works only for raster/vector at this point
@@ -912,7 +901,7 @@ class PopsPanel(wx.Panel):
         if layers:
             all_layers += layers
 
-        self.RemoveAllResultsLayers()
+        self.HideResultsLayers()
         self.lastDisplayedLayerAnim = ''
         self.ShowTreatment(self.currentCheckpoint)
         for name in all_layers:
