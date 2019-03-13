@@ -18,6 +18,7 @@ import re
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
+from wx.lib.fancytext import StaticFancyText, RenderToBitmap
 
 from gui_core.gselect import Select
 import grass.script as gscript
@@ -75,12 +76,13 @@ class PopsPanel(wx.Panel):
         self.lastDisplayedLayerAnim = ''
 
         # steering
-        self.visualizationModes = ['singlerun', 'probability']
+        self.visualizationModes = ['singlerun', 'probability', 'combined']
         self.visualizationMode = 0
         self.empty_placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self.placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self.currentCheckpoint = None
         self.checkpoints = []
+        self.lastTreatmentYear = None
         self.attempt = Attempt()
         self._threadingEvent = threading.Event()
         self.model_running = False
@@ -204,7 +206,7 @@ class PopsPanel(wx.Panel):
     def OnTimeDisplayUpdate(self, event):
         if not self.timeDisplay:
             return
-        self.timeDisplay.Update(*event.date)
+        self.timeDisplay.Update(event.lastTreatmentYear, event.currentViewYear)
 
     def OnUpdateInfoBar(self, event):
         if event.dismiss:
@@ -340,36 +342,34 @@ class PopsPanel(wx.Panel):
 
     def ShowResults(self):
         # change layers
+        self.ShowTreatment()
+        displayTime = self.checkpoints[self.currentCheckpoint]
         event = 'tmpevent'
         attempt = self.attempt.getCurrentFormatted(delim='_')
         name = self._createPlayerName()
-        etype = 'raster'
-        pattern = "{e}__{n}__{a}__*".format(n=name, e=event, a=attempt)
+        prefix = "{e}__{n}__{a}__".format(n=name, e=event, a=attempt)
+        prefix_prob = self.configuration['POPS']['model']['probability_series'] + '__' + prefix
+        suffix = "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2])
 
         if self.visualizationModes[self.visualizationMode] == 'singlerun':
-            pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
+            name = prefix + suffix
         elif self.visualizationModes[self.visualizationMode] == 'probability':
-            pattern = self.configuration['POPS']['model']['probability_series'] + '__' + pattern
-            pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
-
-        self.ShowTreatment()
-        displayTime = self.checkpoints[self.currentCheckpoint]
-        found = False
-        for name in pattern_layers:
-            if "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2]) in name:
-                found = True
-                if self.visualizationModes[self.visualizationMode] == 'probability':
-                    # TODO r.colors should be moved
-                    gscript.run_command('r.colors', map=name, quiet=True, rules=self.configuration['POPS']['color_probability'])
-                    cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-                elif self.visualizationModes[self.visualizationMode] == 'singlerun':
-                    cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-                # assuming it is there, should test
-                self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=False)
-        if not found:
+            name = prefix_prob + suffix
+        elif self.visualizationModes[self.visualizationMode] == 'combined':
+            if self.lastTreatmentYear is None:
+                name = ''
+            elif self.currentCheckpoint + self.configuration['POPS']['model']['start_time'] > self.lastTreatmentYear + 1:
+                name = prefix_prob + suffix
+            else:
+                name = prefix + suffix
+        f = gscript.find_file(name=name, element='raster')
+        if not f['fullname']:
             # display empty raster
             self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
                                      name=self.empty_placeholders['results'], resultType='results', useEvent=False)
+        else:
+            cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
+            self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=False)
 
     def ShowTreatment(self):
         event = self.getEventName()
@@ -401,7 +401,7 @@ class PopsPanel(wx.Panel):
         self._initSimulation(restart=True)
         self.attempt.increaseMajor()
         self.HideResultsLayers()
-        
+
     def _initSimulation(self, restart):
         playerName = self._createPlayerName()
 
@@ -477,6 +477,7 @@ class PopsPanel(wx.Panel):
         self.lastRecordedTreatment = treatments + '_' + postfix
         # create treatment vector of all used treatments in that scenario
         self.createTreatmentVector(tr_name, env)
+        self.lastTreatmentYear = self.currentCheckpoint + self.configuration['POPS']['model']['start_time']
 
         # compute proportion
         treatments_as_float = False
@@ -588,7 +589,9 @@ class PopsPanel(wx.Panel):
                 year, month, day = res.group().strip('_').split('_')
                 self.currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
                 self.checkpoints[self.currentCheckpoint] = (int(year), int(month), int(day))
-                evt2 = updateTimeDisplay(date=(year, month, day))
+                #evt2 = updateTimeDisplay(date=(year, month, day))
+                currentViewYear = int(year) + 1 if int(month) == 12 else int(year)
+                evt2 = updateTimeDisplay(lastTreatmentYear = self.lastTreatmentYear, currentViewYear=currentViewYear)
                 self.scaniface.postEvent(self, evt2)
 
     def _reloadAnalysisFile(self, funcPrefix):
@@ -750,7 +753,8 @@ class PopsPanel(wx.Panel):
             return
         self.currentCheckpoint = self.currentCheckpoint + 1 if forward else self.currentCheckpoint - 1
         displayTime = self.checkpoints[self.currentCheckpoint]
-        self.timeDisplay.Update(*displayTime)
+        currentViewYear = int(displayTime[0]) + 1 if int(displayTime[1]) == 12 else int(displayTime[0])
+        self.timeDisplay.Update(self.lastTreatmentYear, currentViewYear)
 
         self.ShowResults()
 
@@ -962,18 +966,22 @@ class PopsPanel(wx.Panel):
         return (size[0] * mdSize[0], size[1] * mdSize[1])
 
     def StartTimeDisplay(self):
-        self.timeDisplay = TimeDisplay(self, fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'])
-        
+        self.timeDisplay = TimeDisplay(self, start=self.configuration['POPS']['model']['start_time'],
+                                       end=self.configuration['POPS']['model']['end_time'] + 1,
+                                       fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'])
+
         pos = self._getDashboardPosition(key='time_display')
         size = self._getDashboardSize(key='time_display')
         self.timeDisplay.SetSize(size)
         self.timeDisplay.Show()
         self.timeDisplay.SetPosition(pos)
+#        evt = updateTimeDisplay(date=(self.configuration['POPS']['model']['start_time'], 1, 1))
+        evt = updateTimeDisplay(lastTreatmentYear = self.lastTreatmentYear,
+                                currentViewYear=int(self.configuration['POPS']['model']['start_time']))
+        self.scaniface.postEvent(self, evt)
 
-        self.scaniface.postEvent(self, updateTimeDisplay(date=(self.configuration['POPS']['model']['start_time'], 1, 1)))
 
-
-class TimeDisplay(wx.Frame):
+class SimpleTimeDisplay(wx.Frame):
     def __init__(self, parent, fontsize):
         wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.label = wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL)
@@ -989,6 +997,42 @@ class TimeDisplay(wx.Frame):
         if str(month) == '12':
             year = int(year) + 1
         self.label.SetLabel("{y} ".format(y=year))
+
+
+class TimeDisplay(wx.Frame):
+    def __init__(self, parent, fontsize, start, end):
+        wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
+        self.years = range(start, end + 1)
+        self.fontsize = fontsize
+        text = self.GenerateHTML(None, start)
+        self.textCtrl = StaticFancyText(self, -1, text)
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+        self.SetSizer(self.sizer)
+        self.sizer.Fit(self)
+
+    def Update(self, lastTreatment, currentView):
+        text = self.GenerateHTML(lastTreatment, currentView)
+        bmp = RenderToBitmap(text)
+        self.textCtrl.SetBitmap(bmp)
+
+    def GenerateHTML(self, lastTreatment, currentView):
+        delimiter = '&#9148;'
+        html = ''
+        style = {'lastTreatment': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
+                 'currentView':  'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
+                 'default': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
+        for year in self.years:
+            if year == currentView:
+                styl = style['currentView']
+            elif year == lastTreatment:
+                styl = style['lastTreatment']
+            else:
+                styl = style['default']
+            html += ' <font {style}>{year}</font> '.format(year=year, style=styl)
+            if year != self.years[-1]:
+                html += '<font {style}> {d} </font>'.format(style=style['default'], d=delimiter)
+        return html
 
 
 class Attempt(object):
