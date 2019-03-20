@@ -76,13 +76,13 @@ class PopsPanel(wx.Panel):
         self.lastDisplayedLayerAnim = ''
 
         # steering
-        self.visualizationModes = ['singlerun', 'probability', 'combined']
+        self.visualizationModes = ['combined', 'singlerun', 'probability']
         self.visualizationMode = 0
         self.empty_placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self.placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self.currentCheckpoint = None
         self.checkpoints = []
-        self.lastTreatmentYear = None
+        self.currentRealityCheckpoint = 0
         self.attempt = Attempt()
         self._threadingEvent = threading.Event()
         self.model_running = False
@@ -124,10 +124,11 @@ class PopsPanel(wx.Panel):
         stopTreatmentButton = wx.Button(self, label="Stop")
 
         runBtn = wx.Button(modelingBox, label="Run simulation")
-        visualizationBtn = wx.Button(modelingBox, label="Switch visualization")
+        visualizationChoice = wx.Choice(modelingBox, choices=self.visualizationModes)
+        visualizationChoice.SetSelection(0)
 
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
-        visualizationBtn.Bind(wx.EVT_BUTTON, lambda evt: self.SwitchVizMode())
+        visualizationChoice.Bind(wx.EVT_CHOICE, lambda evt: self.SwitchVizMode)
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
         self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
@@ -148,7 +149,7 @@ class PopsPanel(wx.Panel):
         boxSizer = wx.StaticBoxSizer(modelingBox, wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(runBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(visualizationBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(visualizationChoice, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -206,7 +207,7 @@ class PopsPanel(wx.Panel):
     def OnTimeDisplayUpdate(self, event):
         if not self.timeDisplay:
             return
-        self.timeDisplay.Update(event.lastTreatmentYear, event.currentViewYear, self.visualizationModes[self.visualizationMode])
+        self.timeDisplay.Update(event.current, event.currentView, self.visualizationModes[self.visualizationMode])
 
     def OnUpdateInfoBar(self, event):
         if event.dismiss:
@@ -323,13 +324,17 @@ class PopsPanel(wx.Panel):
         with self.resultsToDisplay.mutex:
             self.resultsToDisplay.queue.clear()
 
-        self.visualizationMode += 1
-        if self.visualizationMode >= len(self.visualizationModes):
-            self.visualizationMode = 0
+        if event:
+            # from gui
+            self.visualizationMode = self.visualizationModes[event.GetSelection()]
+        else:
+            # from button
+            self.visualizationMode += 1
+            if self.visualizationMode >= len(self.visualizationModes):
+                self.visualizationMode = 0
 
         if self.timeDisplay:
-            currentViewYear = self.currentCheckpoint + int(self.configuration['POPS']['model']['start_time'])
-            self.timeDisplay.Update(self.lastTreatmentYear, currentViewYear, self.visualizationModes[self.visualizationMode])
+            self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
 
         self.ShowResults()
 
@@ -363,12 +368,11 @@ class PopsPanel(wx.Panel):
             name = prefix_prob + suffix
             rules = self.configuration['POPS']['color_probability']
         elif self.visualizationModes[self.visualizationMode] == 'combined':
-            print 'self.lastTreatmentYear'
-            print self.lastTreatmentYear
+            print self.currentRealityCheckpoint
             print self.currentCheckpoint
-            if self.lastTreatmentYear is None:
+            if self.currentRealityCheckpoint == 0:
                 name = ''
-            elif self.currentCheckpoint + self.configuration['POPS']['model']['start_time'] > self.lastTreatmentYear + 1:
+            elif self.currentCheckpoint > self.currentRealityCheckpoint:
                 name = prefix_prob + suffix
                 rules = self.configuration['POPS']['color_probability']
             else:
@@ -394,7 +398,8 @@ class PopsPanel(wx.Panel):
         attempt = str(self.attempt.getCurrent()[0])
         name = self._createPlayerName()
         name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt])
-        cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'label_color=black', 'label_size=10', 'xref=center']
+        cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'width=2',
+               'label_color=black', 'label_size=12', 'xref=center', 'yref=bottom', '-c', 'font=n019044l']
 
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
@@ -496,7 +501,7 @@ class PopsPanel(wx.Panel):
         # create treatment vector of all used treatments in that scenario
         self.createTreatmentVector(tr_name, env)
         #if gscript.raster_info(treatments)['max'] != None:
-        self.lastTreatmentYear = self.currentCheckpoint + self.configuration['POPS']['model']['start_time']
+        self.currentRealityCheckpoint = self.currentCheckpoint + 1
 
         # compute proportion
         treatments_as_float = False
@@ -609,8 +614,8 @@ class PopsPanel(wx.Panel):
                 self.currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
                 self.checkpoints[self.currentCheckpoint] = (int(year), int(month), int(day))
                 #evt2 = updateTimeDisplay(date=(year, month, day))
-                currentViewYear = int(year) + 1 if int(month) == 12 else int(year)
-                evt2 = updateTimeDisplay(lastTreatmentYear = self.lastTreatmentYear, currentViewYear=currentViewYear,
+                evt2 = updateTimeDisplay(current=self.currentRealityCheckpoint,
+                                         currentView=self.currentCheckpoint,
                                          vtype=self.visualizationModes[self.visualizationMode])
                 self.scaniface.postEvent(self, evt2)
 
@@ -737,6 +742,7 @@ class PopsPanel(wx.Panel):
         self._stopScanning()
         self.timer.Stop()
         self.EndSimulation()
+        self.currentCheckpoint = self.currentRealityCheckpoint = 0
 
     def _bindButtons(self):
         windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
@@ -772,9 +778,7 @@ class PopsPanel(wx.Panel):
         if not forward and self.currentCheckpoint <= start:
             return
         self.currentCheckpoint = self.currentCheckpoint + 1 if forward else self.currentCheckpoint - 1
-        displayTime = self.checkpoints[self.currentCheckpoint]
-        currentViewYear = int(displayTime[0]) + 1 if int(displayTime[1]) == 12 else int(displayTime[0])
-        self.timeDisplay.Update(self.lastTreatmentYear, currentViewYear, self.visualizationModes[self.visualizationMode])
+        self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
 
         self.ShowResults()
 
@@ -997,8 +1001,8 @@ class PopsPanel(wx.Panel):
         self.timeDisplay.Show()
         self.timeDisplay.SetPosition(pos)
 #        evt = updateTimeDisplay(date=(self.configuration['POPS']['model']['start_time'], 1, 1))
-        evt = updateTimeDisplay(lastTreatmentYear = self.lastTreatmentYear,
-                                currentViewYear=int(self.configuration['POPS']['model']['start_time']),
+        evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
+                                currentView=self.currentCheckpoint,
                                 vtype=self.visualizationModes[self.visualizationMode])
         self.scaniface.postEvent(self, evt)
 
@@ -1026,19 +1030,19 @@ class TimeDisplay(wx.Frame):
         wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
         self.years = range(start, end + 1)
         self.fontsize = fontsize
-        text = self.GenerateHTML(None, start, vtype)
+        text = self.GenerateHTML(0, start, vtype)
         self.textCtrl = StaticFancyText(self, -1, text)
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
-    def Update(self, lastTreatment, currentView, vtype):
-        text = self.GenerateHTML(lastTreatment, currentView, vtype)
+    def Update(self, current, currentView, vtype):
+        text = self.GenerateHTML(current + self.years[0], currentView + self.years[0], vtype)
         bmp = RenderToBitmap(text)
         self.textCtrl.SetBitmap(bmp)
 
-    def GenerateHTML(self, lastTreatment, currentView, vtype):
+    def GenerateHTML(self, current, currentView, vtype):
         delim_single = '&#9148;'
         delim_prob = '&#9776;'
         delim_split = '&#9887;'
@@ -1049,27 +1053,27 @@ class TimeDisplay(wx.Frame):
         for year in self.years:
             if year == currentView:
                 styl = style['currentView']
-            elif year == lastTreatment:
+            elif year == current:
                 styl = style['lastTreatment']
             else:
                 styl = style['default']
             html += ' <font {style}>{year}</font> '.format(year=year, style=styl)
             if year != self.years[-1]:
-#                d = delim_single
-#                if vtype == 'probability':
-#                    if year == self.years[0]:
-#                        d = delim_split
-#                    else:
-#                        d = delim_prob
-#                elif vtype == 'combined':
-#                    # TODO fix None
-#                    if year == lastTreatment + 1:
-#                        d = delim_split
-#                    elif year > lastTreatment + 1:
-#                        d = delim_prob
-                # for now, keep simple until I figure it out
                 d = delim_single
-                html += '<font {style}> {d} </font>'.format(style=styl, d=d)
+                if vtype == 'probability':
+                    if year == self.years[0]:
+                        d = delim_split
+                    else:
+                        d = delim_prob
+                elif vtype == 'combined':
+                    # TODO fix None
+                    if year == current:
+                        d = delim_split
+                    elif year > current:
+                        d = delim_prob
+                # for now, keep simple until I figure it out
+                #d = delim_single
+                html += '<font {style}> {d} </font>'.format(style=style['default'], d=d)
         return html
 
 
