@@ -128,7 +128,7 @@ class PopsPanel(wx.Panel):
         visualizationChoice.SetSelection(0)
 
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
-        visualizationChoice.Bind(wx.EVT_CHOICE, lambda evt: self.SwitchVizMode)
+        visualizationChoice.Bind(wx.EVT_CHOICE, self.SwitchVizMode)
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
         self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
