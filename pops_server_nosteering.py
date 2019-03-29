@@ -70,7 +70,7 @@ def run_model(settings):
     params = {}
     params['nprocs'] = 10
     params['ip_address'] = 'localhost'
-    params['port'] = 8000
+    params['port'] = PORT_C
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
@@ -90,7 +90,7 @@ def run_model_nonblocking(settings):
     params = {}
     params['nprocs'] = 10
     params['ip_address'] = 'localhost'
-    params['port'] = 8000
+    params['port'] = PORT_C
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
@@ -275,7 +275,7 @@ def clientComputation(conn, connections, event):
     event.set()
     while True:
         event.wait(2000)
-        data = conn.recv(200)
+        data = conn.recv(2000)
         message = data.split('|')
         for m in message:
             lm = m.split(':')

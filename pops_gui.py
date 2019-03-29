@@ -134,7 +134,7 @@ class PopsPanel(wx.Panel):
         self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
         defaultRegion.Bind(wx.EVT_BUTTON, self._onDefaultRegion)
 
-        self.Bind(wx.EVT_TIMER, self._displayResult, self.timer)
+        self.Bind(wx.EVT_TIMER, self._simulationResultReady, self.timer)
 
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         self.mainSizer.Add(self.infoBar, flag=wx.EXPAND)
@@ -287,9 +287,7 @@ class PopsPanel(wx.Panel):
                     # avoid showing aggregate result
                     # event_player_year_month_day
                     if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
-                        print name
                         resultsToDisplay.put(name)
-                        print 'display'
 
                 ##########
             elif message[0] == 'info':
@@ -326,7 +324,7 @@ class PopsPanel(wx.Panel):
 
         if event:
             # from gui
-            self.visualizationMode = self.visualizationModes[event.GetSelection()]
+            self.visualizationMode = event.GetSelection()
         else:
             # from button
             self.visualizationMode += 1
@@ -350,6 +348,16 @@ class PopsPanel(wx.Panel):
         name = self._createPlayerName()
         self.AddLayersAsAnimation(etype='raster', pattern="{e}__{n}__{a}_*".format(n=name, e=event, a=attempt))
 
+    def _ifShowProbability(self, evalFuture=False):
+        if self.visualizationModes[self.visualizationMode] == 'singlerun':
+            return False
+        if self.visualizationModes[self.visualizationMode] == 'probability':
+            return True
+        if self.visualizationModes[self.visualizationMode] == 'combined':
+            if self.currentCheckpoint + (1 if evalFuture else 0) > self.currentRealityCheckpoint:
+                return True
+            return False
+
     def ShowResults(self):
         # change layers
         self.ShowTreatment()
@@ -361,23 +369,16 @@ class PopsPanel(wx.Panel):
         prefix_prob = self.configuration['POPS']['model']['probability_series'] + '__' + prefix
         suffix = "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2])
 
-        if self.visualizationModes[self.visualizationMode] == 'singlerun':
-            name = prefix + suffix
-            rules = self.configuration['POPS']['color_trees']
-        elif self.visualizationModes[self.visualizationMode] == 'probability':
-            name = prefix_prob + suffix
+        if self._ifShowProbability():
             rules = self.configuration['POPS']['color_probability']
-        elif self.visualizationModes[self.visualizationMode] == 'combined':
-            print self.currentRealityCheckpoint
-            print self.currentCheckpoint
-            if self.currentRealityCheckpoint == 0:
-                name = ''
-            elif self.currentCheckpoint > self.currentRealityCheckpoint:
-                name = prefix_prob + suffix
-                rules = self.configuration['POPS']['color_probability']
-            else:
-                name = prefix + suffix
-                rules = self.configuration['POPS']['color_trees']
+            name = prefix_prob + suffix
+        else:
+            rules = self.configuration['POPS']['color_trees']
+            name = prefix + suffix
+
+        if self.currentRealityCheckpoint == 0:
+            name = ''
+
         f = gscript.find_file(name=name, element='raster')
         if not f['fullname']:
             # display empty raster
@@ -466,8 +467,6 @@ class PopsPanel(wx.Panel):
             self.InitSimulation()
 
         self.showDisplayChange = False
-        # vis mode should be single run, not probability
-        self.visualizationMode = 0
 
         self.infoBar.ShowMessage("Running...")
         playerName = self._createPlayerName()
@@ -600,24 +599,38 @@ class PopsPanel(wx.Panel):
         self._threadingEvent.wait(2000)
         return self.model_running
 
-    def _displayResult(self, event):
+    def _simulationResultReady(self, event):
         if not self.resultsToDisplay.empty():
-            name = self.resultsToDisplay.get()
-            gscript.run_command('r.colors', map=name, quiet=True,
-                                rules=self.configuration['POPS']['color_trees'])
-            cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-            self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=True)
-            # update year
-            res = re.search("_[0-9]{4}_[0-9]{2}_[0-9]{2}", name)
-            if res:
-                year, month, day = res.group().strip('_').split('_')
-                self.currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
-                self.checkpoints[self.currentCheckpoint] = (int(year), int(month), int(day))
-                #evt2 = updateTimeDisplay(date=(year, month, day))
-                evt2 = updateTimeDisplay(current=self.currentRealityCheckpoint,
-                                         currentView=self.currentCheckpoint,
-                                         vtype=self.visualizationModes[self.visualizationMode])
-                self.scaniface.postEvent(self, evt2)
+            found = False
+            while not found:
+                name = self.resultsToDisplay.get()
+                isProb = self._ifShowProbability(evalFuture=True)
+                if self.configuration['POPS']['model']['probability_series'] in name and isProb:
+                    found = True
+                    rules = self.configuration['POPS']['color_probability']
+                elif not (self.configuration['POPS']['model']['probability_series']  in name or isProb):
+                    found = True
+                    rules = self.configuration['POPS']['color_trees']
+                else:
+                    continue
+                gscript.run_command('r.colors', map=name, quiet=True, rules=rules)
+                cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
+
+                # update year
+                res = re.search("_[0-9]{4}_[0-9]{2}_[0-9]{2}", name)
+                if res:  # should happen always?
+                    year, month, day = res.group().strip('_').split('_')
+                    # if last checkpoint is the same date as current raster, we don't want it
+                    if self.checkpoints[self.currentCheckpoint] == (int(year), int(month), int(day)):
+                        return
+                    self.currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
+                    self.checkpoints[self.currentCheckpoint] = (int(year), int(month), int(day))
+                    evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
+                                            currentView=self.currentCheckpoint,
+                                            vtype=self.visualizationModes[self.visualizationMode])
+                    self.scaniface.postEvent(self, evt)
+
+                self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=True)
 
     def _reloadAnalysisFile(self, funcPrefix):
         analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
@@ -739,6 +752,7 @@ class PopsPanel(wx.Panel):
         _closeAdditionalWindows()
         _removeAllLayers()
         self.settings['analyses']['file'] = ''
+        self.placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self._stopScanning()
         self.timer.Stop()
         self.EndSimulation()
@@ -771,6 +785,10 @@ class PopsPanel(wx.Panel):
         # update time display
         if not self.timeDisplay:
             return
+
+        with self.resultsToDisplay.mutex:
+            self.resultsToDisplay.queue.clear()
+
         start = 0
         end = self.configuration['POPS']['model']['end_time'] - self.configuration['POPS']['model']['start_time'] + 1
         if forward and self.currentCheckpoint >= end:
@@ -895,6 +913,7 @@ class PopsPanel(wx.Panel):
             return
         # TODO: check there is exactly one layer
         pl_layer = ll.GetLayersByName(self.placeholders[resultType])[0]
+
         if useEvent:
             evt = changeLayer(layer=pl_layer, cmd=cmd)
             self.scaniface.postEvent(self.scaniface, evt)
