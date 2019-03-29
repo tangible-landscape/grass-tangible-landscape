@@ -532,9 +532,10 @@ class PopsPanel(wx.Panel):
         self._threadingEvent.clear()
         self._threadingEvent.wait(2000)
 
-        self.socket.sendall('cmd:sync')
-        self._threadingEvent.clear()
-        self._threadingEvent.wait(2000)
+        if self.visualizationModes[self.visualizationMode] != 'probability':
+            self.socket.sendall('cmd:sync')
+            self._threadingEvent.clear()
+            self._threadingEvent.wait(2000)
 
         self.socket.sendall('cmd:play')
 
