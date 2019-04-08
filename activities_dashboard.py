@@ -59,30 +59,25 @@ class MultipleDashboardFrame(wx.Frame):
         self.labels = []
         self.titles = []
         self.gauges = []
-        if vertical:
-            self.sizer = wx.BoxSizer(wx.VERTICAL)
-        else:
-            self.sizer = wx.GridBagSizer(5, 5)
+        self.sizer = wx.GridBagSizer(5, 5)
         for i in range(len(self.list_title)):
             if vertical:
                 self.titles.append(wx.StaticText(self, label=self.list_title[i] + ':', style=wx.ALIGN_LEFT))
                 self.labels.append(wx.StaticText(self, style=wx.ALIGN_RIGHT))
+                self.gauges.append(wx.Gauge(self, range=self.list_maximum[i], style=wx.GA_HORIZONTAL|wx.ALIGN_CENTER))
             else:
                 self.titles.append(wx.StaticText(self, label=self.list_title[i], style=wx.ALIGN_CENTER))
                 self.labels.append(wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL))
-            self.gauges.append(wx.Gauge(self, range=self.list_maximum[i], style=wx.GA_VERTICAL))
-            self.gauges[i].SetBackgroundColour(wx.WHITE)
+                self.gauges.append(wx.Gauge(self, range=self.list_maximum[i], style=wx.GA_VERTICAL))
+            #self.gauges[i].SetBackgroundColour(wx.WHITE)
             font = wx.Font(fontsize, wx.DEFAULT, wx.NORMAL, wx.BOLD)
             self.labels[i].SetFont(font)
             self.titles[i].SetFont(font)
             if vertical:
-                sizer = wx.BoxSizer(wx.HORIZONTAL)
-                self.gauges[i].Hide()
-                sizer.Add(self.titles[i], proportion=0, border=5, flag=wx.ALL|wx.ALIGN_LEFT|wx.EXPAND)
-                sizer.Add(self.labels[i], proportion=1, border=5, flag=wx.ALL|wx.ALIGN_RIGHT|wx.EXPAND)
-                self.sizer.Add(sizer, proportion=1,  flag=wx.ALL|wx.EXPAND)
+                self.sizer.Add(self.titles[i], pos=(i, 0), border=5, flag=wx.ALL|wx.ALIGN_LEFT|wx.EXPAND)
+                self.sizer.Add(self.gauges[i], pos=(i, 1), flag=wx.ALL|wx.ALIGN_CENTER_HORIZONTAL|wx.EXPAND)
+                self.sizer.Add(self.labels[i], pos=(i, 2), border=5, flag=wx.ALL|wx.ALIGN_RIGHT|wx.EXPAND)
             else:
-
                 self.sizer.Add(self.titles[i], pos=(0, i), flag=wx.ALL|wx.ALIGN_CENTER)
                 self.sizer.Add(self.gauges[i], pos=(1, i), flag=wx.ALL|wx.EXPAND)
                 self.sizer.Add(self.labels[i], pos=(2, i), flag=wx.ALL|wx.ALIGN_CENTER)

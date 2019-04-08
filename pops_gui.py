@@ -72,7 +72,7 @@ class PopsPanel(wx.Panel):
         self._currentlyRunning = False
         self.switchCurrentResult = 0
         self.showDisplayChange = True
-        self.lastRecordedTreatment = ''
+        self.treatmentHistory = [0] * 50
         self.lastDisplayedLayerAnim = ''
 
         # steering
@@ -201,8 +201,12 @@ class PopsPanel(wx.Panel):
     def OnDisplayUpdate(self, event):
         if not self.dashboardFrame:
             return
+
         if self.showDisplayChange:
-            self.dashboardFrame.show_value(event.value)
+            cumulativeArea = sum(self.treatmentHistory[:self.currentRealityCheckpoint]) + event.area
+            price_multiplic = eval(self.configuration['POPS']['price'].format(self.configuration['POPS']['treatment_efficacy']))
+            self.dashboardFrame.show_value([event.area / 4047, cumulativeArea / 4047.,
+                                            event.area * price_multiplic / 1e6, cumulativeArea * price_multiplic / 1e6])
 
     def OnTimeDisplayUpdate(self, event):
         if not self.timeDisplay:
@@ -466,7 +470,7 @@ class PopsPanel(wx.Panel):
         else:
             self.InitSimulation()
 
-        self.showDisplayChange = False
+        #self.showDisplayChange = False
 
         self.infoBar.ShowMessage("Running...")
         playerName = self._createPlayerName()
@@ -496,29 +500,39 @@ class PopsPanel(wx.Panel):
         tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
                              str(max(0, self.currentCheckpoint))])
         gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
-        self.lastRecordedTreatment = treatments + '_' + postfix
+
         # create treatment vector of all used treatments in that scenario
         self.createTreatmentVector(tr_name, env)
         #if gscript.raster_info(treatments)['max'] != None:
         self.currentRealityCheckpoint = self.currentCheckpoint + 1
 
+        # area
+        rinfo = gscript.raster_info(tr_name)
+        res = (rinfo['nsres'] + rinfo['ewres'] ) / 2.
+        univar = gscript.parse_command('r.univar', map=tr_name, flags='g', env=get_environment(raster=tr_name))
+        if univar and 'n' in univar:
+            area = float(univar['n']) * res * res
+        else:
+            area = 0
+        self.treatmentHistory[self.currentCheckpoint] = area
+
         # compute proportion
         treatments_as_float = False
         if treatments_as_float:
-            if gscript.raster_info(treatments)['ewres'] < gscript.raster_info(host)['ewres']:
-                gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='count', env=env)
+            if gscript.raster_info(tr_name)['ewres'] < gscript.raster_info(host)['ewres']:
+                gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='count', env=env)
                 maxvalue = gscript.raster_info(treatments_resampled)['max']
                 gscript.mapcalc("{p} = if(isnull({t}), 0, {t} / {m})".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue), env=env)
                 gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', treatments_resampled], env=env)
             else:
-                gscript.run_command('r.resamp.stats', input=treatments, output=treatments_resampled, flags='w', method='average', env=env)
+                gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
                 gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
         else:
-            gscript.run_command('r.null', map=treatments, null=0, env=env)
+            gscript.run_command('r.null', map=tr_name, null=0, env=env)
 
         # export treatments file to server
         pack_path = os.path.join(TMP_DIR, treatments + '.pack')
-        gscript.run_command('r.pack', input=treatments, output=pack_path, env=env)
+        gscript.run_command('r.pack', input=tr_name, output=pack_path, env=env)
         self.socket.sendall('clientfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
         self._threadingEvent.clear()
         self._threadingEvent.wait(2000)
