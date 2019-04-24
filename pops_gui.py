@@ -617,7 +617,7 @@ class PopsPanel(wx.Panel):
     def _simulationResultReady(self, event):
         if not self.resultsToDisplay.empty():
             found = False
-            while not found:
+            while not found and not self.resultsToDisplay.empty():
                 name = self.resultsToDisplay.get()
                 isProb = self._ifShowProbability(evalFuture=True)
                 if self.configuration['POPS']['model']['probability_series'] in name and isProb:
