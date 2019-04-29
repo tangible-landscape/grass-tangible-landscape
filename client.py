@@ -10,19 +10,18 @@ This program is free software under the GNU General Public License
 import os
 import tempfile
 import shutil
+import time
 import re
 import socket
 import threading
+import subprocess
 import Queue
 
 import grass.script as gscript
 
 
-
-
-
 class SteeringClient:
-    def __init__(self, url, log=None):
+    def __init__(self, url, launch_server, log=None):
         self._socket = socket.socket()
         self._threading_event = threading.Event()
         self._log = log
@@ -37,6 +36,11 @@ class SteeringClient:
         self._is_client_running = False
         self._tmp_directory = tempfile.mkdtemp()
         self._simulation_done = None
+        self._server = None
+        if launch_server:
+            # should be list
+            self._server = subprocess.Popen(['python'] + [str(each) for each in launch_server])
+            time.sleep(1)
 
     def connect(self):
         try:
@@ -50,8 +54,6 @@ class SteeringClient:
 #                                 certfile="/etc/ssl/certs/SOD.crt",
 #                                 keyfile="/etc/ssl/private/ssl-cert-snakeoil.key",
 #                                 ca_certs="/etc/ssl/certs/test_certificate.crt")
-        if self._log:
-            self._log.WriteLog("Threading started")
         self._is_client_running = True
         self._client_thread = threading.Thread(target=self._client, args=(self._results_queue, self._threading_event))
         self._client_thread.start()
@@ -72,6 +74,10 @@ class SteeringClient:
         self._socket = None
 
         shutil.rmtree(self._tmp_directory)
+
+    def stop_server(self):
+        if self._server:
+            self._server.terminate()
 
     def _client(self, results_queue, event):
         while self._is_client_running:
@@ -125,6 +131,10 @@ class SteeringClient:
                     self._simulation_is_running = True if message[2] == 'yes' else False
                     event.set()
 
+    def _wait_for_confirmation(self):
+        self._threading_event.clear()
+        self._threading_event.wait(2000)
+
     def simulation_start(self, params, region, restart=False):
         if restart:
             message = 'cmd:restart:'
@@ -138,41 +148,48 @@ class SteeringClient:
 
     def simulation_stop(self):
         self._socket.sendall('cmd:end')
-        
+
     def simulation_play(self):
         self._socket.sendall('cmd:play')
 
+    def simulation_pause(self):
+        self._socket.sendall('cmd:pause')
+        self._wait_for_confirmation()
+
+    def simulation_stepf(self):
+        self._socket.sendall('cmd:stepf')
+        self._wait_for_confirmation()
+
+    def simulation_stepb(self):
+        self._socket.sendall('cmd:stepb')
+        self._wait_for_confirmation()
+
     def simulation_goto(self, step):
         self._socket.sendall('cmd:goto:'+ str(step))
-        self._threading_event.clear()
-        self._threading_event.wait(2000)
+        self._wait_for_confirmation()
 
     def simulation_send_data(self, layer_name, file_name, env):
         path = os.path.join(self._tmp_directory, file_name + '.pack')
         gscript.run_command('r.pack', input=layer_name, output=path, env=env)
         self._socket.sendall('clientfile:{}:{}'.format(os.path.getsize(path), path))
-        self._threading_event.clear()
-        self._threading_event.wait(2000)
+        self._wait_for_confirmation()
 
     def simulation_load_data(self, step, name):
         self._socket.sendall('load:' + str(step) + ':' + name)
-        self._threading_event.clear()
-        self._threading_event.wait(2000)
+        self._wait_for_confirmation()
 
     def simulation_sync_runs(self):
         self._socket.sendall('cmd:sync')
-        self._threading_event.clear()
-        self._threading_event.wait(2000)
+        self._wait_for_confirmation()
 
     def simulation_is_running(self):
-        self._socket.sendall('info:model_running')        
-        self._threading_event.clear()
-        self._threading_event.wait(2000)
+        self._socket.sendall('info:model_running')
+        self._wait_for_confirmation()
         return self._simulation_is_running
-    
+
     def set_on_done(self, func):
         self._simulation_done = func
-        
+
     def results_clear(self):
         with self._results_queue.mutex:
             self._results_queue.queue.clear()
