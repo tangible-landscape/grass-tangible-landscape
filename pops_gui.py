@@ -8,10 +8,6 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import os
-import socket
-import threading
-import Queue
-import traceback
 import json
 import imp
 import re
@@ -23,11 +19,13 @@ from wx.lib.fancytext import StaticFancyText, RenderToBitmap
 from gui_core.gselect import Select
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
-from grass.exceptions import CalledModuleError, ScriptError
+from grass.exceptions import CalledModuleError
 
-from tangible_utils import addLayers, get_environment, removeLayers, checkLayers, changeLayer
+from tangible_utils import get_environment, changeLayer
 
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
+
+from client import SteeringClient
 
 
 ProcessForDashboardEvent, EVT_PROCESS_NEW_EVENT = wx.lib.newevent.NewEvent()
@@ -57,12 +55,10 @@ class PopsPanel(wx.Panel):
         self.scaniface = scaniface
         self.settingsChanged = Signal('ColorInteractionPanel.settingsChanged')
 
-        self.socket = None
         self.isRunningClientThread = False
         self.clientthread = None
         self.timer = wx.Timer(self)
         self.speed = 1000  # 1 second per year
-        self.resultsToDisplay = Queue.Queue()
         self.playersByIds = self.playersByName = None
         self.eventsByIds = self.eventsByName = None
         self.configFile = ''
@@ -76,6 +72,7 @@ class PopsPanel(wx.Panel):
         self.lastDisplayedLayerAnim = ''
 
         # steering
+        self.steeringClient = None
         self.visualizationModes = ['combined', 'singlerun', 'probability']
         self.visualizationMode = 0
         self.empty_placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
@@ -84,8 +81,6 @@ class PopsPanel(wx.Panel):
         self.checkpoints = []
         self.currentRealityCheckpoint = 0
         self.attempt = Attempt()
-        self._threadingEvent = threading.Event()
-        self.model_running = False
 
         self.profileFrame = self.dashboardFrame = self.timeDisplay = None
 
@@ -175,28 +170,14 @@ class PopsPanel(wx.Panel):
         self._bindButtons()
 
     def _connectSteering(self):
-        if self.socket:
+        if self.steeringClient:
             return
         urlS = self.configuration['POPS']['urlSteering']
         if not urlS:
             return
-        urlS = urlS.replace('http://', '')
-        urlS = urlS.split(':')
-        self.socket = socket.socket()
-#        self.s = ssl.wrap_socket(self.s, cert_reqs=ssl.CERT_REQUIRED,
-#                                 certfile="/etc/ssl/certs/SOD.crt",
-#                                 keyfile="/etc/ssl/private/ssl-cert-snakeoil.key",
-#                                 ca_certs="/etc/ssl/certs/test_certificate.crt")
-        try:
-            self.socket.connect((urlS[0], int(urlS[1])))
-        except socket.error, exc:
-            self.giface.WriteError("Error connecting to steering server: {}".format(exc))
-            self.socket = None
-            return
-
-        self.isRunningClientThread = True
-        self.clientthread = threading.Thread(target=self._client, args=(self.resultsToDisplay, self._threadingEvent))
-        self.clientthread.start()
+        self.steeringClient = SteeringClient(urlS, log=self.giface)
+        self.steeringClient.set_on_done(self._afterSimulation)
+        self.steeringClient.connect()
 
     def OnDisplayUpdate(self, event):
         if not self.dashboardFrame:
@@ -231,85 +212,90 @@ class PopsPanel(wx.Panel):
 
     def _debug(self, msg):
         with open('/tmp/debug.txt', 'a+') as f:
-            f.write(':'.join(msg))
+            f.write(msg)
             f.write('\n')
 
-    def _client(self, resultsToDisplay, event):
-        while self.isRunningClientThread:
-            data = self.socket.recv(1024)
-            if not data:
-                # GUI received close from server
-                # finish while loop
-                self.socket.close()
-                continue
-            self._debug(msg=['starts'])
-            message = data.split(':')
-            if message[0] == 'clientfile':
-                self._debug(message)
-                _, fsize, path = message
-                with open(message[2], 'rb') as f:
-                    data = f.read()
-                    try:
-                        self.socket.sendall(data)
-                    except socket.error:
-                        print 'erroro sending file'
-            elif message[0] == 'serverfile':
-                self._debug(message)
-                # receive file
-                fsize, path = int(message[1]), message[2]
-                self.socket.sendall(data)
-                data = self.socket.recv(1024)
-                total_received = len(data)
-                if not os.path.exists(TMP_DIR):
-                    os.mkdir(TMP_DIR)
-                new_path = os.path.join(TMP_DIR, os.path.basename(path))
-                f = open(new_path, 'wb')
-                f.write(data)
-                while(total_received < fsize):
-                    data = self.socket.recv(1024)
-                    total_received += len(data)
-                    f.write(data)
-                f.close()
-                ##########
-#                gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
-#                name = os.path.basename(path).strip('.pack')
-#                resultsToDisplay.put(name)
-                ##########
-                if os.path.basename(path).startswith('baseline'):
-                    gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
-                    evt = ProcessBaseline(result='baseline')
-                    wx.PostEvent(self, evt)
-                else:
-                    #gscript.run_command('t.rast.import', input=new_path, output=os.path.basename(path) + '_imported', quiet=True, overwrite=True)
-                    #maps = gscript.read_command('t.rast.list', method='comma', input=os.path.basename(path) + '_imported').strip()
-                    #for each in maps.split(','):
-                    #    resultsToDisplay.put(each)
-                    #evt = ProcessForDashboardEvent(result=each)
-                    #wx.PostEvent(self, evt)
-                    gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
-                    name = os.path.basename(path).replace('.pack', '')
-                    # avoid showing aggregate result
-                    # event_player_year_month_day
-                    if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
-                        resultsToDisplay.put(name)
+#    def _client(self, resultsToDisplay, event):
+#        while self.isRunningClientThread:
+#            data = self.socket.recv(1024)
+#            if not data:
+#                # GUI received close from server
+#                # finish while loop
+#                self.socket.close()
+#                continue
+#            self._debug(msg=['starts'])
+#            message = data.split(':')
+#            if message[0] == 'clientfile':
+#                self._debug(message)
+#                _, fsize, path = message
+#                with open(message[2], 'rb') as f:
+#                    data = f.read()
+#                    try:
+#                        self.socket.sendall(data)
+#                    except socket.error:
+#                        print 'erroro sending file'
+#            elif message[0] == 'serverfile':
+#                self._debug(message)
+#                # receive file
+#                fsize, path = int(message[1]), message[2]
+#                self.socket.sendall(data)
+#                data = self.socket.recv(1024)
+#                total_received = len(data)
+#                if not os.path.exists(TMP_DIR):
+#                    os.mkdir(TMP_DIR)
+#                new_path = os.path.join(TMP_DIR, os.path.basename(path))
+#                f = open(new_path, 'wb')
+#                f.write(data)
+#                while(total_received < fsize):
+#                    data = self.socket.recv(1024)
+#                    total_received += len(data)
+#                    f.write(data)
+#                f.close()
+#                ##########
+##                gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
+##                name = os.path.basename(path).strip('.pack')
+##                resultsToDisplay.put(name)
+#                ##########
+#                if os.path.basename(path).startswith('baseline'):
+#                    gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
+#                    evt = ProcessBaseline(result='baseline')
+#                    wx.PostEvent(self, evt)
+#                else:
+#                    #gscript.run_command('t.rast.import', input=new_path, output=os.path.basename(path) + '_imported', quiet=True, overwrite=True)
+#                    #maps = gscript.read_command('t.rast.list', method='comma', input=os.path.basename(path) + '_imported').strip()
+#                    #for each in maps.split(','):
+#                    #    resultsToDisplay.put(each)
+#                    #evt = ProcessForDashboardEvent(result=each)
+#                    #wx.PostEvent(self, evt)
+#                    gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
+#                    name = os.path.basename(path).replace('.pack', '')
+#                    # avoid showing aggregate result
+#                    # event_player_year_month_day
+#                    if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
+#                        resultsToDisplay.put(name)
+#
+#                ##########
+#            elif message[0] == 'info':
+#                self._debug(message)
+#                if message[1] == 'last':
+#                    name = message[2]
+##                    evt = ProcessForDashboardEvent(result=name)
+#                    evt = updateInfoBar(dismiss=True, message=None)
+#                    wx.PostEvent(self, evt)
+#                    # rename layers to save unique scenario
+#                    self._renameAllAfterSimulation(name)
+#                elif message[1] == 'received':
+#                    print "event.set()"
+#                    event.set()
+#                elif message[1] == 'model_running':
+#                    self.model_running = True if message[2] == 'yes' else False
+#                    event.set()
 
-                ##########
-            elif message[0] == 'info':
-                self._debug(message)
-                if message[1] == 'last':
-                    name = message[2]
-#                    evt = ProcessForDashboardEvent(result=name)
-                    evt = updateInfoBar(dismiss=True, message=None)
-                    wx.PostEvent(self, evt)
-                    # rename layers to save unique scenario
-                    self._renameAllAfterSimulation(name)
-                elif message[1] == 'received':
-                    print "event.set()"
-                    event.set()
-                elif message[1] == 'model_running':
-                    self.model_running = True if message[2] == 'yes' else False
-                    event.set()
-
+    def _afterSimulation(self, name):
+        self._renameAllAfterSimulation(name)
+        evt = updateInfoBar(dismiss=True, message=None)
+        wx.PostEvent(self, evt)
+        
     def _renameAllAfterSimulation(self, name):
         event, player, date = name.split('__')
         a1, a2 = self.attempt.getCurrent()
@@ -323,8 +309,7 @@ class PopsPanel(wx.Panel):
 
     def SwitchVizMode(self, event=None):
         # clear the queue to stop animation
-        with self.resultsToDisplay.mutex:
-            self.resultsToDisplay.queue.clear()
+        self.steeringClient.results_clear()
 
         if event:
             # from gui
@@ -345,12 +330,6 @@ class PopsPanel(wx.Panel):
 
     def getEventName(self):
         return 'tmpevent'
-
-    def ShowAnimation(self, event=None):
-        event = self.getEventName()
-        attempt = self.attempt.getCurrentFormatted(delim='_')
-        name = self._createPlayerName()
-        self.AddLayersAsAnimation(etype='raster', pattern="{e}__{n}__{a}_*".format(n=name, e=event, a=attempt))
 
     def _ifShowProbability(self, evalFuture=False):
         if self.visualizationModes[self.visualizationMode] == 'singlerun':
@@ -417,8 +396,8 @@ class PopsPanel(wx.Panel):
             wx.FutureCall(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
 
     def EndSimulation(self):
-        if self._isModelRunning():
-            self.socket.sendall('cmd:end')
+        if self.steeringClient.simulation_is_running():
+            self.steeringClient.simulation_stop()
 
     def InitSimulation(self):
         self._initSimulation(restart=False)
@@ -450,18 +429,10 @@ class PopsPanel(wx.Panel):
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
         # run simulation
-        if restart:
-            message = 'cmd:restart:'
-        else:
-            message = 'cmd:start:'
-        message += "region=" + region
-        for key in model_params:
-            message += '|'
-            message += '{k}={v}'.format(k=key, v=model_params[key])
-        self.socket.sendall(message)
+        self.steeringClient.simulation_start(model_params, region, restart)
 
     def RunSimulation(self, event=None):
-        if self._isModelRunning():
+        if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentCheckpoint == 0:
                 self.RestartSimulation()
@@ -469,6 +440,7 @@ class PopsPanel(wx.Panel):
                 self.attempt.increaseMinor()
         else:
             self.InitSimulation()
+            
 
         #self.showDisplayChange = False
 
@@ -531,27 +503,17 @@ class PopsPanel(wx.Panel):
             gscript.run_command('r.null', map=tr_name, null=0, env=env)
 
         # export treatments file to server
-        pack_path = os.path.join(TMP_DIR, treatments + '.pack')
-        gscript.run_command('r.pack', input=tr_name, output=pack_path, env=env)
-        self.socket.sendall('clientfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
-        self._threadingEvent.clear()
-        self._threadingEvent.wait(2000)
+        self.steeringClient.simulation_send_data(tr_name, treatments, env)
         # load new data here
         tr_year = self.configuration['POPS']['model']['start_time'] + self.currentCheckpoint
-        self.socket.sendall('load:' + str(tr_year) + ':' + treatments)
-        self._threadingEvent.clear()
-        self._threadingEvent.wait(2000)
+        self.steeringClient.simulation_load_data(tr_year, treatments)
 
-        self.socket.sendall('cmd:goto:' + str(self.currentCheckpoint))
-        self._threadingEvent.clear()
-        self._threadingEvent.wait(2000)
+        self.steeringClient.simulation_goto(self.currentCheckpoint)
 
         if self.visualizationModes[self.visualizationMode] != 'probability':
-            self.socket.sendall('cmd:sync')
-            self._threadingEvent.clear()
-            self._threadingEvent.wait(2000)
+            self.steeringClient.simulation_sync_runs()
 
-        self.socket.sendall('cmd:play')
+        self.steeringClient.simulation_play()
 
         self.HideResultsLayers()
         self.ShowTreatment()
@@ -603,22 +565,16 @@ class PopsPanel(wx.Panel):
             gscript.run_command('g.copy', raster=[host, host_treated], env=env)
 
     def _run(self):
-        self.socket.sendall('cmd:play')
+        self.steeringClient.simulation_play()
 
     def _stop(self):
-        self.socket.sendall('cmd:end')
-
-    def _isModelRunning(self):
-        self.socket.sendall('info:model_running')
-        self._threadingEvent.clear()
-        self._threadingEvent.wait(2000)
-        return self.model_running
+        self.steeringClient.simulation_stop()
 
     def _simulationResultReady(self, event):
-        if not self.resultsToDisplay.empty():
+        if not self.steeringClient.results_empty():
             found = False
-            while not found and not self.resultsToDisplay.empty():
-                name = self.resultsToDisplay.get()
+            while not found and not self.steeringClient.results_empty():
+                name = self.steeringClient.results_get()
                 isProb = self._ifShowProbability(evalFuture=True)
                 if self.configuration['POPS']['model']['probability_series'] in name and isProb:
                     found = True
@@ -670,19 +626,8 @@ class PopsPanel(wx.Panel):
         # timer stop
         if self.timer.IsRunning():
             self.timer.Stop()
-        # first set variable to skip out of thread once possible
-        self.isRunningClientThread = False
-        try:
-            # send message to server that we finish sending
-            # then we receive empty response, see above
-            if self.socket:
-                self.socket.shutdown(socket.SHUT_WR)
-        except socket.error, e:
-            print e
-            pass
-        # wait for ending the thread
-        if self.clientthread and self.clientthread.isAlive():
-            self.clientthread.join()
+        self.steeringClient.disconnect()
+
         # allow clean up in main dialog
         event.Skip()
 
@@ -801,8 +746,7 @@ class PopsPanel(wx.Panel):
         if not self.timeDisplay:
             return
 
-        with self.resultsToDisplay.mutex:
-            self.resultsToDisplay.queue.clear()
+        self.steeringClient.results_clear()
 
         start = 0
         end = self.configuration['POPS']['model']['end_time'] - self.configuration['POPS']['model']['start_time'] + 1
@@ -956,20 +900,6 @@ class PopsPanel(wx.Panel):
                 name = l.maplayer.name.split('@')[0]
                 if name in all_layers:
                     ll.DeleteLayer(l)
-
-    def AddLayersAsAnimation(self, etype='raster', pattern=None, layers=None):
-        all_layers = []
-        if pattern:
-            pattern_layers = gscript.list_grouped(type=etype, pattern=pattern)[gscript.gisenv()['MAPSET']]
-            all_layers += pattern_layers
-        if layers:
-            all_layers += layers
-
-        self.HideResultsLayers()
-        self.lastDisplayedLayerAnim = ''
-        self.ShowTreatment()
-        for name in all_layers:
-            self.resultsToDisplay.put(name)
 
     def StartDisplay(self):
         multiple = False if 'multiple' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['multiple']
