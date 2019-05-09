@@ -90,7 +90,7 @@ def shaded_relief(scanned_elev, new, zscale=10, env=None):
     gcore.run_command('r.shaded.relief', overwrite=True, input=scanned_elev, output=new, zscale=zscale, env=env)
 
 
-def simwe(scanned_elev, depth, rain_value, niterations, slope=None, aspect=None, env=None):
+def simwe(scanned_elev, depth, rain_value, niterations, slope=None, aspect=None, man=None, man_value=None, env=None):
     suffix = str(uuid.uuid4()).replace('-', '')[:5]
     options = {}
     if slope:
@@ -98,11 +98,16 @@ def simwe(scanned_elev, depth, rain_value, niterations, slope=None, aspect=None,
     if aspect:
         options['aspect'] = aspect
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, env=env, **options)
-    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, env=env)
+    simwe_options = {}
+    if man:
+        simwe_options['man'] = man
+    elif man_value:
+        simwe_options['man_value'] = man_value
+    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, env=env, **simwe_options)
     gcore.run_command('g.remove', flags='f', type='raster', name=['dx_' + suffix, 'dy' + suffix], env=env)
 
 
-def erosion(scanned_elev, rain_value, depth, detachment_coeff, transport_coeff, shear_stress, niterations, sediment_flux, erosion_deposition, slope=None, aspect=None, env=None):
+def erosion(scanned_elev, rain_value, depth, detachment_coeff, transport_coeff, shear_stress, niterations, sediment_flux, erosion_deposition, slope=None, aspect=None, man=None, man_value=None, env=None):
     suffix = str(uuid.uuid4()).replace('-', '')[:5]
     options = {}
     if slope:
@@ -110,12 +115,17 @@ def erosion(scanned_elev, rain_value, depth, detachment_coeff, transport_coeff, 
     if aspect:
         options['aspect'] = aspect
     dc, tc, tau = 'dc' + suffix, 'tc' + suffix, 'tau' + suffix
+    simwe_options = {}
+    if man:
+        simwe_options['man'] = man
+    elif man_value:
+        simwe_options['man_value'] = man_value
     gcore.run_command('r.slope.aspect', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, overwrite=True, env=env, **options)
-    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, overwrite=True, env=env)
+    gcore.run_command('r.sim.water', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, rain_value=rain_value, depth=depth, nwalkers=10000, niterations=niterations, overwrite=True, env=env, **simwe_options)
     gcore.run_command('r.mapcalc', expression="{dc} = {detachment_coeff}".format(dc=dc, detachment_coeff=detachment_coeff), overwrite=True, env=env)
     gcore.run_command('r.mapcalc', expression="{tc} = {transport_coeff}".format(tc=tc, transport_coeff=transport_coeff), overwrite=True, env=env)
     gcore.run_command('r.mapcalc', expression="{tau} = {shear_stress}".format(tau=tau, shear_stress=shear_stress), overwrite=True, env=env)
-    gcore.run_command('r.sim.sediment', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, water_depth=depth, detachment_coeff=dc, transport_coeff=tc, shear_stress=tau, sediment_flux=sediment_flux, erosion_deposition=erosion_deposition, niterations=niterations, nwalkers=10000, overwrite=True, env=env)
+    gcore.run_command('r.sim.sediment', elevation=scanned_elev, dx='dx_' + suffix, dy='dy' + suffix, water_depth=depth, detachment_coeff=dc, transport_coeff=tc, shear_stress=tau, sediment_flux=sediment_flux, erosion_deposition=erosion_deposition, niterations=niterations, nwalkers=10000, overwrite=True, env=env, **simwe_options)
     gcore.run_command('g.remove', flags='f', type='raster', name=[dc, tc, tau, 'dx_' + suffix, 'dy' + suffix], env=env)
 
 
