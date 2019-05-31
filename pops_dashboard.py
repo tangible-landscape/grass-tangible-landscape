@@ -4,398 +4,105 @@ Created on Wed Aug 23 09:29:18 2017
 
 @author: anna
 """
-
+import os
+import shutil
 import json
 import requests
 
+import grass.script as gscript
 
-class DashBoardRequests:
+from tangible_utils import get_environment
+
+
+class PoPSDashboard:
     def __init__(self):
-        self.locationId = 1
-        self.root = None
-        self.bardataId = None
-        self.barBaselineId = None
-        self.radardataIds = {}
-        self.radarBaselineId = None
+        self._root = None
+        self._run = {}
+        self._run_id = None
+        self._temp_location = 'temp_export_location_' + str(os.getpid())
+        gscript.run_command('g.proj', 'epsg=4326', location=self._temp_location)
+        gisrc, env = self._get_gisrc_environment()
+        self._tmpgisrc = gisrc
+        self._env = env
+        self._tmp_out_file = gscript.tempfile(False)
+        self._tmp_vect_file = 'tmp_vect_' + gscript.tempfile(False)
+        self._tmp_rast_file = 'tmp_rast_' + gscript.tempfile(False)
 
     def set_root_URL(self, url):
-        self.root = url
+        self._root = url
 
-    def get_events(self):
-        """[{"_id":1000,"name":"MyNewEvent","locationId":"1","__v":0}]"""
-        res = requests.get(self.root + '/event/location/{lid}'.format(lid=self.locationId))
-        res.raise_for_status()
-        eventNames = []
-        eventIds = []
-        for each in res.json():
-            eventIds.append(int(each['_id']))
-            for char in ".-+ &%#@!?,():'":
-                each['name'] = each['name'].replace(char, '_')
-            eventNames.append(each['name'])
-        return eventIds, eventNames
+    def set_run_params(self, params):
+        self._run = params
 
-    def get_current_event(self):
-        """Should be run only when we have selected player"""
-        res = requests.get(self.root + '/current')
-        if res.status_code == 404:
-            return None
-        data = res.json()
-        return int(data[0]['eventId'])
+    def set_management_polygons(self, management):
+        geojson = self.vector_to_geojson(management)
+        self._run['management_polygons'] = geojson
 
-    def get_players(self, eventId):
-        res = requests.get(self.root + '/player/{eid}'.format(eid=eventId))
-        res.raise_for_status()
-        playerNames = []
-        playerIds = []
-        for each in res.json():
-                playerNames.append(each['playerName'])
-                playerIds.append(each['playerId'])
-        return playerIds, playerNames
-
-    def get_current_player(self):
-        res = requests.get(self.root + '/current')
-        if res.status_code == 404:
-            return None, None
-        data = res.json()
-        return data[0]['playerId'], data[0]['playerName']
-
-    def create_player(self, name, eventId):
-        # check if player exists
-        ids, names = self.get_players(eventId)
-        for i, n in zip(ids, names):
-            if name == n:
-                return i, name
+    def upload_run(self):
         try:
-            res = requests.post(self.root + '/player', data='{{"name": "{n}"}}'.format(n=name), headers={"content-type": "application/json"})
+            res = requests.post(self._root + 'run/', data=self._run)
             res.raise_for_status()
-            pid = res.json()['_id']
-            res = requests.post(self.root + '/play', data='{{"locationId": {l}, "eventId": {e}, "playerId":"{pid}", "playerName": "{n}"}}'.format(n=name, pid=pid, e=eventId, l=self.locationId), headers={"content-type": "application/json"})
-            res.raise_for_status()
-            return pid, name
-        except requests.exceptions.HTTPError:
-            return None, None
-
-    def get_data_barJson(self, eventId):
-        try:
-            res = requests.get(self.root + '/charts/bar/', params={'locationId': self.locationId, 'eventId': eventId})
-            res.raise_for_status()
-            return res.json()
+            self.run_id = res.json()['id']
         except requests.exceptions.HTTPError:
             return None
 
-    def get_data_barId(self, eventId):
-        res = requests.get(self.root + '/charts/barId', params={"locationId": self.locationId, "eventId": eventId})
-        res.raise_for_status()
-        self.bardataId = res.json()[0]['_id']
-        return self.bardataId
+    # TODO
+    def upload_results(self, year, raster):
+        results = process_for_dashboard(year, raster)
+        results['spread_map'] = self.raster_to_geojson(raster)
 
-    def get_data_radarJson(self, eventId, playerId):
-        try:
-            res = requests.get(self.root + '/charts/radar', params={"locationId": self.locationId, "eventId": eventId, "playerId": playerId})
-            res.raise_for_status()
-            return res.json()
-        except requests.exceptions.HTTPError:
-            return None
+    def raster_to_geojson(self, raster):
+        env = get_environment(raster=raster)
+        gscript.mapcalc("{n} = if({r} == 0, null(), {r})".format(n=self._tmp_rast_file,
+                        r=raster), overwrite=True, env=env)
+        gscript.run_command('r.to.vect', flags='vt', input=self._tmp_rast_file,
+                            output=self._tmp_vect_file, type='area', env=env)
+        self.vector_to_geojson(self._tmp_vect_file)
 
-    def get_data_radarId(self, eventId, playerId):
-        res = requests.get(self.root + '/charts/radarId', params={"locationId": self.locationId,
-                                                                  "eventId": eventId, "playerId": playerId})
-        res.raise_for_status()
-        self.radardataIds[playerId] = res.json()[0]['_id']
-        return self.radardataIds[playerId]
+    def vector_to_geojson(self, vector):
+        gscript.run_command('v.proj', env=self._env) # TODO
+        gscript.run_command('v.out.ogr', input=vector, output=self._tmp_out_file,
+                            format_='GeoJSON', quiet=True, overwrite=True,
+                            env=self._env)
+        with open(self._tmp_out_file) as f:
+            j = json.load(f)
+        return j
 
-    # data bar
-    def post_data_bar(self, jsonfile, eventId):
-        if self.bardataId:
-            self._delete_data_bar(self.bardataId)
-        else:
-            try:
-                self.bardataId = self.get_data_barId(eventId)
-                self._delete_data_bar(self.bardataId)
-            except requests.exceptions.HTTPError:
-                pass
+    def _get_gisrc_environment(self):
+        """Creates environment to be passed in run_command for example.
+        Returns tuple with temporary file path and the environment. The user
+        of this function is responsile for deleting the file."""
+        env = os.environ.copy()
+        tmp_gisrc_file = gscript.tempfile()
+        with open(tmp_gisrc_file, 'w') as f:
+            f.write('MAPSET: {mapset}\n'.format(mapset='PERMANENT'))
+            f.write('GISDBASE: {g}\n'.format(g=env['GISDBASE']))
+            f.write('LOCATION_NAME: {l}\n'.format(l=self._temp_location))
+            f.write('GUI: text\n')
+        env['GISRC'] = tmp_gisrc_file
+        return tmp_gisrc_file, env
 
-        self.bardataId = self._post_data_bar(jsonfile, eventId)
-
-    def _post_data_bar(self, jsonfile, eventId):
-        post_data = {'file': open(jsonfile, 'rb')}
-        res = requests.post(self.root + '/charts/bar', files=post_data, data={"locationId": self.locationId, "eventId": eventId})
-        res.raise_for_status()
-        return res.json()['id']
-
-    def _delete_data_bar(self, fid):
-        res = requests.delete(self.root + '/charts/bar/{bid}'.format(bid=self.bardataId))
-        res.raise_for_status()
-
-    # baseline bar
-    def get_baseline_barJson(self):
-        try:
-            res = requests.get(self.root + '/charts/barBaseline', params={"locationId": self.locationId})
-            res.raise_for_status()
-            return res.json()
-        except requests.exceptions.HTTPError:
-            return None
-
-    def get_baseline_barId(self):
-        res = requests.get(self.root + '/charts/barBaselineId', params={"locationId": self.locationId})
-        res.raise_for_status()
-        self.barBaselineId = res.json()['_id']
-        return res.json()
-
-    def post_baseline_bar(self, jsonfile):
-        try:
-            self._delete_baseline_bar()
-        except requests.exceptions.HTTPError:
-            pass
-        self._post_baseline_bar(jsonfile)
-
-    def _post_baseline_bar(self, jsonfile):
-        post_data = {'file': open(jsonfile, 'rb')}
-        res = requests.post(self.root + '/charts/barBaseline', files=post_data, data={"locationId": self.locationId})
-        res.raise_for_status()
-
-    def _delete_baseline_bar(self):
-        res = requests.delete(self.root + '/charts/barBaseline/', params={'locationId': self.locationId})
-        res.raise_for_status()
-
-    # radar data
-    def post_data_radar(self, jsonfile, eventId, playerId):
-        if playerId in self.radardataIds:
-            self._delete_data_radar(self.radardataIds[playerId])
-        else:
-            try:
-                self.radardataIds[playerId] = self.get_data_radarId(eventId, playerId)
-                self._delete_data_radar(self.radardataIds[playerId])
-            except requests.exceptions.HTTPError:
-                pass
-
-        self.radardataIds[playerId] = self._post_data_radar(jsonfile, eventId, playerId)
-
-    def _post_data_radar(self, jsonfile, eventId, playerId):
-        post_data = {'file': open(jsonfile, 'rb')}
-        res = requests.post(self.root + '/charts/radar', files=post_data,
-                            data={"locationId": self.locationId, "eventId": eventId, 'playerId': playerId})
-        res.raise_for_status()
-        return res.json()['id']
-
-    def _delete_data_radar(self, fid):
-        res = requests.delete(self.root + '/charts/radar/{bid}'.format(bid=fid))
-        res.raise_for_status()
-
-    # radar baseline
-    def get_baseline_radarJson(self):
-        try:
-            res = requests.get(self.root + '/charts/radarBaseline', params={"locationId": self.locationId})
-            res.raise_for_status()
-            return res.json()
-        except requests.exceptions.HTTPError:
-            return None
-
-    def post_baseline_radar(self, jsonfile):
-        try:
-            self._delete_baseline_radar()
-        except requests.exceptions.HTTPError:
-            pass
-
-        self._post_baseline_radar(jsonfile)
-
-    def _post_baseline_radar(self, jsonfile):
-        post_data = {'file': open(jsonfile, 'rb')}
-        res = requests.post(self.root + '/charts/radarBaseline', files=post_data, data={"locationId": self.locationId})
-        res.raise_for_status()
-
-    def get_baseline_radarId(self):
-        res = requests.get(self.root + '/charts/radarBaselineId', params={"locationId": self.locationId})
-        res.raise_for_status()
-        self.radarBaselineId = res.json()['_id']
-        return res.json()
-
-    def _delete_baseline_radar(self):
-        res = requests.delete(self.root + '/charts/radarBaseline/', params={'locationId': self.locationId})
-        res.raise_for_status()
+    def close(self):
+        path_to_location = os.path.join(gscript.gisenv()['GISDBASE'], self._temp_location)
+        shutil.rmtree(path_to_location)
+        os.remove(self._tmpgisrc)
+        gscript.run_command('g.remove', type='vector', name=self._tmp_vect_file, flags='f', quiet=True)
+        gscript.run_command('g.remove', type='raster', name=self._tmp_rast_file, flags='f', quiet=True)
 
 
-class RadarData:
-    def __init__(self, filePath, baseline=None):
-        self.columns = ["Infected Area (mi2)", "Money Spent", "Area Treated (mi2)", "Crop affected (mi2)"]
-        self.formatting = ["{:.1f}", "{:.0f} M", "{:.1f}", "{:.1f}"]
-        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7, 3.861e-7]
-        if not baseline:
-            baseline = [0, 0, 0, 0]
-        scaled = [10, 0, 0, 0]
-        self._filePath = filePath
-        self.attempts = [str(i) for i in range(1, 50)]
-        self._data = [{'data': [], 'tableRows':[], 'attempt': None, "baseline": True}]
-        i = 0
-        for c, f, m in zip(self.columns, self.formatting, self.multiplication):
-            self._data[0]['data'].append({'axis': c, 'value': scaled[i]})
-            self._data[0]['tableRows'].append({'column': c, 'value': f.format(baseline[i] * m)})
-            i += 1
-        self.save()
 
-    def setDataFromJson(self, jsonString):
-        self._data = jsonString
-        self.save()
-
-    def getBaselineValues(self):
-        radar = []
-        for each in self._data[0]['tableRows']:
-            radar.append(each['value'])
-        return radar
-
-    def getBaselineScaledValues(self):
-        radar = []
-        for each in self._data[0]['data']:
-            radar.append(each['value'])
-        return radar
-
-    def save(self):
-        with open(self._filePath, 'w') as f:
-            f.write(json.dumps(self._data, indent=4))
-
-    def addRecord(self, radarValues, tableValues, attempt, baseline=False):
-        self._data.append({'data': [], 'tableRows': [], 'attempt': attempt, "baseline": False})
-        i = 0
-        for c, f, m in zip(self.columns, self.formatting, self.multiplication):
-            self._data[-1]['data'].append({'axis': c, 'value': radarValues[i]})
-            self._data[-1]['tableRows'].append({'column': c, 'value': f.format(tableValues[i] * m)})
-            i += 1
-
-        self.save()
-
-    def removeAttempt(self, attempt):
-        i = -1
-        found = False
-        for each in self._data:
-            i += 1
-            if each['attempt'] == attempt:
-                found = True
-                break
-        if found:
-            del self._data[i]
-            self.save()
-
-
-class BarData:
-    def __init__(self, filePath, baseline=None):
-        if not baseline:
-            baseline = [0, 0, 0, 0]
-        columns = ["Infected Area (mi2)", "Money Spent (M)", "Area Treated (mi2)", "Crop affected (mi2)"]
-        self.formatting = [lambda x: round(x, 1), int, lambda x: round(x, 1), lambda x: round(x, 1)]
-        self.multiplication = [3.861e-7, 1/1000000., 3.861e-7, 3.861e-7]
-        self._filePath = filePath
-        self._data = []
-        i = 0
-        for each in columns:
-            col = {"axis": each, "options": False, "values": [{"value": self.formatting[i](baseline[i] * self.multiplication[i]), "playerName": "No treatment", "attempt": ""}]}
-            self._data.append(col)
-            i += 1
-        self.save()
-
-    def save(self):
-        with open(self._filePath, 'w') as f:
-            f.write(json.dumps(self._data, indent=4))
-
-    def setDataFromJson(self, jsonString):
-        self._data = jsonString
-        self.save()
-
-    def getBaseline(self):
-        baseline = []
-        for each in self._data:
-            baseline.append(each['values'][0]['value'])
-        return baseline
-
-    def addRecord(self, values, player, attempt):
-        for i, value in enumerate(values):
-            self._addRecord(i, self.formatting[i](value * self.multiplication[i]), player, attempt)
-
-    def _addRecord(self, which, value, player, attempt):
-#        cnt_attempt = 1
-#        for each in self._data[which]['values']:
-#            if player == each['playerName']:
-#                cnt_attempt += 1
-        dictionary = {"value": value, "playerName": player, "attempt": attempt}
-        self._data[which]['values'].append(dictionary)
-        self.save()
-
-    def getAllAttempts(self, playerName):
-        attempts = []
-        for each in self._data[0]['values']:
-            if playerName == each['playerName']:
-                attempts.append(each['attempt'])
-        return attempts
-
-    def removeAttempt(self, playerName, attempt):
-        for each in self._data:
-            for i, item in enumerate(each['values']):
-                if item['playerName'] == playerName and item['attempt'] == attempt:
-                    del each['values'][i]
-                    break
-        self.save()
+def process_for_dashboard(id_, year, raster):
+    result = {'run': id_, 'years': year}
+#    env = get_environment(raster=raster)
+    data = gscript.parse_command('r.univar', map=raster, flags='gr')
+    # TODO: finish number_infected, infected_area
+    return result
 
 
 def main():
-    # BEFORE RUNNING:
-    # create an event, create at least one player and set him as playing
-    dashboard = DashBoardRequests()
-    dashboard.set_root_URL('http://localhost:3000')
-    eids, enames = dashboard.get_events()
-    events = dict(zip(eids, enames))
-    eid = dashboard.get_current_event()
-    import os, tempfile, shutil
-    tmpdir = tempfile.mkdtemp()
-
-    playerIds, playerNames = dashboard.get_players(eid)
-    fp = os.path.join(tmpdir, 'SOD_{evt}.json'.format(evt=events[eid]))
-    fp_baseline = os.path.join(tmpdir, 'SOD_{evt}_baseline.json'.format(evt=events[eid]))
-
-    baseline = (3417, 0, 0)
-    barBaseline = BarData(filePath=fp_baseline, baseline=baseline)
-    bar = BarData(filePath=fp, baseline=baseline)
-
-    dashboard.post_baseline_bar(fp_baseline)
-    dashboard.post_data_bar(fp_baseline, eid)
-    try:
-        barjson = dashboard.get_data_barJson(eid)
-        bar.setDataFromJson(barjson)
-    except requests.exceptions.HTTPError:
-        pass
-
-    bar.addRecord((1500, 500, 200), playerNames[0])
-    dashboard.post_data_bar(fp, eid)
-
-    bar.addRecord((1000, 100, 10), playerNames[0])
-    dashboard.post_data_bar(fp, eid)
-
-    bar.addRecord((2000, 1000, 100), playerNames[0])
-    dashboard.post_data_bar(fp, eid)
-
-    bar.addRecord((3000, 100, 10), playerNames[0])
-    dashboard.post_data_bar(fp, eid)
-
-    fp = os.path.join(tmpdir, 'SOD_{evt}_baseline.json'.format(evt=events[eid]))
-    baseline = (3417, 0, 0)
-    radar = RadarData(filePath=fp, baseline=baseline)
-    dashboard.post_baseline_radar(fp)
-
-    for each in playerIds:
-        fp = os.path.join(tmpdir, 'SOD_{evt}_{pl}.json'.format(evt=events[eid], pl=each))
-        radar = RadarData(filePath=fp, baseline=baseline)
-        try:
-            #radarjson = dashboard.get_data_radarJson(eid, each)
-            #radar.setDataFromJson(radarjson)
-            pass
-        except requests.exceptions.HTTPError:
-            pass
-        dashboard.post_data_radar(fp, eventId=eid, playerId=each)
-
-        radarValues = [1, 2, 3]
-        tableValues = [baseline[0], baseline[1], baseline[2]]
-        radar.addRecord(radarValues, tableValues, baseline=False)
-        dashboard.post_data_radar(fp, eventId=eid, playerId=each)
-
-    shutil.rmtree(tmpdir)
+    dashboard = PoPSDashboard()
+    dashboard.set_root_URL('http://popsmodel.org/api/')
+    dashboard.close()
 
 
 if __name__ == '__main__':
