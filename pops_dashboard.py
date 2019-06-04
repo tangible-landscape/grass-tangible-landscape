@@ -20,13 +20,14 @@ class PoPSDashboard:
         self._run = {}
         self._run_id = None
         self._temp_location = 'temp_export_location_' + str(os.getpid())
-        gscript.run_command('g.proj', 'epsg=4326', location=self._temp_location)
+        gscript.run_command('g.proj', epsg=4326, location=self._temp_location, quiet=True)
         gisrc, env = self._get_gisrc_environment()
         self._tmpgisrc = gisrc
         self._env = env
         self._tmp_out_file = gscript.tempfile(False)
-        self._tmp_vect_file = 'tmp_vect_' + gscript.tempfile(False)
-        self._tmp_rast_file = 'tmp_rast_' + gscript.tempfile(False)
+        suffix = os.path.basename(gscript.tempfile(False)).replace('.', '_')
+        self._tmp_vect_file = 'tmp_vect_' + suffix
+        self._tmp_rast_file = 'tmp_rast_' + suffix
 
     def set_root_URL(self, url):
         self._root = url
@@ -35,7 +36,7 @@ class PoPSDashboard:
         self._run = params
 
     def set_management_polygons(self, management):
-        geojson = self.vector_to_geojson(management)
+        geojson = self.vector_to_proj_geojson(management, 'treatment')
         self._run['management_polygons'] = geojson
 
     def upload_run(self):
@@ -46,22 +47,29 @@ class PoPSDashboard:
         except requests.exceptions.HTTPError:
             return None
 
-    # TODO
     def upload_results(self, year, raster):
-        results = process_for_dashboard(year, raster)
-        results['spread_map'] = self.raster_to_geojson(raster)
-
-    def raster_to_geojson(self, raster):
         env = get_environment(raster=raster)
         gscript.mapcalc("{n} = if({r} == 0, null(), {r})".format(n=self._tmp_rast_file,
-                        r=raster), overwrite=True, env=env)
-        gscript.run_command('r.to.vect', flags='vt', input=self._tmp_rast_file,
-                            output=self._tmp_vect_file, type='area', env=env)
-        self.vector_to_geojson(self._tmp_vect_file)
+                        r=raster), env=env)
+        results = process_for_dashboard(self._run_id, year, self._tmp_rast_file)
+        results['spread_map'] = self.raster_to_proj_geojson(self._tmp_rast_file, env)
+        try:
+            res = requests.post(self._root + 'output/', data=results)
+            res.raise_for_status()
+            self.run_id = res.json()['id']
+        except requests.exceptions.HTTPError:
+            return None
 
-    def vector_to_geojson(self, vector):
-        gscript.run_command('v.proj', env=self._env) # TODO
-        gscript.run_command('v.out.ogr', input=vector, output=self._tmp_out_file,
+    def raster_to_proj_geojson(self, raster, env):
+        gscript.run_command('r.to.vect', input=raster,
+                            output=self._tmp_vect_file, type='area', column='outputs', env=env)
+        self.vector_to_proj_geojson(self._tmp_vect_file, 'output')
+
+    def vector_to_proj_geojson(self, vector, name):
+        genv = gscript.gisenv()
+        gscript.run_command('v.proj', location=genv['LOCATION_NAME'], quiet=True,
+                            mapset=genv['MAPSET'], input=vector, output=name, env=self._env)
+        gscript.run_command('v.out.ogr', input=name, flags='sm', output=self._tmp_out_file,
                             format_='GeoJSON', quiet=True, overwrite=True,
                             env=self._env)
         with open(self._tmp_out_file) as f:
@@ -73,10 +81,11 @@ class PoPSDashboard:
         Returns tuple with temporary file path and the environment. The user
         of this function is responsile for deleting the file."""
         env = os.environ.copy()
+        genv = gscript.gisenv()
         tmp_gisrc_file = gscript.tempfile()
         with open(tmp_gisrc_file, 'w') as f:
             f.write('MAPSET: {mapset}\n'.format(mapset='PERMANENT'))
-            f.write('GISDBASE: {g}\n'.format(g=env['GISDBASE']))
+            f.write('GISDBASE: {g}\n'.format(g=genv['GISDBASE']))
             f.write('LOCATION_NAME: {l}\n'.format(l=self._temp_location))
             f.write('GUI: text\n')
         env['GISRC'] = tmp_gisrc_file
@@ -93,15 +102,25 @@ class PoPSDashboard:
 
 def process_for_dashboard(id_, year, raster):
     result = {'run': id_, 'years': year}
-#    env = get_environment(raster=raster)
     data = gscript.parse_command('r.univar', map=raster, flags='gr')
-    # TODO: finish number_infected, infected_area
+    info = gscript.raster_info(raster)
+    result['infected_area'] = int(data['n']) * info['nsres'] * info['ewres']
+    result['number_infected'] = int(data['sum'])
+
     return result
 
 
 def main():
     dashboard = PoPSDashboard()
-    dashboard.set_root_URL('http://popsmodel.org/api/')
+    dashboard.set_root_URL('https://popsmodel.org/api/')
+    
+    dashboard.set_run_params(params={"name": "testTLconn", "reproductive_rate": 4,
+                                     "distance_scale": 20, "cost_per_hectare": 1,
+                                     "efficacy": 1, "session": 1})
+
+    dashboard.set_management_polygons('treatments__tmpevent__player__53')
+    dashboard.upload_run()
+    dashboard.upload_results(2017, 'tmpevent__player__14_0__2021_12_31')
     dashboard.close()
 
 
