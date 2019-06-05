@@ -6,7 +6,6 @@ Created on Wed Aug 23 09:29:18 2017
 """
 import os
 import shutil
-import json
 import requests
 
 import grass.script as gscript
@@ -43,7 +42,8 @@ class PoPSDashboard:
         try:
             res = requests.post(self._root + 'run/', data=self._run)
             res.raise_for_status()
-            self.run_id = res.json()['id']
+            self._run_id = res.json()['id']
+            return self._run_id
         except requests.exceptions.HTTPError:
             return None
 
@@ -56,14 +56,16 @@ class PoPSDashboard:
         try:
             res = requests.post(self._root + 'output/', data=results)
             res.raise_for_status()
-            self.run_id = res.json()['id']
+
+            out_id = res.json()['id']
+            return out_id
         except requests.exceptions.HTTPError:
             return None
 
     def raster_to_proj_geojson(self, raster, env):
         gscript.run_command('r.to.vect', input=raster,
                             output=self._tmp_vect_file, type='area', column='outputs', env=env)
-        self.vector_to_proj_geojson(self._tmp_vect_file, 'output')
+        return self.vector_to_proj_geojson(self._tmp_vect_file, 'output')
 
     def vector_to_proj_geojson(self, vector, name):
         genv = gscript.gisenv()
@@ -73,7 +75,7 @@ class PoPSDashboard:
                             format_='GeoJSON', quiet=True, overwrite=True,
                             env=self._env)
         with open(self._tmp_out_file) as f:
-            j = json.load(f)
+            j = f.read()
         return j
 
     def _get_gisrc_environment(self):
@@ -114,13 +116,13 @@ def main():
     dashboard = PoPSDashboard()
     dashboard.set_root_URL('https://popsmodel.org/api/')
     
-    dashboard.set_run_params(params={"name": "testTLconn", "reproductive_rate": 4,
+    dashboard.set_run_params(params={"name": "testTLconn3", "reproductive_rate": 4,
                                      "distance_scale": 20, "cost_per_hectare": 1,
                                      "efficacy": 1, "session": 1})
 
     dashboard.set_management_polygons('treatments__tmpevent__player__53')
-    dashboard.upload_run()
-    dashboard.upload_results(2017, 'tmpevent__player__14_0__2021_12_31')
+    if dashboard.upload_run():
+        dashboard.upload_results(2021, 'tmpevent__player__14_0__2021_12_31')
     dashboard.close()
 
 
