@@ -16,35 +16,13 @@ import grass.script as gscript
 from tangible_utils import get_environment
 
 
-
-
-
-def run_model(settings):
+def run_model(settings, steering):
     model = 'r.pops.spread'
     params = {}
     params['nprocs'] = 10
-    params['ip_address'] = 'localhost'
-    params['port'] = port_computation
-    region = settings.pop('region')
-    region = region.split(',')
-    env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
-    params.update(settings)
-    name = settings['output_series']
-    gscript.run_command(model, overwrite=True, flags='l', env=env, **params)
-    names = gscript.read_command('g.list', mapset='.', pattern="{n}_*".format(n=name), type='raster', separator='comma').strip()
-    gscript.run_command('t.create', output=name, type='strds', temporaltype='relative',
-                        title='SOD', description='SOD', overwrite=True)
-    gscript.run_command('t.register', input=name, maps=names.split(','), start=2000, unit='years', increment=1, overwrite=True)
-
-    return name
-
-
-def run_model_nonblocking(settings):
-    model = 'r.pops.spread'
-    params = {}
-    params['nprocs'] = 10
-    params['ip_address'] = 'localhost'
-    params['port'] = port_computation
+    if steering:
+        params['ip_address'] = 'localhost'
+        params['port'] = port_computation
     region = settings.pop('region')
     region = region.split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
@@ -54,12 +32,13 @@ def run_model_nonblocking(settings):
     return p
 
 
-def clientInterface(conn, connections, event):
+def clientInterface(conn, connections, event, steering):
     # Sending message to connected client
     conn.sendall('Welcome to the server.\n')
     # have file list to be sent one after the other
     sod_process = None
     # infinite loop so that function do not terminate and thread do not end.
+    _debug_file = open('/tmp/debugServer.txt', 'w')
     while True:
         # receiving from client
         data = conn.recv(1024)
@@ -87,22 +66,12 @@ def clientInterface(conn, connections, event):
             fsize, path = int(message[1]), message[2]
             with open(path, 'rb') as f:
                 data = f.read()
-                try:
-                    conn.sendall(data)
-                except socket.error:
-                    print 'erroro sending file'
+#                try:
+                conn.sendall(data)
+#                except socket.error:
+#                    print 'erroro sending file'
                 event.set()
         if message[0] == 'cmd':
-            print message
-                # series
-#                pack_path = TMP_DIR + params['output_series']
-#                gscript.run_command('t.rast.export', input=name, output=pack_path, format='pack', quiet=True, overwrite=True)
-#
-#                if 'GUI' in connections:
-#                    connections['GUI'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
-
-
-                    #connections['GUI'].sendall('info:last:' + names[-1])
             if message[1] == 'start':
                 params = {}
                 if len(message) == 3:  # additional parameters
@@ -113,22 +82,11 @@ def clientInterface(conn, connections, event):
                         except ValueError:
                             params[key] = val
                 if 'computation' not in connections:
-                    sod_process = run_model_nonblocking(params)
-            elif message[1] == 'baseline':
-                print message
-                if len(message) == 3:  # additional parameters
-                    params = {}
-                    for each in message[2].split('|'):
-                        key, val = each.split('=')
-                        try:
-                            params[key] = float(val)
-                        except ValueError:
-                            params[key] = val
-                    name = run_baseline(params)
-                    pack_path = os.path.join(tmp_directory, name + '.pack')
-                    gscript.run_command('r.pack', input=name, output=pack_path, overwrite=True)
-                    if 'interface' in connections:
-                        connections['interface'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+                    if steering:
+                        sod_process = run_model(params, True)
+                    else:
+                        sod_process = run_model(params, False)
+                        start_new_thread(check_output, (connections['interface'], params['output_series'], sod_process, event))
             elif message[1] == 'end':
                 print "server: get stop from GUI"
                 if 'computation' in connections:
@@ -156,23 +114,29 @@ def clientInterface(conn, connections, event):
                         params[key] = float(val)
                     except ValueError:
                         params[key] = val
-                sod_process = run_model_nonblocking(params)
+                sod_process = run_model(params, True)
             elif message[1] == 'play':
-                connections['computation'].sendall('cmd:play;')
+                if 'computation' in connections:
+                    connections['computation'].sendall('cmd:play;')
             elif message[1] == 'pause':
-                connections['computation'].sendall('cmd:pause;')
+                if 'computation' in connections:
+                    connections['computation'].sendall('cmd:pause;')
                 conn.sendall('info:received')
             elif message[1] == 'stepf':
-                connections['computation'].sendall('cmd:stepf;')
+                if 'computation' in connections:
+                    connections['computation'].sendall('cmd:stepf;')
                 conn.sendall('info:received')
             elif message[1] == 'stepb':
-                connections['computation'].sendall('cmd:stepb;')
+                if 'computation' in connections:
+                    connections['computation'].sendall('cmd:stepb;')
                 conn.sendall('info:received')
             elif message[1] == 'goto':
-                connections['computation'].sendall('goto:' + message[2] + ';')
+                if 'computation' in connections:
+                    connections['computation'].sendall('goto:' + message[2] + ';')
                 conn.sendall('info:received')
             elif message[1] == 'sync':
-                connections['computation'].sendall('sync;')
+                if 'computation' in connections:
+                    connections['computation'].sendall('sync;')
                 conn.sendall('info:received')
         elif message[0] == 'load':
             if 'computation' in connections:
@@ -181,7 +145,7 @@ def clientInterface(conn, connections, event):
         elif message[0] == 'info':
             if message[1] == 'model_running':
                 if 'interface' in connections:
-                    if sod_process:
+                    if sod_process and sod_process.poll() is None:
                         print 'sod_processes is running'
                         connections['interface'].sendall('info:model_running:yes')
                     else:
@@ -197,12 +161,20 @@ def clientInterface(conn, connections, event):
     del connections['interface']
 
 
-def checkOutput(connection, basename, sod_process, event):
+def check_output(connection, basename, sod_process, event):
+    _debug_file = open('/tmp/debugCheck.txt', 'w')
     old_found = []
     event.set()
-    while sod_process.poll() is None:
+    is_running = True
+    _debug(_debug_file, basename)
+    while is_running:
+        is_running = sod_process.poll() is None
         time.sleep(0.1)
-        found = gscript.list_grouped(type='raster', pattern=basename + '_*')[gscript.gisenv()['MAPSET']]
+        found = gscript.list_grouped(type='raster', flag='e',
+                                     pattern='^' + basename + '_[0-9]{4}_[0-9]{2}_[0-9]{2}')[gscript.gisenv()['MAPSET']]
+        last = None
+        if found:
+            last = found[-1]
         for each in found:
             if each not in old_found:
                 event.wait(2000)
@@ -211,15 +183,12 @@ def checkOutput(connection, basename, sod_process, event):
                 event.clear()
                 connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
                 old_found.append(each)
+                _debug(_debug_file, 'serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path) + '\n')
+        if not is_running:
+            _debug(_debug_file, 'info:last:' + last)
+            connection.sendall('info:last:' + last)
     sod_process.wait()
     sod_process = None
-    pack_path = os.path.join(tmp_directory, basename + '.pack')
-    gscript.run_command('r.pack', input=basename, output=pack_path, overwrite=True)
-    event.wait(2000)
-    event.clear()
-    connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
-    event.wait(2000)
-    connection.sendall('info:last:' + basename)
 
 
 def clientComputation(conn, connections, event):
@@ -253,17 +222,24 @@ def clientComputation(conn, connections, event):
     conn.close()
 
 
+
+def _debug(dfile, message):
+        """Write debug file"""
+        dfile.write(message + '\n')
+        dfile.flush()
+
 def cleanup():
     shutil.rmtree(tmp_directory)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 3:
+    port_computation = None
+    if len(sys.argv) >= 2:
         port_interface = int(sys.argv[1])
-        port_computation = int(sys.argv[2])
     else:
         port_interface = 8888
-        port_computation = 8000
+    if len(sys.argv) == 3:
+        port_computation = int(sys.argv[2])
 
     host = ''   # Symbolic name, meaning all available interfaces
 
@@ -271,7 +247,12 @@ if __name__ == '__main__':
     atexit.register(cleanup)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s_c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if port_computation:
+        s_c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s_c.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    else:
+        s_c = None
     print 'Sockets created'
 
     # Bind socket to local host and port
@@ -279,26 +260,31 @@ if __name__ == '__main__':
         s.bind((host, port_interface))
     except socket.error as msg:
         print 'Bind ' + str(port_interface) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-        sys.exit()
+        sys.exit(1)
 
     # Bind socket to local host and port
-    try:
-        s_c.bind((host, port_computation))
-    except socket.error as msg:
-        print 'Bind ' + str(port_computation) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-        sys.exit()
+    if s_c:
+        try:
+            s_c.bind((host, port_computation))
+        except socket.error as msg:
+            print 'Bind ' + str(port_computation) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+            sys.exit(1)
 
     print 'Sockets bind complete'
 
     # Start listening on socket
     s.listen(10)
-    s_c.listen(10)
+    if s_c:
+        s_c.listen(10)
     print 'Socket now listening'
     connections = {}
 
     event = Event()
     while True:
-        read, write, error = select.select([s, s_c], [s, s_c], [])
+        if s_c:
+            read, write, error = select.select([s, s_c], [s, s_c], [])
+        else:
+            read, write, error = select.select([s, ], [s, ], [])
         for r in read:
             conn, addr = r.accept()
             if r == s:
@@ -307,7 +293,7 @@ if __name__ == '__main__':
     #                                 certfile="/etc/ssl/certs/server.crt",
     #                                 keyfile="/etc/ssl/private/server.key")
                 connections['interface'] = conn
-                start_new_thread(clientInterface, (conn, connections, event))
-            else:
+                start_new_thread(clientInterface, (conn, connections, event, bool(s_c)))
+            elif r == s_c:
                 connections['computation'] = conn
-                start_new_thread(clientComputation, (conn, connections, event))
+                start_new_thread(clientComputation, (conn, connections, event, bool(s_c)))

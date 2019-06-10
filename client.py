@@ -37,10 +37,31 @@ class SteeringClient:
         self._tmp_directory = tempfile.mkdtemp()
         self._simulation_done = None
         self._server = None
+        self._debug_file = open('/tmp/debug.txt', 'w')
+        self._steering = True
+        self._model_params = ''
         if launch_server:
             # should be list
             self._server = subprocess.Popen(['python'] + [str(each) for each in launch_server])
             time.sleep(1)
+            if self._server.poll() == 1:
+                for port in launch_server[1:]:
+                    self._kill_process(port)
+                    time.sleep(1)
+                    self._server = subprocess.Popen(['python'] + [str(each) for each in launch_server])
+                    time.sleep(1)
+
+    def _debug(self, message):
+        """Write debug file"""
+        self._debug_file.write(message + '\n')
+        self._debug_file.flush()
+
+    def _kill_process(self, port):
+        """Kill process on specified port, may be dangerous if somebody else is using it."""
+        res = subprocess.Popen("netstat -tulpn|grep " + str(port), shell=True, stdout=subprocess.PIPE).communicate()
+        if res[0]:
+            pid = res[0].split()[-1].split('/')[0]
+            subprocess.Popen("kill " + pid, shell=True)
 
     def connect(self):
         try:
@@ -49,7 +70,8 @@ class SteeringClient:
             if self._log:
                 self._log.WriteError("Error connecting to steering server: {}".format(exc))
             self._socket = None
-            return
+            self._is_client_running = False
+            return False
 #        self.s = ssl.wrap_socket(self.s, cert_reqs=ssl.CERT_REQUIRED,
 #                                 certfile="/etc/ssl/certs/SOD.crt",
 #                                 keyfile="/etc/ssl/private/ssl-cert-snakeoil.key",
@@ -57,6 +79,7 @@ class SteeringClient:
         self._is_client_running = True
         self._client_thread = threading.Thread(target=self._client, args=(self._results_queue, self._threading_event))
         self._client_thread.start()
+        return True
 
     def disconnect(self):
         self._is_client_running = False
@@ -74,6 +97,7 @@ class SteeringClient:
         self._socket = None
 
         shutil.rmtree(self._tmp_directory)
+        os.remove(self._debug_file.name)
 
     def stop_server(self):
         if self._server:
@@ -89,6 +113,7 @@ class SteeringClient:
                 continue
 
             message = data.split(':')
+            self._debug(data)
             if message[0] == 'clientfile':
                 _, fsize, path = message
                 with open(message[2], 'rb') as f:
@@ -111,8 +136,10 @@ class SteeringClient:
                     total_received += len(data)
                     f.write(data)
                 f.close()
-
-                gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
+                try:
+                    gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
+                except:
+                    self._debug('failed r.unpack '+ new_path)
                 name = os.path.basename(path).replace('.pack', '')
                 # avoid showing aggregate result
                 # event_player_year_month_day
@@ -135,22 +162,35 @@ class SteeringClient:
         self._threading_event.clear()
         self._threading_event.wait(2000)
 
-    def simulation_start(self, params, region, restart=False):
+    def set_steering(self, steering):
+        self._steering = steering
+
+    def simulation_set_params(self, params, region):
+        message = "region=" + region
+        for key in params:
+            message += '|'
+            message += '{k}={v}'.format(k=key, v=params[key])
+        self._model_params = message
+
+    def simulation_start(self, restart=False):
+        if not self._steering:
+            return
+
         if restart:
             message = 'cmd:restart:'
         else:
             message = 'cmd:start:'
-        message += "region=" + region
-        for key in params:
-            message += '|'
-            message += '{k}={v}'.format(k=key, v=params[key])
-        self._socket.sendall(message)
+
+        self._socket.sendall(message + self._model_params)
 
     def simulation_stop(self):
         self._socket.sendall('cmd:end')
 
     def simulation_play(self):
-        self._socket.sendall('cmd:play')
+        if self._steering:
+            self._socket.sendall('cmd:play')
+        else:
+            self._socket.sendall('cmd:start:' + self._model_params)
 
     def simulation_pause(self):
         self._socket.sendall('cmd:pause')
@@ -169,23 +209,32 @@ class SteeringClient:
         self._wait_for_confirmation()
 
     def simulation_send_data(self, layer_name, file_name, env):
+        self._debug('simulation_send_data')
         path = os.path.join(self._tmp_directory, file_name + '.pack')
         gscript.run_command('r.pack', input=layer_name, output=path, env=env)
         self._socket.sendall('clientfile:{}:{}'.format(os.path.getsize(path), path))
         self._wait_for_confirmation()
 
     def simulation_load_data(self, step, name):
-        self._socket.sendall('load:' + str(step) + ':' + name)
-        self._wait_for_confirmation()
+        self._debug('simulation_load_data')
+        if self._steering:
+            self._socket.sendall('load:' + str(step) + ':' + name)
+            self._wait_for_confirmation()
+        else:
+            self._model_params += '|' + '{k}={v}'.format(k='treatments', v=name)
+            self._model_params += '|' + '{k}={v}'.format(k='treatment_year', v=str(step))
 
     def simulation_sync_runs(self):
         self._socket.sendall('cmd:sync')
         self._wait_for_confirmation()
 
     def simulation_is_running(self):
-        self._socket.sendall('info:model_running')
-        self._wait_for_confirmation()
-        return self._simulation_is_running
+        self._debug('simulation_is_running')
+        if self._is_client_running:
+            self._socket.sendall('info:model_running')
+            self._wait_for_confirmation()
+            return self._simulation_is_running
+        return False
 
     def set_on_done(self, func):
         self._simulation_done = func

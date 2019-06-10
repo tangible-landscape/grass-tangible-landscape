@@ -176,10 +176,14 @@ class PopsPanel(wx.Panel):
         if not urlS:
             return
         server = None
+        steering = False
         if 'steeringServer' in self.configuration['POPS']:
             server = self.configuration['POPS']['steeringServer']
+            if len(server) == 3:
+                steering = True
         self.steeringClient = SteeringClient(urlS, launch_server=server, log=self.giface)
         self.steeringClient.set_on_done(self._afterSimulation)
+        self.steeringClient.set_steering(steering)
         self.steeringClient.connect()
 
     def OnDisplayUpdate(self, event):
@@ -290,6 +294,7 @@ class PopsPanel(wx.Panel):
             name = ''
 
         f = gscript.find_file(name=name, element='raster')
+        print(name)
         if not f['fullname']:
             # display empty raster
             self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
@@ -310,7 +315,7 @@ class PopsPanel(wx.Panel):
         name = self._createPlayerName()
         name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt])
         cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'width=2',
-               'label_color=black', 'label_size=12', 'xref=center', 'yref=bottom', '-c', 'font=n019044l']
+               'label_color=black', 'label_size=12', 'xref=center', 'yref=bottom', 'font=n019044l']
 
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
@@ -323,7 +328,7 @@ class PopsPanel(wx.Panel):
             wx.FutureCall(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
 
     def EndSimulation(self):
-        if self.steeringClient.simulation_is_running():
+        if self.steeringClient and self.steeringClient.simulation_is_running():
             self.steeringClient.simulation_stop()
 
     def InitSimulation(self):
@@ -356,7 +361,8 @@ class PopsPanel(wx.Panel):
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
         # run simulation
-        self.steeringClient.simulation_start(model_params, region, restart)
+        self.steeringClient.simulation_set_params(model_params, region)
+        self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
         if self.steeringClient.simulation_is_running():
@@ -388,10 +394,6 @@ class PopsPanel(wx.Panel):
 
         env = get_environment(raster=studyArea, align=host)
 
-        self.treated_area = self.computeTreatmentArea(treatments)
-        price_per_m2 = eval(price_function.format(treatment_efficacy))
-        self.money_spent = self.treated_area * price_per_m2
-
         event = 'tmpevent'
         postfix = 'tmpevent' + '__' + playerName + '_'
         probability = probability + '__' + postfix
@@ -399,21 +401,16 @@ class PopsPanel(wx.Panel):
         tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
                              str(max(0, self.currentCheckpoint))])
         gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
-
         # create treatment vector of all used treatments in that scenario
-        self.createTreatmentVector(tr_name, env)
-        #if gscript.raster_info(treatments)['max'] != None:
-        self.currentRealityCheckpoint = self.currentCheckpoint + 1
+        self.createTreatmentVector(tr_name, env=env)
 
-        # area
-        rinfo = gscript.raster_info(tr_name)
-        res = (rinfo['nsres'] + rinfo['ewres'] ) / 2.
-        univar = gscript.parse_command('r.univar', map=tr_name, flags='g', env=get_environment(raster=tr_name))
-        if univar and 'n' in univar:
-            area = float(univar['n']) * res * res
-        else:
-            area = 0
-        self.treatmentHistory[self.currentCheckpoint] = area
+        # measuring area
+        gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=treatments, n=treatments + '_exclude_host'), env=env)
+        self.treated_area = self.computeTreatmentArea(treatments + '_exclude_host')
+        self.treatmentHistory[self.currentCheckpoint] = self.treated_area
+        price_per_m2 = eval(price_function.format(treatment_efficacy))
+        self.money_spent = self.treated_area * price_per_m2
+
 
         # compute proportion
         treatments_as_float = False
@@ -427,7 +424,9 @@ class PopsPanel(wx.Panel):
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
                 gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
         else:
-            gscript.run_command('r.null', map=tr_name, null=0, env=env)
+            gscript.run_command('r.null', map=tr_name, null=0, env=env)  
+
+        self.currentRealityCheckpoint = self.currentCheckpoint + 1
 
         # export treatments file to server
         self.steeringClient.simulation_send_data(tr_name, treatments, env)
@@ -445,10 +444,10 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
         self.ShowTreatment()
 
-    def createTreatmentVector(self, lastTreatment, env):
-        tr, evt, plr, attempt, year = lastTreatment.split('__')
+    def createTreatmentVector(self, treatment_layer, env):
+        tr, evt, plr, attempt, year = treatment_layer.split('__')
         postfix = 'cat_year'
-        gscript.write_command('r.reclass', input=lastTreatment, output=lastTreatment + '__' + postfix, rules='-',
+        gscript.write_command('r.reclass', input=treatment_layer, output=treatment_layer + '__' + postfix, rules='-',
                               stdin='1 = {y}'.format(y=int(year) + self.configuration['POPS']['model']['start_time']), env=env)
         pattern = '__'.join([tr, evt, plr, attempt, '*', postfix])
         layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
@@ -462,8 +461,9 @@ class PopsPanel(wx.Panel):
             to_patch = gscript.natural_sort(to_patch)[::-1]
             gscript.run_command('r.patch', input=to_patch, output=name, flags='z', env=env)
         else:
-            gscript.run_command('g.copy', raster=[lastTreatment + '__' + postfix, name], env=env)
+            gscript.run_command('g.copy', raster=[treatment_layer + '__' + postfix, name], env=env)
         gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
+        gscript.run_command('v.colors', map=name, use='cat', color=self.configuration['POPS']['color_treatments'], env=env)
         # for nicer look
         #gscript.run_command('v.generalize', input=name + '_tmp', output=name, method='snakes', threshold=10, env=env)
 
@@ -553,8 +553,9 @@ class PopsPanel(wx.Panel):
         # timer stop
         if self.timer.IsRunning():
             self.timer.Stop()
-        self.steeringClient.disconnect()
-        self.steeringClient.stop_server()
+        if self.steeringClient:
+            self.steeringClient.disconnect()
+            self.steeringClient.stop_server()
 
         # allow clean up in main dialog
         event.Skip()
