@@ -21,14 +21,15 @@ import grass.script as gscript
 
 
 class SteeringClient:
-    def __init__(self, url, launch_server, log=None):
+    def __init__(self, url, port_interface, port_simulation, launch_server, local_gdbase=True, log=None):
         self._socket = socket.socket()
         self._threading_event = threading.Event()
+        self._local_gdbase = local_gdbase
         self._log = log
         if not url:
             return
         url = url.replace('http://', '')
-        self._url = url.split(':')
+        self._url = [url, port_interface]
 
         self._simulation_is_running = False
         self._results_queue = Queue.Queue()
@@ -42,7 +43,10 @@ class SteeringClient:
         self._model_params = ''
         if launch_server:
             # should be list
-            self._server = subprocess.Popen(['python'] + [str(each) for each in launch_server])
+            if port_simulation:
+                self._server = subprocess.Popen(['python', launch_server, port_interface, port_simulation, str(int(local_gdbase))])
+            else:
+                self._server = subprocess.Popen(['python', launch_server, port_interface, str(int(local_gdbase))])
             time.sleep(1)
             if self._server.poll() == 1:
                 for port in launch_server[1:]:
@@ -148,7 +152,12 @@ class SteeringClient:
 
                 ##########
             elif message[0] == 'info':
-                if message[1] == 'last':
+                if message[1] == 'output':
+                    name = message[2]
+                    if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
+                        results_queue.put(name)
+                    self._socket.sendall('info:received')
+                elif message[1] == 'last':
                     if self._simulation_done:
                         name = message[2]
                         self._simulation_done(name)
@@ -165,8 +174,10 @@ class SteeringClient:
     def set_steering(self, steering):
         self._steering = steering
 
-    def simulation_set_params(self, params, region):
-        message = "region=" + region
+    def simulation_set_params(self, model_name, params, flags, region):
+        message = "model_name=" + model_name
+        message += "|region=" + region
+        message += "|flags=" + flags
         for key in params:
             message += '|'
             message += '{k}={v}'.format(k=key, v=params[key])
@@ -205,10 +216,12 @@ class SteeringClient:
         self._wait_for_confirmation()
 
     def simulation_goto(self, step):
-        self._socket.sendall('cmd:goto:'+ str(step))
+        self._socket.sendall('cmd:goto:' + str(step))
         self._wait_for_confirmation()
 
     def simulation_send_data(self, layer_name, file_name, env):
+        if self._local_gdbase:
+            return
         self._debug('simulation_send_data')
         path = os.path.join(self._tmp_directory, file_name + '.pack')
         gscript.run_command('r.pack', input=layer_name, output=path, env=env)

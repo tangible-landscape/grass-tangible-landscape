@@ -17,17 +17,14 @@ from tangible_utils import get_environment
 
 
 def run_model(settings, steering):
-    model = 'r.pops.spread'
-    params = {}
-    params['nprocs'] = 10
+    model = settings.pop('model_name')
     if steering:
-        params['ip_address'] = 'localhost'
-        params['port'] = port_computation
-    region = settings.pop('region')
-    region = region.split(',')
+        settings['ip_address'] = 'localhost'
+        settings['port'] = port_computation
+    region = settings.pop('region').split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
-    params.update(settings)
-    p = gscript.start_command(model, overwrite=True, flags='l', env=env, **params)
+    flags = settings.pop('flags')
+    p = gscript.start_command(model, overwrite=True, flags=flags, env=env, **settings)
 
     return p
 
@@ -222,24 +219,28 @@ def clientComputation(conn, connections, event):
     conn.close()
 
 
-
 def _debug(dfile, message):
         """Write debug file"""
         dfile.write(message + '\n')
         dfile.flush()
+
 
 def cleanup():
     shutil.rmtree(tmp_directory)
 
 
 if __name__ == '__main__':
-    port_computation = None
-    if len(sys.argv) >= 2:
+    if len(sys.argv) == 4:
         port_interface = int(sys.argv[1])
-    else:
-        port_interface = 8888
-    if len(sys.argv) == 3:
         port_computation = int(sys.argv[2])
+        local_gdbase = int(sys.argv[3])
+    elif len(sys.argv) == 3:
+        port_interface = int(sys.argv[1])
+        local_gdbase = int(sys.argv[2])
+        port_computation = None
+    else:
+        print 'Incorrect number of arguments, is {a1}, should be {a2}'.format(a1=len(sys.argv) - 1, a2=" 2 or 3")
+        sys.exit(1)
 
     host = ''   # Symbolic name, meaning all available interfaces
 

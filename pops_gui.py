@@ -55,8 +55,6 @@ class PopsPanel(wx.Panel):
         self.scaniface = scaniface
         self.settingsChanged = Signal('ColorInteractionPanel.settingsChanged')
 
-        self.isRunningClientThread = False
-        self.clientthread = None
         self.timer = wx.Timer(self)
         self.speed = 1000  # 1 second per year
         self.playersByIds = self.playersByName = None
@@ -64,12 +62,9 @@ class PopsPanel(wx.Panel):
         self.configFile = ''
         self.configuration = {}
         self.current = 0
-        self.baselineEnv = None
-        self._currentlyRunning = False
         self.switchCurrentResult = 0
         self.showDisplayChange = True
         self.treatmentHistory = [0] * 50
-        self.lastDisplayedLayerAnim = ''
 
         # steering
         self.steeringClient = None
@@ -164,7 +159,6 @@ class PopsPanel(wx.Panel):
         self.Bind(EVT_UPDATE_TIME_DISPLAY, self.OnTimeDisplayUpdate)
         self.Bind(EVT_UPDATE_INFOBAR, self.OnUpdateInfoBar)
 
-
     def _connect(self):
         self._connectSteering()
         self._bindButtons()
@@ -172,16 +166,29 @@ class PopsPanel(wx.Panel):
     def _connectSteering(self):
         if self.steeringClient:
             return
-        urlS = self.configuration['POPS']['urlSteering']
+        try:
+            urlS = self.configuration['POPS']['steering']['url']
+        except KeyError:
+            return
         if not urlS:
             return
         server = None
+        local_gdbase = False
         steering = False
-        if 'steeringServer' in self.configuration['POPS']:
-            server = self.configuration['POPS']['steeringServer']
-            if len(server) == 3:
-                steering = True
-        self.steeringClient = SteeringClient(urlS, launch_server=server, log=self.giface)
+        steering_dict = self.configuration['POPS']['steering']
+        port_simulation = None
+        if 'port_simulation' in steering_dict and steering_dict['port_simulation']:
+            steering = True
+            port_simulation = steering_dict['port_simulation']
+
+        # when we launch server from within, we use the same database
+        if 'server' in steering_dict:
+            server = steering_dict['server']
+            local_gdbase = True
+        self.steeringClient = SteeringClient(urlS, port_interface=steering_dict['port_interface'],
+                                             port_simulation=port_simulation,
+                                             launch_server=server,
+                                             local_gdbase=local_gdbase, log=self.giface)
         self.steeringClient.set_on_done(self._afterSimulation)
         self.steeringClient.set_steering(steering)
         self.steeringClient.connect()
@@ -294,7 +301,6 @@ class PopsPanel(wx.Panel):
             name = ''
 
         f = gscript.find_file(name=name, element='raster')
-        print(name)
         if not f['fullname']:
             # display empty raster
             self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
@@ -354,14 +360,15 @@ class PopsPanel(wx.Panel):
         probability = probability + '__' + postfix
 
         extent = gscript.raster_info(studyArea)
-        region = '{n},{s},{w},{e},{a}'.format(n=extent['north'], s=extent['south'],
-                                              w=extent['west'], e=extent['east'], a=host)
-
+        region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
+        region = '{n},{s},{w},{e},{align}'.format(**region)
         model_params = self.configuration['POPS']['model'].copy()
+        model_name = model_params.pop('model_name')
+        flags = model_params.pop('flags')
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
         # run simulation
-        self.steeringClient.simulation_set_params(model_params, region)
+        self.steeringClient.simulation_set_params(model_name, model_params, flags, region)
         self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
