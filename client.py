@@ -44,16 +44,23 @@ class SteeringClient:
         if launch_server:
             # should be list
             if port_simulation:
-                self._server = subprocess.Popen(['python', launch_server, port_interface, port_simulation, str(int(local_gdbase))])
+                self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
             else:
-                self._server = subprocess.Popen(['python', launch_server, port_interface, str(int(local_gdbase))])
+                self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(int(local_gdbase))])
             time.sleep(1)
+            relaunch = False
             if self._server.poll() == 1:
-                for port in launch_server[1:]:
-                    self._kill_process(port)
-                    time.sleep(1)
-                    self._server = subprocess.Popen(['python'] + [str(each) for each in launch_server])
-                    time.sleep(1)
+                for port in (port_interface, port_simulation):
+                    if port:
+                        self._kill_process(port)
+                        relaunch = True
+            time.sleep(1)
+            if relaunch:
+                if port_simulation:
+                    self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
+                else:
+                    self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(int(local_gdbase))])
+                time.sleep(1)
 
     def _debug(self, message):
         """Write debug file"""
@@ -64,7 +71,7 @@ class SteeringClient:
         """Kill process on specified port, may be dangerous if somebody else is using it."""
         res = subprocess.Popen("netstat -tulpn|grep " + str(port), shell=True, stdout=subprocess.PIPE).communicate()
         if res[0]:
-            pid = res[0].split()[-1].split('/')[0]
+            pid = res[0].strip().split()[-1].split('/')[0]
             subprocess.Popen("kill " + pid, shell=True)
 
     def connect(self):
@@ -99,9 +106,11 @@ class SteeringClient:
         if self._client_thread and self._client_thread.isAlive():
             self._client_thread.join()
         self._socket = None
-
-        shutil.rmtree(self._tmp_directory)
-        os.remove(self._debug_file.name)
+        try:
+            shutil.rmtree(self._tmp_directory)
+            os.remove(self._debug_file.name)
+        except:
+            pass
 
     def stop_server(self):
         if self._server:
