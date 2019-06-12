@@ -164,8 +164,12 @@ class PopsPanel(wx.Panel):
 
     def _connect(self):
         self._connectSteering()
+        self._connectDashboard()
         self._bindButtons()
+
+    def _connectDashboard(self):
         self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard'])
+        self.webDashboard.set_session_id(self.configuration['POPS']['session'])
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -228,6 +232,15 @@ class PopsPanel(wx.Panel):
         else:
             self.settings['activities']['config'] = ''
 
+    def _get_model_param(self, param):
+        if self.params_from_dashboard:
+            return self.params_from_dashboard[param]
+        else:
+            if param in self.configuration['POPS']['model']:
+                return self.configuration['POPS']['model'][param]
+            else:
+                return self.configuration['POPS'][param]
+
     def _debug(self, msg):
         with open('/tmp/debug.txt', 'a+') as f:
             f.write(msg)
@@ -237,7 +250,7 @@ class PopsPanel(wx.Panel):
         self._renameAllAfterSimulation(name)
         evt = updateInfoBar(dismiss=True, message=None)
         wx.PostEvent(self, evt)
-        
+
     def _renameAllAfterSimulation(self, name):
         event, player, date = name.split('__')
         a1, a2 = self.attempt.getCurrent()
@@ -371,11 +384,18 @@ class PopsPanel(wx.Panel):
         flags = model_params.pop('flags')
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
+
+        model_params['short_distance_scale'] = self.run_params_from_dashboard['distance_scale']
+        model_params['reproductive_rate'] = self.run_params_from_dashboard['reproductive_rate']
+        model_params['random_seed'] = self.run_params_from_dashboard['random_seed']
+
         # run simulation
         self.steeringClient.simulation_set_params(model_name, model_params, flags, region)
         self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
+        self.params_from_dashboard = self.webDashboard.get_run_params()
+
         if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentCheckpoint == 0:
@@ -384,7 +404,7 @@ class PopsPanel(wx.Panel):
                 self.attempt.increaseMinor()
         else:
             self.InitSimulation()
-            
+
 
         #self.showDisplayChange = False
 
@@ -400,7 +420,7 @@ class PopsPanel(wx.Panel):
         studyArea = self.configuration['tasks'][self.current]['base']
         host = self.configuration['POPS']['model']['host']
         probability = self.configuration['POPS']['model']['probability_series']
-        treatment_efficacy = self.configuration['POPS']['treatment_efficacy']
+        treatment_efficacy = self._get_model_param('efficacy')
         price_function = self.configuration['POPS']['price']
 
         env = get_environment(raster=studyArea, align=host)
@@ -423,9 +443,9 @@ class PopsPanel(wx.Panel):
         self.money_spent = self.treated_area * price_per_m2
 
 
-        # compute proportion
-        treatments_as_float = False
-        if treatments_as_float:
+        # compute proportion - disable for now
+        resampling_treatments = False
+        if resampling_treatments:
             if gscript.raster_info(tr_name)['ewres'] < gscript.raster_info(host)['ewres']:
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='count', env=env)
                 maxvalue = gscript.raster_info(treatments_resampled)['max']
@@ -435,7 +455,9 @@ class PopsPanel(wx.Panel):
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
                 gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
         else:
-            gscript.run_command('r.null', map=tr_name, null=0, env=env)  
+            gscript.run_command('r.null', map=tr_name, null=0, env=env)
+            gscript.mapcalc("{tr_new} = float({tr}) / {eff})".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy)))
+            gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
 
         self.currentRealityCheckpoint = self.currentCheckpoint + 1
 
@@ -567,6 +589,8 @@ class PopsPanel(wx.Panel):
         if self.steeringClient:
             self.steeringClient.disconnect()
             self.steeringClient.stop_server()
+        if self.webDashboard:
+            self.webDashboard.close()
 
         # allow clean up in main dialog
         event.Skip()
