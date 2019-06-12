@@ -297,4 +297,4 @@ if __name__ == '__main__':
                 start_new_thread(clientInterface, (conn, connections, event, bool(s_c)))
             elif r == s_c:
                 connections['computation'] = conn
-                start_new_thread(clientComputation, (conn, connections, event, bool(s_c)))
+                start_new_thread(clientComputation, (conn, connections, event))

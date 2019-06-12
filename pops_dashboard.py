@@ -18,6 +18,7 @@ class PoPSDashboard:
         self._root = None
         self._run = {}
         self._run_id = None
+        self._session_id = None
         self._temp_location = 'temp_export_location_' + str(os.getpid())
         gscript.run_command('g.proj', epsg=4326, location=self._temp_location, quiet=True)
         gisrc, env = self._get_gisrc_environment()
@@ -30,6 +31,9 @@ class PoPSDashboard:
 
     def set_root_URL(self, url):
         self._root = url
+        
+    def set_session_id(self, sid):
+        self._session_id = str(sid)
 
     def set_run_params(self, params):
         self._run = params
@@ -38,12 +42,37 @@ class PoPSDashboard:
         geojson = self.vector_to_proj_geojson(management, 'treatment')
         self._run['management_polygons'] = geojson
 
-    def upload_run(self):
+    def _get_run(self, run_id):
         try:
-            res = requests.post(self._root + 'run/', data=self._run)
+            res = requests.get(self._root + 'run/' + run_id + '/')
             res.raise_for_status()
-            self._run_id = res.json()['id']
-            return self._run_id
+            return res.json()
+        except requests.exceptions.HTTPError:
+            return None
+
+    def _get_run_id(self):
+        try:
+            res = requests.get(self._root + 'session/' + self._session_id + '/')
+            res.raise_for_status()
+            run_id = str(res.json()['most_recent_run'])
+            return run_id
+        except requests.exceptions.HTTPError:
+            return None
+
+    def get_run_params(self):
+        run_id = self._get_run_id()
+        if run_id == self._run_id:
+            # we need to create a new run based on original
+        else:
+            self._run_id = run_id
+        self._run = self._get_run(self._run_id)
+        return self._run
+
+    def update_run(self, management):
+        try:
+            res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
+            res.raise_for_status()
+            return res.json()['id']
         except requests.exceptions.HTTPError:
             return None
 

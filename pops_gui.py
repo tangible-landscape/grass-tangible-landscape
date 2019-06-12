@@ -26,6 +26,7 @@ from tangible_utils import get_environment, changeLayer
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 from client import SteeringClient
+from pops_dashboard install PoPSDashboard
 
 
 ProcessForDashboardEvent, EVT_PROCESS_NEW_EVENT = wx.lib.newevent.NewEvent()
@@ -65,6 +66,8 @@ class PopsPanel(wx.Panel):
         self.switchCurrentResult = 0
         self.showDisplayChange = True
         self.treatmentHistory = [0] * 50
+
+        self.webDashboard = PoPSDashboard()
 
         # steering
         self.steeringClient = None
@@ -162,6 +165,7 @@ class PopsPanel(wx.Panel):
     def _connect(self):
         self._connectSteering()
         self._bindButtons()
+        self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard'])
 
     def _connectSteering(self):
         if self.steeringClient:
