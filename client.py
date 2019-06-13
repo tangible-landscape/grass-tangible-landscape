@@ -37,6 +37,7 @@ class SteeringClient:
         self._is_client_running = False
         self._tmp_directory = tempfile.mkdtemp()
         self._simulation_done = None
+        self._step_done = None
         self._server = None
         self._debug_file = open('/tmp/debug.txt', 'w')
         self._steering = True
@@ -165,6 +166,7 @@ class SteeringClient:
                     name = message[2]
                     if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
                         results_queue.put(name)
+                        self._step_done(name)
                     self._socket.sendall('info:received')
                 elif message[1] == 'last':
                     if self._simulation_done:
@@ -260,6 +262,9 @@ class SteeringClient:
 
     def set_on_done(self, func):
         self._simulation_done = func
+
+    def set_on_step_done(self, func):
+        self._step_done = func
 
     def results_clear(self):
         with self._results_queue.mutex:

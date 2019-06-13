@@ -26,7 +26,7 @@ from tangible_utils import get_environment, changeLayer
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 from client import SteeringClient
-from pops_dashboard install PoPSDashboard
+from pops_dashboard import PoPSDashboard
 
 
 ProcessForDashboardEvent, EVT_PROCESS_NEW_EVENT = wx.lib.newevent.NewEvent()
@@ -168,8 +168,8 @@ class PopsPanel(wx.Panel):
         self._bindButtons()
 
     def _connectDashboard(self):
-        self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard'])
-        self.webDashboard.set_session_id(self.configuration['POPS']['session'])
+        self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard']['url'])
+        self.webDashboard.set_session_id(self.configuration['POPS']['dashboard']['session'])
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -198,6 +198,7 @@ class PopsPanel(wx.Panel):
                                              launch_server=server,
                                              local_gdbase=local_gdbase, log=self.giface)
         self.steeringClient.set_on_done(self._afterSimulation)
+        self.steeringClient.set_on_step_done(self._uploadStepToDashboard)
         self.steeringClient.set_steering(steering)
         self.steeringClient.connect()
 
@@ -250,6 +251,16 @@ class PopsPanel(wx.Panel):
         self._renameAllAfterSimulation(name)
         evt = updateInfoBar(dismiss=True, message=None)
         wx.PostEvent(self, evt)
+        self.webDashboard.run_done()
+
+    def _uploadStepToDashboard(self, name):
+        if 'probability' in name:
+            return
+        res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', name)
+        if res:
+            date = res.group()
+            year = int(date.split('_')[0])
+        self.webDashboard.upload_results(year)
 
     def _renameAllAfterSimulation(self, name):
         event, player, date = name.split('__')
@@ -385,9 +396,9 @@ class PopsPanel(wx.Panel):
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
 
-        model_params['short_distance_scale'] = self.run_params_from_dashboard['distance_scale']
-        model_params['reproductive_rate'] = self.run_params_from_dashboard['reproductive_rate']
-        model_params['random_seed'] = self.run_params_from_dashboard['random_seed']
+        model_params['short_distance_scale'] = self.params_from_dashboard['distance_scale']
+        model_params['reproductive_rate'] = self.params_from_dashboard['reproductive_rate']
+        model_params['random_seed'] = self.params_from_dashboard['random_seed']
 
         # run simulation
         self.steeringClient.simulation_set_params(model_name, model_params, flags, region)
@@ -433,7 +444,9 @@ class PopsPanel(wx.Panel):
                              str(max(0, self.currentCheckpoint))])
         gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
         # create treatment vector of all used treatments in that scenario
-        self.createTreatmentVector(tr_name, env=env)
+        tr_vector = self.createTreatmentVector(tr_name, env=env)
+        self.webDashboard.set_management_polygons(tr_vector)
+        self.webDashboard.update_run()
 
         # measuring area
         gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=treatments, n=treatments + '_exclude_host'), env=env)
@@ -456,7 +469,7 @@ class PopsPanel(wx.Panel):
                 gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
         else:
             gscript.run_command('r.null', map=tr_name, null=0, env=env)
-            gscript.mapcalc("{tr_new} = float({tr}) / {eff})".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy)))
+            gscript.mapcalc("{tr_new} = float({tr}) / {eff}".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
             gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
 
         self.currentRealityCheckpoint = self.currentCheckpoint + 1
@@ -497,6 +510,7 @@ class PopsPanel(wx.Panel):
             gscript.run_command('g.copy', raster=[treatment_layer + '__' + postfix, name], env=env)
         gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
         gscript.run_command('v.colors', map=name, use='cat', color=self.configuration['POPS']['color_treatments'], env=env)
+        return name
         # for nicer look
         #gscript.run_command('v.generalize', input=name + '_tmp', output=name, method='snakes', threshold=10, env=env)
 

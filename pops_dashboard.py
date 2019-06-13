@@ -32,7 +32,7 @@ class PoPSDashboard:
 
     def set_root_URL(self, url):
         self._root = url
-        
+
     def set_session_id(self, sid):
         self._session_id = str(sid)
 
@@ -40,6 +40,7 @@ class PoPSDashboard:
         self._run = params
 
     def set_management_polygons(self, management):
+        # TODO: add area/cost
         geojson = self._vector_to_proj_geojson(management, 'treatment')
         self._run['management_polygons'] = geojson
 
@@ -113,6 +114,14 @@ class PoPSDashboard:
         except requests.exceptions.HTTPError:
             return None
 
+    def run_done(self, success=True):
+        self._run['status'] = 'SUCCESS' if success else 'FAILURE'
+        try:
+            res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
+            res.raise_for_status()
+        except requests.exceptions.HTTPError:
+            return None
+
     def _raster_to_proj_geojson(self, raster, env):
         gscript.run_command('r.to.vect', input=raster,
                             output=self._tmp_vect_file, type='area', column='outputs', env=env)
@@ -173,22 +182,13 @@ def main():
 #                                     "distance_scale": 20, "cost_per_hectare": 1,
 #                                     "efficacy": 1, "session": 1})
 
-    dashboard.set_management_polygons('treatments__tmpevent__player__12')
+    dashboard.set_management_polygons('treatments__tmpevent__player__7')
     if dashboard.update_run():
-        out_id = dashboard.upload_results(2021, 'tmpevent__player__9_0__2021_12_31')
+        out_id = dashboard.upload_results(2021, 'tmpevent__player__7_0__2021_12_31')
+        if out_id:
+            dashboard.run_done()
         
-    run = dashboard.get_run_params()
-    print run['id']
-    dashboard.set_management_polygons('treatments__tmpevent__player__11')
-    if dashboard.update_run():
-        out_id = dashboard.upload_results(2021, 'tmpevent__player__9_0__2021_12_31')
 
-    run = dashboard.get_run_params()
-    print run['id']
-    dashboard.set_management_polygons('treatments__tmpevent__player__11')
-    if dashboard.update_run():
-        out_id = dashboard.upload_results(2021, 'tmpevent__player__9_0__2021_12_31')
-    dashboard.close()
 
 
 if __name__ == '__main__':
