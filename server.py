@@ -167,8 +167,9 @@ def check_output(connection, basename, sod_process, event):
     while is_running:
         is_running = sod_process.poll() is None
         time.sleep(0.1)
+        # should catch both infected and probability
         found = gscript.list_grouped(type='raster', flag='e',
-                                     pattern='^' + basename + '_[0-9]{4}_[0-9]{2}_[0-9]{2}')[gscript.gisenv()['MAPSET']]
+                                     pattern=basename + '_[0-9]{4}_[0-9]{2}_[0-9]{2}')[gscript.gisenv()['MAPSET']]
         last = None
         if found:
             last = found[-1]
@@ -182,6 +183,7 @@ def check_output(connection, basename, sod_process, event):
                 old_found.append(each)
                 _debug(_debug_file, 'serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path) + '\n')
         if not is_running:
+            event.wait(2000)
             _debug(_debug_file, 'info:last:' + last)
             connection.sendall('info:last:' + last)
     sod_process.wait()

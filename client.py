@@ -157,8 +157,11 @@ class SteeringClient:
                 name = os.path.basename(path).replace('.pack', '')
                 # avoid showing aggregate result
                 # event_player_year_month_day
+                self._debug('serverfile: ' + name)
                 if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
                     results_queue.put(name)
+                    self._debug('_step_done: ' + name)
+                    self._step_done(name)
 
                 ##########
             elif message[0] == 'info':

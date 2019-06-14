@@ -208,9 +208,9 @@ class PopsPanel(wx.Panel):
 
         if self.showDisplayChange:
             cumulativeArea = sum(self.treatmentHistory[:self.currentRealityCheckpoint]) + event.area
-            price_multiplic = eval(self.configuration['POPS']['price'].format(self.configuration['POPS']['treatment_efficacy']))
-            self.dashboardFrame.show_value([event.area / 4047, cumulativeArea / 4047.,
-                                            event.area * price_multiplic / 1e6, cumulativeArea * price_multiplic / 1e6])
+            cost = self._get_model_param('cost_per_hectare')
+            self.dashboardFrame.show_value([event.area / 10000, cumulativeArea / 10000.,
+                                            (event.area / 10000) * cost, (cumulativeArea * 10000) * cost])
 
     def OnTimeDisplayUpdate(self, event):
         if not self.timeDisplay:
@@ -254,16 +254,21 @@ class PopsPanel(wx.Panel):
         self.webDashboard.run_done()
 
     def _uploadStepToDashboard(self, name):
-        if 'probability' in name:
+        if not 'probability' in name:
             return
+
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', name)
         if res:
             date = res.group()
             year = int(date.split('_')[0])
-        self.webDashboard.upload_results(year)
+            print self.webDashboard.upload_results(year, name)
 
     def _renameAllAfterSimulation(self, name):
-        event, player, date = name.split('__')
+        name_split = name.split('__')
+        if len(name_split) == 3:
+            event, player, date = name.split('__')
+        elif len(name_split) == 4:  # probability
+            prob, event, player, date = name.split('__')
         a1, a2 = self.attempt.getCurrent()
         pattern = "{e}__{n}__[0-9]{{4}}_[0-9]{{2}}_[0-9]{{2}}".format(n=player, e=event)
         pattern_layers = gscript.list_grouped(type='raster', pattern=pattern, flag='e')[gscript.gisenv()['MAPSET']]
@@ -432,7 +437,7 @@ class PopsPanel(wx.Panel):
         host = self.configuration['POPS']['model']['host']
         probability = self.configuration['POPS']['model']['probability_series']
         treatment_efficacy = self._get_model_param('efficacy')
-        price_function = self.configuration['POPS']['price']
+        cost_per_hectare = self._get_model_param('cost_per_hectare')
 
         env = get_environment(raster=studyArea, align=host)
 
@@ -452,8 +457,7 @@ class PopsPanel(wx.Panel):
         gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=treatments, n=treatments + '_exclude_host'), env=env)
         self.treated_area = self.computeTreatmentArea(treatments + '_exclude_host')
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
-        price_per_m2 = eval(price_function.format(treatment_efficacy))
-        self.money_spent = self.treated_area * price_per_m2
+        self.money_spent = (self.treated_area / 10000.) * cost_per_hectare
 
 
         # compute proportion - disable for now
@@ -475,10 +479,10 @@ class PopsPanel(wx.Panel):
         self.currentRealityCheckpoint = self.currentCheckpoint + 1
 
         # export treatments file to server
-        self.steeringClient.simulation_send_data(tr_name, treatments, env)
+        self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
         tr_year = self.configuration['POPS']['model']['start_time'] + self.currentCheckpoint
-        self.steeringClient.simulation_load_data(tr_year, treatments)
+        self.steeringClient.simulation_load_data(tr_year, tr_name)
 
         self.steeringClient.simulation_goto(self.currentCheckpoint)
 

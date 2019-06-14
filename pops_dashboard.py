@@ -131,8 +131,9 @@ class PoPSDashboard:
         genv = gscript.gisenv()
         gscript.run_command('v.proj', location=genv['LOCATION_NAME'], quiet=True,
                             mapset=genv['MAPSET'], input=vector, output=name, overwrite=True, env=self._env)
+        gscript.try_remove(self._tmp_out_file)
         gscript.run_command('v.out.ogr', input=name, flags='sm', output=self._tmp_out_file,
-                            format_='GeoJSON', quiet=True, overwrite=True,
+                            format_='GeoJSON', lco="COORDINATE_PRECISION=4", quiet=True, overwrite=True,
                             env=self._env)
         with open(self._tmp_out_file) as f:
             j = f.read()
