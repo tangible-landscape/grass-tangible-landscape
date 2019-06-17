@@ -17,15 +17,20 @@ import threading
 import subprocess
 import Queue
 
+import wx.lib.newevent
 import grass.script as gscript
+
+ProcessForDashboardEvent, EVT_PROCESS_FOR_DASHBOARD_EVENT = wx.lib.newevent.NewEvent()
 
 
 class SteeringClient:
-    def __init__(self, url, port_interface, port_simulation, launch_server, local_gdbase=True, log=None):
+    def __init__(self, url, port_interface, port_simulation,
+                 launch_server, local_gdbase=True, log=None, eventHandler=None):
         self._socket = socket.socket()
         self._threading_event = threading.Event()
         self._local_gdbase = local_gdbase
         self._log = log
+        self._eventHandler = eventHandler
         if not url:
             return
         url = url.replace('http://', '')
@@ -161,7 +166,8 @@ class SteeringClient:
                 if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
                     results_queue.put(name)
                     self._debug('_step_done: ' + name)
-                    self._step_done(name)
+                    evt = ProcessForDashboardEvent(name=name)
+                    wx.PostEvent(self._eventHandler, evt)
 
                 ##########
             elif message[0] == 'info':
@@ -169,7 +175,8 @@ class SteeringClient:
                     name = message[2]
                     if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
                         results_queue.put(name)
-                        self._step_done(name)
+                        evt = ProcessForDashboardEvent(name=name)
+                        wx.PostEvent(self._eventHandler, evt)
                     self._socket.sendall('info:received')
                 elif message[1] == 'last':
                     if self._simulation_done:
@@ -265,9 +272,6 @@ class SteeringClient:
 
     def set_on_done(self, func):
         self._simulation_done = func
-
-    def set_on_step_done(self, func):
-        self._step_done = func
 
     def results_clear(self):
         with self._results_queue.mutex:

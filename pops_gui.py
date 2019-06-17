@@ -25,11 +25,10 @@ from tangible_utils import get_environment, changeLayer
 
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
-from client import SteeringClient
+from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT
 from pops_dashboard import PoPSDashboard
 
 
-ProcessForDashboardEvent, EVT_PROCESS_NEW_EVENT = wx.lib.newevent.NewEvent()
 updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
 updateTimeDisplay, EVT_UPDATE_TIME_DISPLAY = wx.lib.newevent.NewEvent()
 updateInfoBar, EVT_UPDATE_INFOBAR = wx.lib.newevent.NewEvent()
@@ -159,6 +158,7 @@ class PopsPanel(wx.Panel):
         self._bindButtons()
 
         self.Bind(EVT_UPDATE_DISPLAY, self.OnDisplayUpdate)
+        self.Bind(EVT_PROCESS_FOR_DASHBOARD_EVENT, self._uploadStepToDashboard)
         self.Bind(EVT_UPDATE_TIME_DISPLAY, self.OnTimeDisplayUpdate)
         self.Bind(EVT_UPDATE_INFOBAR, self.OnUpdateInfoBar)
 
@@ -196,9 +196,8 @@ class PopsPanel(wx.Panel):
         self.steeringClient = SteeringClient(urlS, port_interface=steering_dict['port_interface'],
                                              port_simulation=port_simulation,
                                              launch_server=server,
-                                             local_gdbase=local_gdbase, log=self.giface)
+                                             local_gdbase=local_gdbase, log=self.giface, eventHandler=self)
         self.steeringClient.set_on_done(self._afterSimulation)
-        self.steeringClient.set_on_step_done(self._uploadStepToDashboard)
         self.steeringClient.set_steering(steering)
         self.steeringClient.connect()
 
@@ -253,15 +252,15 @@ class PopsPanel(wx.Panel):
         wx.PostEvent(self, evt)
         self.webDashboard.run_done()
 
-    def _uploadStepToDashboard(self, name):
-        if not 'probability' in name:
+    def _uploadStepToDashboard(self, event):
+        if not 'probability' in event.name:
             return
 
-        res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', name)
+        res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', event.name)
         if res:
             date = res.group()
             year = int(date.split('_')[0])
-            print self.webDashboard.upload_results(year, name)
+            print self.webDashboard.upload_results(year, event.name)
 
     def _renameAllAfterSimulation(self, name):
         name_split = name.split('__')
@@ -404,6 +403,7 @@ class PopsPanel(wx.Panel):
         model_params['short_distance_scale'] = self.params_from_dashboard['distance_scale']
         model_params['reproductive_rate'] = self.params_from_dashboard['reproductive_rate']
         model_params['random_seed'] = self.params_from_dashboard['random_seed']
+        #model_params['end_time'] = self.params_from_dashboard['final_year']
 
         # run simulation
         self.steeringClient.simulation_set_params(model_name, model_params, flags, region)
@@ -473,7 +473,7 @@ class PopsPanel(wx.Panel):
                 gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
         else:
             gscript.run_command('r.null', map=tr_name, null=0, env=env)
-            gscript.mapcalc("{tr_new} = float({tr}) / {eff}".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
+            gscript.mapcalc("{tr_new} = float({tr}) * {eff} / 100".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
             gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
 
         self.currentRealityCheckpoint = self.currentCheckpoint + 1
@@ -497,11 +497,12 @@ class PopsPanel(wx.Panel):
     def createTreatmentVector(self, treatment_layer, env):
         tr, evt, plr, attempt, year = treatment_layer.split('__')
         postfix = 'cat_year'
-        gscript.write_command('r.reclass', input=treatment_layer, output=treatment_layer + '__' + postfix, rules='-',
-                              stdin='1 = {y}'.format(y=int(year) + self.configuration['POPS']['model']['start_time']), env=env)
+        gscript.mapcalc("{n} = if({t} == 1, {y}, null())".format(n=treatment_layer + '__' + postfix,
+                        t=treatment_layer, y=int(year) + self.configuration['POPS']['model']['start_time']), env=env)
         pattern = '__'.join([tr, evt, plr, attempt, '*', postfix])
         layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
         to_patch = []
+
         for layer in layers:
             y = int(layer.split('__')[-2])
             if y <= int(year):
@@ -510,7 +511,7 @@ class PopsPanel(wx.Panel):
         if len(to_patch) >= 2:
             to_patch = gscript.natural_sort(to_patch)[::-1]
             gscript.run_command('r.patch', input=to_patch, output=name, flags='z', env=env)
-        else:
+        else:            
             gscript.run_command('g.copy', raster=[treatment_layer + '__' + postfix, name], env=env)
         gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
         gscript.run_command('v.colors', map=name, use='cat', color=self.configuration['POPS']['color_treatments'], env=env)
@@ -553,6 +554,7 @@ class PopsPanel(wx.Panel):
             found = False
             while not found and not self.steeringClient.results_empty():
                 name = self.steeringClient.results_get()
+                print name
                 isProb = self._ifShowProbability(evalFuture=True)
                 if self.configuration['POPS']['model']['probability_series'] in name and isProb:
                     found = True

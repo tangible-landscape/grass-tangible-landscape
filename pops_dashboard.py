@@ -7,6 +7,8 @@ Created on Wed Aug 23 09:29:18 2017
 import os
 import shutil
 import requests
+import tempfile
+import threading
 
 import grass.script as gscript
 
@@ -104,16 +106,9 @@ class PoPSDashboard:
         gscript.mapcalc("{n} = if({r} == 0, null(), {r})".format(n=self._tmp_rast_file,
                         r=raster), env=env)
         results = process_for_dashboard(self._run_id, year, self._tmp_rast_file)
-        results['spread_map'] = self._raster_to_proj_geojson(self._tmp_rast_file, env)
-        try:
-            res = requests.post(self._root + 'output/', data=results)
-            res.raise_for_status()
-
-            out_id = res.json()['id']
-            return out_id
-        except requests.exceptions.HTTPError:
-            return None
-
+        t = threading.Thread(target=raster_to_proj_geojson_thread, args=(self._tmp_rast_file, self._env, results, self._root))
+        t.start()
+        
     def run_done(self, success=True):
         self._run['status'] = 'SUCCESS' if success else 'FAILURE'
         try:
@@ -123,7 +118,7 @@ class PoPSDashboard:
             return None
 
     def _raster_to_proj_geojson(self, raster, env):
-        gscript.run_command('r.to.vect', input=raster,
+        gscript.run_command('r.to.vect', input=raster, flags='vt',
                             output=self._tmp_vect_file, type='area', column='outputs', env=env)
         return self._vector_to_proj_geojson(self._tmp_vect_file, 'output')
 
@@ -135,6 +130,7 @@ class PoPSDashboard:
         gscript.run_command('v.out.ogr', input=name, flags='sm', output=self._tmp_out_file,
                             format_='GeoJSON', lco="COORDINATE_PRECISION=4", quiet=True, overwrite=True,
                             env=self._env)
+        print self._tmp_out_file
         with open(self._tmp_out_file) as f:
             j = f.read()
         return j
@@ -162,12 +158,52 @@ class PoPSDashboard:
         gscript.run_command('g.remove', type='raster', name=self._tmp_rast_file, flags='f', quiet=True)
 
 
+def raster_to_proj_geojson_thread(raster, gisrcenv, results, root):
+    tempdir = tempfile.mkdtemp()
+    tmp_layer1 = os.path.basename(tempdir) + '1'
+    tmp_layer2 = os.path.basename(tempdir) + '2'
+    tmp_file = os.path.join(tempdir, 'out.json')
+    
+    env = get_environment(raster=raster)
+    gscript.run_command('r.to.vect', input=raster, flags='v',
+                        output=tmp_layer1, type='area', column='outputs', env=env)
+    genv = gscript.gisenv()
+    gscript.run_command('v.proj', location=genv['LOCATION_NAME'], quiet=True,
+                        mapset=genv['MAPSET'], input=tmp_layer1, output=tmp_layer2, overwrite=True, env=gisrcenv)
+    gscript.run_command('v.db.addcolumn', map=tmp_layer2, columns="outputs integer", quiet=True, env=gisrcenv)
+    gscript.run_command('v.db.update', map=tmp_layer2, column='outputs', query_column='cat', quiet=True, env=gisrcenv)
+    gscript.run_command('v.out.ogr', input=tmp_layer2, flags='sm', output=tmp_file,
+                        format_='GeoJSON', lco="COORDINATE_PRECISION=4", quiet=True, overwrite=True,
+                        env=gisrcenv)
+    with open(tmp_file) as f:
+        j = f.read()
+        results['spread_map'] = j
+        with open('/tmp/data.json', 'w') as f:
+            f.write(str(results))
+        shutil.rmtree(tempdir)
+        gscript.run_command('g.remove', name=[tmp_layer1, tmp_layer2], quiet=True, flags='f', type=['raster', 'vector'])
+        try:
+            res = requests.post(root + 'output/', data=results)
+            res.raise_for_status()
+
+            out_id = res.json()['id']
+            print 'out_id ' + str(out_id)
+            return out_id
+        except requests.exceptions.HTTPError, e:
+            print e
+            try:
+                print res.json()
+            except:
+                print 'no json'
+            return None
+        
+
 
 def process_for_dashboard(id_, year, raster):
     result = {'run': id_, 'years': year}
     data = gscript.parse_command('r.univar', map=raster, flags='gr')
     info = gscript.raster_info(raster)
-    result['infected_area'] = int(data['n']) * info['nsres'] * info['ewres']
+    result['infected_area'] = int(data['n']) * info['nsres'] * info['ewres'] / 10000.
     result['number_infected'] = int(data['sum'])
 
     return result
