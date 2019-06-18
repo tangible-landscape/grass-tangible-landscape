@@ -92,6 +92,18 @@ class PoPSDashboard:
     def update_run(self):
         try:
             if self._create_new:
+                name = self._run['name']
+                namesp = name.split('-')
+                if len(namesp) > 1:
+                    try:
+                        order = int(namesp[-1])
+                        namesp[:-1].append(order +  1)
+                        name = '-'.join(namesp)
+                    except ValueError:
+                        name += '-1'
+                else:
+                    name += '-1'
+                self._run['name'] = name
                 res = requests.post(self._root + 'run/', data=self._run)
             else:
                 res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
@@ -203,7 +215,7 @@ def process_for_dashboard(id_, year, raster):
     result = {'run': id_, 'years': year}
     data = gscript.parse_command('r.univar', map=raster, flags='gr')
     info = gscript.raster_info(raster)
-    result['infected_area'] = int(data['n']) * info['nsres'] * info['ewres'] / 10000.
+    result['infected_area'] = int(data['n']) * info['nsres'] * info['ewres']
     result['number_infected'] = int(data['sum'])
 
     return result

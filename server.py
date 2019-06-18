@@ -24,7 +24,7 @@ def run_model(settings, steering):
     region = settings.pop('region').split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
     flags = settings.pop('flags')
-    gscript.run_command('g.remove', flags='fe', type='raster',
+    gscript.run_command('g.remove', flags='fe', type='raster', quiet=True,
                         pattern=settings['output_series'] + '_[0-9]{4}_[0-9]{2}_[0-9]{2}')
     p = gscript.start_command(model, overwrite=True, flags=flags, env=env, **settings)
 
@@ -144,12 +144,16 @@ def clientInterface(conn, connections, event, steering):
         elif message[0] == 'info':
             if message[1] == 'model_running':
                 if 'interface' in connections:
-                    if sod_process and sod_process.poll() is None:
-                        print 'sod_processes is running'
-                        connections['interface'].sendall('info:model_running:yes')
-                    else:
-                        print 'sod_processes is not running'
-                        connections['interface'].sendall('info:model_running:no')
+                    try:
+                        if sod_process and sod_process.poll() is None:
+                            print 'sod_processes is running'
+                            connections['interface'].sendall('info:model_running:yes')
+                        else:
+                            print 'sod_processes is not running'
+                            connections['interface'].sendall('info:model_running:no')
+                    except socket.error:
+                        print "timeout"
+                        break
 
         # client closed
         if not data:

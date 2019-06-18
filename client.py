@@ -282,3 +282,6 @@ class SteeringClient:
 
     def results_get(self):
         return self._results_queue.get()
+
+    def is_steering(self):
+        return self._steering

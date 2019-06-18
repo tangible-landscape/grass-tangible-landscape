@@ -70,7 +70,7 @@ class PopsPanel(wx.Panel):
 
         # steering
         self.steeringClient = None
-        self.visualizationModes = ['combined', 'singlerun', 'probability']
+        self.visualizationModes = ['singlerun', 'probability', 'combined']
         self.visualizationMode = 0
         self.empty_placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self.placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
@@ -78,8 +78,9 @@ class PopsPanel(wx.Panel):
         self.checkpoints = []
         self.currentRealityCheckpoint = 0
         self.attempt = Attempt()
+        self._one_step = None
 
-        self.profileFrame = self.dashboardFrame = self.timeDisplay = None
+        self.profileFrame = self.dashboardFrame = self.timeDisplay = self.timeStatusDisplay = None
 
         self.treated_area = 0
         self.money_spent = 0
@@ -116,11 +117,13 @@ class PopsPanel(wx.Panel):
         stopTreatmentButton = wx.Button(self, label="Stop")
 
         runBtn = wx.Button(modelingBox, label="Run simulation")
-        visualizationChoice = wx.Choice(modelingBox, choices=self.visualizationModes)
-        visualizationChoice.SetSelection(0)
+        self.visualizationChoice = wx.Choice(modelingBox, choices=self.visualizationModes)
+        self.visualizationChoice.SetSelection(0)
+        resetButton = wx.Button(modelingBox, label=u"\u21A9")
+        resetButton.Bind(wx.EVT_BUTTON, self.ResetSimulation)
 
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
-        visualizationChoice.Bind(wx.EVT_CHOICE, self.SwitchVizMode)
+        self.visualizationChoice.Bind(wx.EVT_CHOICE, self.SwitchVizMode)
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
         self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
@@ -141,7 +144,8 @@ class PopsPanel(wx.Panel):
         boxSizer = wx.StaticBoxSizer(modelingBox, wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(runBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
-        sizer.Add(visualizationChoice, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(self.visualizationChoice, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(resetButton, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -201,20 +205,32 @@ class PopsPanel(wx.Panel):
         self.steeringClient.set_steering(steering)
         self.steeringClient.connect()
 
+    def _initVisualizationModes(self):
+        if self.steeringClient:
+            if self.steeringClient.is_steering():
+                self.visualizationChoice.SetItems(self.visualizationModes)
+                self.visualizationMode = 2
+            else:
+                # only probability (default) and single run
+                self.visualizationChoice.SetItems(self.visualizationModes[:-1])
+                self.visualizationMode = 1
+            self.visualizationChoice.SetSelection(self.visualizationMode)
+
     def OnDisplayUpdate(self, event):
         if not self.dashboardFrame:
             return
 
         if self.showDisplayChange:
             cumulativeArea = sum(self.treatmentHistory[:self.currentRealityCheckpoint]) + event.area
-            cost = self._get_model_param('cost_per_hectare')
+            cost = self._get_model_param('cost_per_meter_squared')
             self.dashboardFrame.show_value([event.area / 10000, cumulativeArea / 10000.,
                                             (event.area / 10000) * cost, (cumulativeArea * 10000) * cost])
 
     def OnTimeDisplayUpdate(self, event):
-        if not self.timeDisplay:
-            return
-        self.timeDisplay.Update(event.current, event.currentView, self.visualizationModes[self.visualizationMode])
+        if self.timeDisplay:
+            self.timeDisplay.Update(event.current, event.currentView, self.visualizationModes[self.visualizationMode])
+        if self.timeStatusDisplay:
+            self.timeStatusDisplay.Update(event.currentView, "forecast" if self._ifShowProbability() else "infected")
 
     def OnUpdateInfoBar(self, event):
         if event.dismiss:
@@ -279,19 +295,29 @@ class PopsPanel(wx.Panel):
 
     def SwitchVizMode(self, event=None):
         # clear the queue to stop animation
-        self.steeringClient.results_clear()
+        if self.steeringClient:
+            self.steeringClient.results_clear()
 
         if event:
             # from gui
             self.visualizationMode = event.GetSelection()
         else:
             # from button
-            self.visualizationMode += 1
-            if self.visualizationMode >= len(self.visualizationModes):
-                self.visualizationMode = 0
+            if self.steeringClient and self.steeringClient.is_steering():
+                self.visualizationMode += 1
+                if self.visualizationMode >= len(self.visualizationModes):
+                    self.visualizationMode = 0
+            else:
+                self.visualizationMode += 1
+                if self.visualizationMode >= len(self.visualizationModes) - 1:
+                    self.visualizationMode = 0
+                self.visualizationChoice.SetSelection(self.visualizationMode)
 
         if self.timeDisplay:
             self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
+
+        if self.timeStatusDisplay:
+            self.timeStatusDisplay.Update(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "infected")
 
         self.ShowResults()
 
@@ -311,6 +337,15 @@ class PopsPanel(wx.Panel):
                 return True
             return False
 
+    def ResetSimulation(self, event):
+        self.HideResultsLayers()
+        self.currentCheckpoint = 0
+        self.currentRealityCheckpoint = 0
+        if self.timeDisplay:
+            self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
+        if self.timeStatusDisplay:
+            self.timeStatusDisplay.Update(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "infected")
+        
     def ShowResults(self):
         # change layers
         self.ShowTreatment()
@@ -436,8 +471,8 @@ class PopsPanel(wx.Panel):
         studyArea = self.configuration['tasks'][self.current]['base']
         host = self.configuration['POPS']['model']['host']
         probability = self.configuration['POPS']['model']['probability_series']
-        treatment_efficacy = self._get_model_param('efficacy')
-        cost_per_hectare = self._get_model_param('cost_per_hectare')
+        treatment_efficacy = float(self._get_model_param('efficacy'))
+        cost_per_meter_squared = float(self._get_model_param('cost_per_meter_squared'))
 
         env = get_environment(raster=studyArea, align=host)
 
@@ -457,7 +492,7 @@ class PopsPanel(wx.Panel):
         gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=treatments, n=treatments + '_exclude_host'), env=env)
         self.treated_area = self.computeTreatmentArea(treatments + '_exclude_host')
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
-        self.money_spent = (self.treated_area / 10000.) * cost_per_hectare
+        self.money_spent = self.treated_area * cost_per_meter_squared
 
 
         # compute proportion - disable for now
@@ -481,7 +516,10 @@ class PopsPanel(wx.Panel):
         # export treatments file to server
         self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
-        tr_year = self.configuration['POPS']['model']['start_time'] + self.currentCheckpoint
+        if self.steeringClient.is_steering():
+            tr_year = self.configuration['POPS']['model']['start_time'] + self.currentCheckpoint
+        else:
+            tr_year = self.configuration['POPS']['model']['start_time']
         self.steeringClient.simulation_load_data(tr_year, tr_name)
 
         self.steeringClient.simulation_goto(self.currentCheckpoint)
@@ -489,6 +527,10 @@ class PopsPanel(wx.Panel):
         if self.visualizationModes[self.visualizationMode] != 'probability':
             self.steeringClient.simulation_sync_runs()
 
+        if self.steeringClient.is_steering():
+            self._one_step = True
+        else:
+            self._one_step = None
         self.steeringClient.simulation_play()
 
         self.HideResultsLayers()
@@ -554,7 +596,6 @@ class PopsPanel(wx.Panel):
             found = False
             while not found and not self.steeringClient.results_empty():
                 name = self.steeringClient.results_get()
-                print name
                 isProb = self._ifShowProbability(evalFuture=True)
                 if self.configuration['POPS']['model']['probability_series'] in name and isProb:
                     found = True
@@ -574,14 +615,18 @@ class PopsPanel(wx.Panel):
                     # if last checkpoint is the same date as current raster, we don't want it
                     if self.checkpoints[self.currentCheckpoint] == (int(year), int(month), int(day)):
                         return
-                    self.currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
-                    self.checkpoints[self.currentCheckpoint] = (int(year), int(month), int(day))
-                    evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
-                                            currentView=self.currentCheckpoint,
-                                            vtype=self.visualizationModes[self.visualizationMode])
-                    self.scaniface.postEvent(self, evt)
-
-                self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=True)
+                    currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
+                    self.checkpoints[currentCheckpoint] = (int(year), int(month), int(day))
+                    # when steering, jump just one step but keep processing outputs
+                    if self._one_step or self._one_step is None:
+                        self.currentCheckpoint = currentCheckpoint
+                        evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
+                                                currentView=self.currentCheckpoint,
+                                                vtype=self.visualizationModes[self.visualizationMode])
+                        self.scaniface.postEvent(self, evt)
+                        self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=True)
+                        if self._one_step:
+                            self._one_step = False
 
     def _reloadAnalysisFile(self, funcPrefix):
         analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
@@ -628,6 +673,7 @@ class PopsPanel(wx.Panel):
             return
         self._connect()
         self._loadConfiguration(None)
+        self._initVisualizationModes()
 
         self.currentCheckpoint = 0
         start = self.configuration['POPS']['model']['start_time']
@@ -673,6 +719,9 @@ class PopsPanel(wx.Panel):
         # time display
         if 'time_display' in self.configuration['tasks'][self.current]:
             self.StartTimeDisplay()
+        # time status display
+        if 'time_status_display' in self.configuration['tasks'][self.current]:
+            self.StartTimeStatusDisplay()
         # start display timer
         self.timer.Start(self.speed)
 
@@ -687,6 +736,9 @@ class PopsPanel(wx.Panel):
             if self.timeDisplay:
                 self.timeDisplay.Destroy()
                 self.timeDisplay = None
+            if self.timeStatusDisplay:
+                self.timeStatusDisplay.Destroy()
+                self.timeStatusDisplay = None
 
         def _removeAllLayers():
             ll = self.giface.GetLayerList()
@@ -706,7 +758,7 @@ class PopsPanel(wx.Panel):
         windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
         windows.append(wx.GetTopLevelParent(self))
         windows.append(self.giface.lmgr)
-        bindings = {'simulate': self._RunSimulation, 'animate': lambda evt: self.ShowResults(),
+        bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
                     'stepforward': self.StepForward, 'stepback': self.StepBack}
         if "keyboard_events" in self.configuration:
             items = []
@@ -726,10 +778,6 @@ class PopsPanel(wx.Panel):
         self.Step(forward=True)
 
     def Step(self, forward=True):
-        # update time display
-        if not self.timeDisplay:
-            return
-
         self.steeringClient.results_clear()
 
         start = 0
@@ -739,7 +787,10 @@ class PopsPanel(wx.Panel):
         if not forward and self.currentCheckpoint <= start:
             return
         self.currentCheckpoint = self.currentCheckpoint + 1 if forward else self.currentCheckpoint - 1
-        self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
+        if self.timeDisplay:
+            self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
+        if self.timeStatusDisplay:
+            self.timeStatusDisplay.Update(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "infected")
 
         self.ShowResults()
 
@@ -948,11 +999,27 @@ class PopsPanel(wx.Panel):
         self.timeDisplay.SetSize(size)
         self.timeDisplay.Show()
         self.timeDisplay.SetPosition(pos)
-#        evt = updateTimeDisplay(date=(self.configuration['POPS']['model']['start_time'], 1, 1))
         evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
                                 currentView=self.currentCheckpoint,
                                 vtype=self.visualizationModes[self.visualizationMode])
         self.scaniface.postEvent(self, evt)
+
+    def StartTimeStatusDisplay(self):
+        self.timeStatusDisplay = TimeStatusDisplay(self, start=self.configuration['POPS']['model']['start_time'],
+                                       end=self.configuration['POPS']['model']['end_time'] + 1,
+                                       fontsize=self.configuration['tasks'][self.current]['time_status_display']['fontsize'],
+                                       beginning_of_year=self.configuration['tasks'][self.current]['time_status_display']['beginning_of_year'])
+
+        pos = self._getDashboardPosition(key='time_status_display')
+        size = self._getDashboardSize(key='time_status_display')
+        self.timeStatusDisplay.SetSize(size)
+        self.timeStatusDisplay.Show()
+        self.timeStatusDisplay.SetPosition(pos)
+        evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
+                                currentView=self.currentCheckpoint,
+                                vtype=self.visualizationModes[self.visualizationMode])
+        self.scaniface.postEvent(self, evt)
+
 
 
 class SimpleTimeDisplay(wx.Frame):
@@ -966,11 +1033,8 @@ class SimpleTimeDisplay(wx.Frame):
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
-    def Update(self, year, month, day):
-        # TODO: datetime
-        if str(month) == '12':
-            year = int(year) + 1
-        self.label.SetLabel("{y} ".format(y=year))
+    def Update(self, current):
+        self.label.SetLabel(str(current + self.years[0]))
 
 
 class TimeDisplay(wx.Frame):
@@ -1023,6 +1087,36 @@ class TimeDisplay(wx.Frame):
                 #d = delim_single
                 html += '<font {style}> {d} </font>'.format(style=style['default'], d=d)
         return html
+
+
+class TimeStatusDisplay(wx.Frame):
+    def __init__(self, parent, fontsize, start, end, beginning_of_year):
+        wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
+        self.years = range(start, end + 1)
+        self.beginning_of_year = beginning_of_year
+        s = int(fontsize / 2.)
+        if self.beginning_of_year:
+            year = str(self.years[0])
+        else:
+            year = str(self.years[0] - 1)
+        self.yearCtrl = wx.StaticText(self, -1, year, style=wx.ALIGN_CENTRE_HORIZONTAL)
+        self.yearCtrl.SetFont(wx.Font(fontsize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.typeCtrl = wx.StaticText(self, -1, "forecast", style=wx.ALIGN_CENTRE_HORIZONTAL)
+        self.typeCtrl.SetFont(wx.Font(s, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.typeCtrl.SetBackgroundColour(wx.Colour(220, 220, 220))
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.yearCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+        self.sizer.Add(self.typeCtrl, 0, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND)
+        self.SetSizer(self.sizer)
+        self.sizer.Fit(self)
+
+    def Update(self, year, dtype):
+        if self.beginning_of_year:
+            year = str(int(year) + self.years[0])
+        else:
+            year = str(int(year) + self.years[0] - 1)
+        self.yearCtrl.SetLabel(year)
+        self.typeCtrl.SetLabel(dtype)
 
 
 class Attempt(object):
