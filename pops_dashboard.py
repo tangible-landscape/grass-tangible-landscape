@@ -41,10 +41,11 @@ class PoPSDashboard:
     def set_run_params(self, params):
         self._run = params
 
-    def set_management_polygons(self, management):
-        # TODO: add area/cost
-        geojson = self._vector_to_proj_geojson(management, 'treatment')
+    def set_management(self, polygons, cost, area):
+        geojson = self._vector_to_proj_geojson(polygons, 'treatment')
         self._run['management_polygons'] = geojson
+        self._run['management_cost'] = cost
+        self._run['management_area'] = area
 
     def _compare_runs(self, run1, run2):
         same = True
@@ -82,12 +83,33 @@ class PoPSDashboard:
         if not self._run_id:
             return None
         run = self._get_run(self._run_id)
+        if not run:
+            self._create_new = True
+            return
         if self._compare_runs(run, self._run):
             self._create_new = True
         else:
             self._create_new = False
         self._run = self._get_run(self._run_id)
         return self._run
+
+    def get_session_name(self):
+        try:
+            res = requests.get(self._root + 'session/' + self._session_id + '/')
+            res.raise_for_status()
+            name = res.json()['name']
+            return name
+        except requests.exceptions.HTTPError:
+            return None
+
+    def get_run_name(self):
+        try:
+            res = requests.get(self._root + 'run/' + self._run_id + '/')
+            res.raise_for_status()
+            name = res.json()['name']
+            return name
+        except requests.exceptions.HTTPError:
+            return None
 
     def update_run(self):
         try:
@@ -120,7 +142,7 @@ class PoPSDashboard:
         results = process_for_dashboard(self._run_id, year, self._tmp_rast_file)
         t = threading.Thread(target=raster_to_proj_geojson_thread, args=(self._tmp_rast_file, self._env, results, self._root))
         t.start()
-        
+
     def run_done(self, success=True):
         self._run['status'] = 'SUCCESS' if success else 'FAILURE'
         try:
@@ -175,7 +197,7 @@ def raster_to_proj_geojson_thread(raster, gisrcenv, results, root):
     tmp_layer1 = os.path.basename(tempdir) + '1'
     tmp_layer2 = os.path.basename(tempdir) + '2'
     tmp_file = os.path.join(tempdir, 'out.json')
-    
+
     env = get_environment(raster=raster)
     gscript.run_command('r.to.vect', input=raster, flags='v',
                         output=tmp_layer1, type='area', column='outputs', env=env)
@@ -208,7 +230,7 @@ def raster_to_proj_geojson_thread(raster, gisrcenv, results, root):
             except:
                 print 'no json'
             return None
-        
+
 
 
 def process_for_dashboard(id_, year, raster):
@@ -236,7 +258,7 @@ def main():
         out_id = dashboard.upload_results(2021, 'tmpevent__player__7_0__2021_12_31')
         if out_id:
             dashboard.run_done()
-        
+
 
 
 

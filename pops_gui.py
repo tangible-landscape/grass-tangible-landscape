@@ -57,10 +57,9 @@ class PopsPanel(wx.Panel):
 
         self.timer = wx.Timer(self)
         self.speed = 1000  # 1 second per year
-        self.playersByIds = self.playersByName = None
-        self.eventsByIds = self.eventsByName = None
         self.configFile = ''
         self.configuration = {}
+        self.workdir = None
         self.current = 0
         self.switchCurrentResult = 0
         self.showDisplayChange = True
@@ -90,6 +89,7 @@ class PopsPanel(wx.Panel):
             self.settings['POPS']['config'] = ''
         else:
             self.configFile = self.settings['POPS']['config']
+            self.workdir = os.path.dirname(self.configFile)
 
 
         if self.configFile:
@@ -174,6 +174,7 @@ class PopsPanel(wx.Panel):
     def _connectDashboard(self):
         self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard']['url'])
         self.webDashboard.set_session_id(self.configuration['POPS']['dashboard']['session'])
+        self.webDashboard.get_run_params()
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -196,6 +197,7 @@ class PopsPanel(wx.Panel):
         # when we launch server from within, we use the same database
         if 'server' in steering_dict:
             server = steering_dict['server']
+            server = os.path.join(os.path.dirname(os.path.realpath(__file__)), server)
             local_gdbase = True
         self.steeringClient = SteeringClient(urlS, port_interface=steering_dict['port_interface'],
                                              port_simulation=port_simulation,
@@ -223,8 +225,17 @@ class PopsPanel(wx.Panel):
         if self.showDisplayChange:
             cumulativeArea = sum(self.treatmentHistory[:self.currentRealityCheckpoint]) + event.area
             cost = self._get_model_param('cost_per_meter_squared')
-            self.dashboardFrame.show_value([event.area / 10000, cumulativeArea / 10000.,
-                                            (event.area / 10000) * cost, (cumulativeArea * 10000) * cost])
+            unit = self.configuration['POPS'].get('unit', 'acre')
+            if unit == 'acre':
+                coef = 4046.86
+            elif unit == 'ha':
+                coef = 10000.
+            elif unit == 'km':
+                coef = 1000000.
+            else:
+                coef = 1.
+            self.dashboardFrame.show_value([event.area / coef, cumulativeArea / coef,
+                                            (event.area / coef) * cost, (cumulativeArea / coef) * cost])
 
     def OnTimeDisplayUpdate(self, event):
         if self.timeDisplay:
@@ -245,15 +256,32 @@ class PopsPanel(wx.Panel):
             with open(self.configFile, 'r') as f:
                 self.configuration = json.load(f)
                 self.tasks = self.configuration['tasks']
+            self.workdir = os.path.dirname(self.configFile)
         else:
-            self.settings['activities']['config'] = ''
+            self.settings['POPS']['config'] = ''
 
     def _get_model_param(self, param):
         if self.params_from_dashboard:
-            return self.params_from_dashboard[param]
+            if param == 'short_distance_scale':
+                return self.params_from_dashboard['distance_scale']
+            if param in ('temperature_file', 'moisture_coefficient_file', 'temperature_coefficient_file'):
+                weather = self.params_from_dashboard['weather']
+                if weather in self.configuration['POPS']['model'][param]:
+                    return self.configuration['POPS']['model'][param][weather]
+                else:
+                    return self.configuration['POPS']['model'][param]
+            else:
+                return self.params_from_dashboard[param]
         else:
             if param in self.configuration['POPS']['model']:
-                return self.configuration['POPS']['model'][param]
+                if param in ('temperature_file', 'moisture_coefficient_file', 'temperature_coefficient_file'):
+                    weather = self.configuration['POPS']['weather']
+                    if weather in self.configuration['POPS']['model'][param]:
+                        return self.configuration['POPS']['model'][param][weather]
+                    else:
+                        return self.configuration['POPS']['model'][param]
+                else:
+                    return self.configuration['POPS']['model'][param]
             else:
                 return self.configuration['POPS'][param]
 
@@ -322,10 +350,21 @@ class PopsPanel(wx.Panel):
         self.ShowResults()
 
     def _createPlayerName(self):
-        return 'player'
+        try:
+            name = self.webDashboard.get_run_name()
+            if not name:
+                name = 'run'
+            name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_')
+        except:
+            return 'run'
+        return name
 
     def getEventName(self):
-        return 'tmpevent'
+        name = self.webDashboard.get_session_name()
+        if name:
+            return name
+        else:
+            return 'tmpevent'
 
     def _ifShowProbability(self, evalFuture=False):
         if self.visualizationModes[self.visualizationMode] == 'singlerun':
@@ -350,7 +389,7 @@ class PopsPanel(wx.Panel):
         # change layers
         self.ShowTreatment()
         displayTime = self.checkpoints[self.currentCheckpoint]
-        event = 'tmpevent'
+        event = self.getEventName()
         attempt = self.attempt.getCurrentFormatted(delim='_')
         name = self._createPlayerName()
         prefix = "{e}__{n}__{a}__".format(n=name, e=event, a=attempt)
@@ -358,10 +397,10 @@ class PopsPanel(wx.Panel):
         suffix = "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2])
 
         if self._ifShowProbability():
-            rules = self.configuration['POPS']['color_probability']
+            rules = os.path.join(self.workdir, self.configuration['POPS']['color_probability'])
             name = prefix_prob + suffix
         else:
-            rules = self.configuration['POPS']['color_trees']
+            rules = os.path.join(self.workdir, self.configuration['POPS']['color_trees'])
             name = prefix + suffix
 
         if self.currentRealityCheckpoint == 0:
@@ -423,7 +462,7 @@ class PopsPanel(wx.Panel):
         host = self.configuration['POPS']['model']['host']
         probability = self.configuration['POPS']['model']['probability_series']
 
-        postfix = 'tmpevent' + '__' + playerName + '_'
+        postfix = self.getEventName() + '__' + playerName + '_'
         probability = probability + '__' + postfix
 
         extent = gscript.raster_info(studyArea)
@@ -435,9 +474,12 @@ class PopsPanel(wx.Panel):
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
 
-        model_params['short_distance_scale'] = self.params_from_dashboard['distance_scale']
-        model_params['reproductive_rate'] = self.params_from_dashboard['reproductive_rate']
-        model_params['random_seed'] = self.params_from_dashboard['random_seed']
+        model_params['short_distance_scale'] = self._get_model_param('short_distance_scale')
+        model_params['reproductive_rate'] = self._get_model_param('reproductive_rate')
+        model_params['random_seed'] = self._get_model_param('random_seed')
+        model_params['temperature_coefficient_file'] = os.path.join(self.workdir, self._get_model_param('temperature_coefficient_file'))
+        model_params['moisture_coefficient_file'] = os.path.join(self.workdir, self._get_model_param('moisture_coefficient_file'))
+        model_params['temperature_file'] = os.path.join(self.workdir, self._get_model_param('temperature_file'))
         #model_params['end_time'] = self.params_from_dashboard['final_year']
 
         # run simulation
@@ -476,8 +518,8 @@ class PopsPanel(wx.Panel):
 
         env = get_environment(raster=studyArea, align=host)
 
-        event = 'tmpevent'
-        postfix = 'tmpevent' + '__' + playerName + '_'
+        event = self.getEventName()
+        postfix = event + '__' + playerName + '_'
         probability = probability + '__' + postfix
         # todo, save treatments
         tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
@@ -485,8 +527,6 @@ class PopsPanel(wx.Panel):
         gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
         # create treatment vector of all used treatments in that scenario
         tr_vector = self.createTreatmentVector(tr_name, env=env)
-        self.webDashboard.set_management_polygons(tr_vector)
-        self.webDashboard.update_run()
 
         # measuring area
         gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=treatments, n=treatments + '_exclude_host'), env=env)
@@ -494,6 +534,8 @@ class PopsPanel(wx.Panel):
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
 
+        self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent, area=self.treated_area)
+        self.webDashboard.update_run()
 
         # compute proportion - disable for now
         resampling_treatments = False
@@ -599,10 +641,10 @@ class PopsPanel(wx.Panel):
                 isProb = self._ifShowProbability(evalFuture=True)
                 if self.configuration['POPS']['model']['probability_series'] in name and isProb:
                     found = True
-                    rules = self.configuration['POPS']['color_probability']
+                    rules = os.path.join(self.workdir, self.configuration['POPS']['color_probability'])
                 elif not (self.configuration['POPS']['model']['probability_series']  in name or isProb):
                     found = True
-                    rules = self.configuration['POPS']['color_trees']
+                    rules = os.path.join(self.workdir, self.configuration['POPS']['color_trees'])
                 else:
                     continue
                 gscript.run_command('r.colors', map=name, quiet=True, rules=rules)
@@ -629,7 +671,7 @@ class PopsPanel(wx.Panel):
                             self._one_step = False
 
     def _reloadAnalysisFile(self, funcPrefix):
-        analysesFile = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
+        analysesFile = os.path.join(self.workdir, self.configuration['tasks'][self.current]['analyses'])
         try:
             myanalyses = imp.load_source('myanalyses', analysesFile)
         except StandardError:
@@ -692,10 +734,10 @@ class PopsPanel(wx.Panel):
         if self.treatmentSelect.GetValue():
             self.ChangeRegion()
 
-        event = 'tmpevent'
+        event = self.getEventName()
         self.attempt.initialize(event, player=self._createPlayerName())
 
-        self.settings['analyses']['file'] = os.path.join(self.configuration['taskDir'], self.configuration['tasks'][self.current]['analyses'])
+        self.settings['analyses']['file'] = os.path.join(self.workdir, self.configuration['tasks'][self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
         if 'scanning_params' in self.configuration['tasks'][self.current]:
             for each in self.configuration['tasks'][self.current]['scanning_params'].keys():
