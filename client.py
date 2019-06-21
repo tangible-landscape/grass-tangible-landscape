@@ -190,7 +190,7 @@ class SteeringClient:
 
     def _wait_for_confirmation(self):
         self._threading_event.clear()
-        self._threading_event.wait(2000)
+        self._threading_event.wait(5)
 
     def set_steering(self, steering):
         self._steering = steering

@@ -151,6 +151,7 @@ def clientInterface(conn, connections, event, steering):
                         else:
                             print 'sod_processes is not running'
                             connections['interface'].sendall('info:model_running:no')
+                            print 'sod_processes is not running after'
                     except socket.error:
                         print "timeout"
                         break
@@ -181,7 +182,7 @@ def check_output(connection, basename, sod_process, event):
             last = found[-1]
         for each in found:
             if each not in old_found:
-                event.wait(2000)
+                event.wait(5)
                 pack_path = os.path.join(tmp_directory, each + '.pack')
                 gscript.run_command('r.pack', input=each, output=pack_path, overwrite=True)
                 event.clear()
@@ -189,7 +190,7 @@ def check_output(connection, basename, sod_process, event):
                 old_found.append(each)
                 _debug(_debug_file, 'serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path) + '\n')
         if not is_running:
-            event.wait(2000)
+            event.wait(5)
             _debug(_debug_file, 'info:last:' + last)
             connection.sendall('info:last:' + last)
     sod_process.wait()
@@ -203,12 +204,12 @@ def clientComputation(conn, connections, event):
     # when GUI expects files
     event.set()
     while True:
-        event.wait(2000)
+        event.wait(5)
         data = conn.recv(2000)
         message = data.split('|')
         for m in message:
             lm = m.split(':')
-            event.wait(2000)
+            event.wait(5)
             if lm[0] == 'output':
                 # r.pack
                 pack_path = os.path.join(tmp_directory, lm[1] + '.pack')

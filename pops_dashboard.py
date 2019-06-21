@@ -9,14 +9,17 @@ import shutil
 import requests
 import tempfile
 import threading
+import wx
+import time
 
 import grass.script as gscript
 
 from tangible_utils import get_environment
 
 
-class PoPSDashboard:
+class PoPSDashboard(wx.EvtHandler):
     def __init__(self):
+        wx.EvtHandler.__init__(self)
         self._root = None
         self._run = {}
         self._run_id = None
@@ -31,6 +34,10 @@ class PoPSDashboard:
         suffix = os.path.basename(gscript.tempfile(False)).replace('.', '_')
         self._tmp_vect_file = 'tmp_vect_' + suffix
         self._tmp_rast_file = 'tmp_rast_' + suffix
+        self._threads = []
+        self._run_done = False
+        self._timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._checkThreads, self._timer)
 
     def set_root_URL(self, url):
         self._root = url
@@ -42,10 +49,15 @@ class PoPSDashboard:
         self._run = params
 
     def set_management(self, polygons, cost, area):
-        geojson = self._vector_to_proj_geojson(polygons, 'treatment')
-        self._run['management_polygons'] = geojson
-        self._run['management_cost'] = cost
-        self._run['management_area'] = area
+        if gscript.vector_info_topo(polygons)['areas']:
+            geojson = self._vector_to_proj_geojson(polygons, 'treatment')
+            self._run['management_polygons'] = geojson
+            self._run['management_cost'] = cost
+            self._run['management_area'] = area
+        else:
+            self._run['management_polygons'] = None
+            self._run['management_cost'] = 0
+            self._run['management_area'] = 0
 
     def _compare_runs(self, run1, run2):
         same = True
@@ -82,14 +94,16 @@ class PoPSDashboard:
         self._run_id = self._get_run_id()
         if not self._run_id:
             return None
-        run = self._get_run(self._run_id)
-        if not run:
-            self._create_new = True
-            return
-        if self._compare_runs(run, self._run):
-            self._create_new = True
-        else:
-            self._create_new = False
+
+        if False:
+            run = self._get_run(self._run_id)
+            if not run:
+                self._create_new = True
+                return
+            if self._compare_runs(run, self._run):
+                self._create_new = True
+            else:
+                self._create_new = False
         self._run = self._get_run(self._run_id)
         return self._run
 
@@ -112,6 +126,7 @@ class PoPSDashboard:
             return None
 
     def update_run(self):
+        self._run_done = False
         try:
             if self._create_new:
                 name = self._run['name']
@@ -142,8 +157,16 @@ class PoPSDashboard:
         results = process_for_dashboard(self._run_id, year, self._tmp_rast_file)
         t = threading.Thread(target=raster_to_proj_geojson_thread, args=(self._tmp_rast_file, self._env, results, self._root))
         t.start()
+        self._threads.append(t)
+        time.sleep(0.5)
+        if not self._timer.IsRunning():
+            self._timer.Start(500)
+
 
     def run_done(self, success=True):
+        self._run_done = True
+
+    def _report_status(self, success=True):
         self._run['status'] = 'SUCCESS' if success else 'FAILURE'
         try:
             res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
@@ -169,6 +192,16 @@ class PoPSDashboard:
             j = f.read()
         return j
 
+    def _checkThreads(self, event):
+        if self._run_done:
+            for t in self._threads:
+                if t.isAlive():
+                    return
+            self._threads = []
+            self._report_status()
+            self._run_done = False
+            self._timer.Stop()
+
     def _get_gisrc_environment(self):
         """Creates environment to be passed in run_command for example.
         Returns tuple with temporary file path and the environment. The user
@@ -190,6 +223,8 @@ class PoPSDashboard:
         os.remove(self._tmpgisrc)
         gscript.run_command('g.remove', type='vector', name=self._tmp_vect_file, flags='f', quiet=True)
         gscript.run_command('g.remove', type='raster', name=self._tmp_rast_file, flags='f', quiet=True)
+        if self._timer.IsRunning():
+            self._timer.Stop()
 
 
 def raster_to_proj_geojson_thread(raster, gisrcenv, results, root):

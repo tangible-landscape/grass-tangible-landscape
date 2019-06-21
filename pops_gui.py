@@ -174,7 +174,7 @@ class PopsPanel(wx.Panel):
     def _connectDashboard(self):
         self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard']['url'])
         self.webDashboard.set_session_id(self.configuration['POPS']['dashboard']['session'])
-        self.webDashboard.get_run_params()
+        self.params_from_dashboard = self.webDashboard.get_run_params()
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -224,7 +224,7 @@ class PopsPanel(wx.Panel):
 
         if self.showDisplayChange:
             cumulativeArea = sum(self.treatmentHistory[:self.currentRealityCheckpoint]) + event.area
-            cost = self._get_model_param('cost_per_meter_squared')
+            cost = float(self._get_model_param('cost_per_meter_squared'))
             unit = self.configuration['POPS'].get('unit', 'acre')
             if unit == 'acre':
                 coef = 4046.86
@@ -234,8 +234,12 @@ class PopsPanel(wx.Panel):
                 coef = 1000000.
             else:
                 coef = 1.
-            self.dashboardFrame.show_value([event.area / coef, cumulativeArea / coef,
-                                            (event.area / coef) * cost, (cumulativeArea / coef) * cost])
+            money_coef = 1e6
+            if self.steeringClient.is_steering():
+                self.dashboardFrame.show_value([event.area / coef, cumulativeArea / coef,
+                                               (event.area / coef) * cost / money_coef, (cumulativeArea / coef) * cost / money_coef])
+            else:
+                self.dashboardFrame.show_value([event.area / coef, (event.area / coef) * cost / money_coef])
 
     def OnTimeDisplayUpdate(self, event):
         if self.timeDisplay:
@@ -370,6 +374,8 @@ class PopsPanel(wx.Panel):
         if self.visualizationModes[self.visualizationMode] == 'singlerun':
             return False
         if self.visualizationModes[self.visualizationMode] == 'probability':
+            if self.currentCheckpoint == 0:
+                return False
             return True
         if self.visualizationModes[self.visualizationMode] == 'combined':
             if self.currentCheckpoint + (1 if evalFuture else 0) > self.currentRealityCheckpoint:
@@ -380,6 +386,7 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
         self.currentCheckpoint = 0
         self.currentRealityCheckpoint = 0
+        self.treatmentHistory = [0] * 50
         if self.timeDisplay:
             self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
         if self.timeStatusDisplay:
@@ -427,7 +434,7 @@ class PopsPanel(wx.Panel):
         name = self._createPlayerName()
         name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt])
         cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'width=2',
-               'label_color=black', 'label_size=12', 'xref=center', 'yref=bottom', 'font=n019044l']
+               'label_color=white', 'label_size=12', 'xref=center', 'yref=bottom', 'font=n019044l']
 
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
@@ -801,7 +808,7 @@ class PopsPanel(wx.Panel):
         windows.append(wx.GetTopLevelParent(self))
         windows.append(self.giface.lmgr)
         bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
-                    'stepforward': self.StepForward, 'stepback': self.StepBack}
+                    'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation}
         if "keyboard_events" in self.configuration:
             items = []
             for eventName in self.configuration['keyboard_events']:
@@ -1134,6 +1141,7 @@ class TimeDisplay(wx.Frame):
 class TimeStatusDisplay(wx.Frame):
     def __init__(self, parent, fontsize, start, end, beginning_of_year):
         wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
+        panel = wx.Panel(self)
         self.years = range(start, end + 1)
         self.beginning_of_year = beginning_of_year
         s = int(fontsize / 2.)
@@ -1141,16 +1149,18 @@ class TimeStatusDisplay(wx.Frame):
             year = str(self.years[0])
         else:
             year = str(self.years[0] - 1)
-        self.yearCtrl = wx.StaticText(self, -1, year, style=wx.ALIGN_CENTRE_HORIZONTAL)
+        self.yearCtrl = wx.StaticText(panel, -1, year, style=wx.ALIGN_CENTRE_HORIZONTAL)
         self.yearCtrl.SetFont(wx.Font(fontsize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        self.typeCtrl = wx.StaticText(self, -1, "forecast", style=wx.ALIGN_CENTRE_HORIZONTAL)
+        self.typeCtrl = wx.StaticText(panel, -1, "forecast", style=wx.ALIGN_CENTRE_HORIZONTAL)
         self.typeCtrl.SetFont(wx.Font(s, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        self.typeCtrl.SetBackgroundColour(wx.Colour(220, 220, 220))
+        panel.SetBackgroundColour(wx.Colour(25, 25, 26))
+        self.yearCtrl.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.typeCtrl.SetForegroundColour(wx.Colour(255, 255, 255))
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.sizer.Add(self.yearCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
-        self.sizer.Add(self.typeCtrl, 0, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND)
-        self.SetSizer(self.sizer)
-        self.sizer.Fit(self)
+        self.sizer.Add(self.typeCtrl, 0, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+        panel.SetSizer(self.sizer)
+        self.sizer.Fit(panel)
 
     def Update(self, year, dtype):
         if self.beginning_of_year:
