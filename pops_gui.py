@@ -234,12 +234,12 @@ class PopsPanel(wx.Panel):
                 coef = 1000000.
             else:
                 coef = 1.
-            money_coef = 1e6
+            money_coef = self.configuration['POPS'].get('cost_unit', 1)
             if self.steeringClient.is_steering():
                 self.dashboardFrame.show_value([event.area / coef, cumulativeArea / coef,
-                                               (event.area / coef) * cost / money_coef, (cumulativeArea / coef) * cost / money_coef])
+                                               event.area * cost / money_coef, cumulativeArea * cost / money_coef])
             else:
-                self.dashboardFrame.show_value([event.area / coef, (event.area / coef) * cost / money_coef])
+                self.dashboardFrame.show_value([event.area / coef, event.area * cost / money_coef])
 
     def OnTimeDisplayUpdate(self, event):
         if self.timeDisplay:
@@ -298,7 +298,9 @@ class PopsPanel(wx.Panel):
         self._renameAllAfterSimulation(name)
         evt = updateInfoBar(dismiss=True, message=None)
         wx.PostEvent(self, evt)
-        self.webDashboard.run_done()
+        res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', name)
+        if res:
+            self.webDashboard.run_done(last_name_suffix=res.group())
 
     def _uploadStepToDashboard(self, event):
         if not 'probability' in event.name:
@@ -308,7 +310,9 @@ class PopsPanel(wx.Panel):
         if res:
             date = res.group()
             year = int(date.split('_')[0])
-            print self.webDashboard.upload_results(year, event.name)
+            # assumes infected is already ready
+            infected = event.name.strip(self.configuration['POPS']['model']['probability_series'] + '__')
+            print self.webDashboard.upload_results(year, event.name, infected)
 
     def _renameAllAfterSimulation(self, name):
         name_split = name.split('__')
@@ -426,7 +430,7 @@ class PopsPanel(wx.Panel):
             except CalledModuleError:
                 pass
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-            self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=False)
+            self._changeResultsLayer(cmd=cmd, name=name, opacity=0.7, resultType='results', useEvent=False)
 
     def ShowTreatment(self):
         event = self.getEventName()
@@ -556,8 +560,7 @@ class PopsPanel(wx.Panel):
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
                 gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
         else:
-            gscript.run_command('r.null', map=tr_name, null=0, env=env)
-            gscript.mapcalc("{tr_new} = float({tr}) * {eff} / 100".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
+            gscript.mapcalc("{tr_new} = if(isnull({tr}), 0, float({tr}) * {eff} / 100)".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
             gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
 
         self.currentRealityCheckpoint = self.currentCheckpoint + 1
@@ -673,7 +676,7 @@ class PopsPanel(wx.Panel):
                                                 currentView=self.currentCheckpoint,
                                                 vtype=self.visualizationModes[self.visualizationMode])
                         self.scaniface.postEvent(self, evt)
-                        self._changeResultsLayer(cmd=cmd, name=name, resultType='results', useEvent=True)
+                        self._changeResultsLayer(cmd=cmd, name=name, opacity=0.7, resultType='results', useEvent=True)
                         if self._one_step:
                             self._one_step = False
 
@@ -811,9 +814,10 @@ class PopsPanel(wx.Panel):
                     'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation}
         if "keyboard_events" in self.configuration:
             items = []
-            for eventName in self.configuration['keyboard_events']:
+            for key in self.configuration['keyboard_events']:
+                eventName = self.configuration['keyboard_events'][key]
                 eventId = wx.NewId()
-                items.append((wx.ACCEL_NORMAL, self.configuration['keyboard_events'][eventName], eventId))
+                items.append((wx.ACCEL_NORMAL, int(key), eventId))
                 for win in windows:
                     win.Bind(wx.EVT_MENU, bindings.get(eventName, lambda evt: self.CustomAction(eventName)), id=eventId)
             accel_tbl = wx.AcceleratorTable(items)
@@ -949,7 +953,7 @@ class PopsPanel(wx.Panel):
         self.giface.GetMapWindow().Map.GetRegion(regionName=region, update=True)
         self.giface.GetMapWindow().UpdateMap()
 
-    def _changeResultsLayer(self, cmd, name, resultType, useEvent):
+    def _changeResultsLayer(self, cmd, name, resultType, useEvent, opacity=1):
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'ChangeLayer'):
             print "Changing layer in Layer Manager requires GRASS GIS version > 7.8"

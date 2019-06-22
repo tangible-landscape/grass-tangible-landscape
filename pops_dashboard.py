@@ -10,11 +10,13 @@ import requests
 import tempfile
 import threading
 import wx
-import time
+import re
 
 import grass.script as gscript
 
 from tangible_utils import get_environment
+
+threadDone, EVT_THREAD_DONE = wx.lib.newevent.NewEvent()
 
 
 class PoPSDashboard(wx.EvtHandler):
@@ -34,10 +36,8 @@ class PoPSDashboard(wx.EvtHandler):
         suffix = os.path.basename(gscript.tempfile(False)).replace('.', '_')
         self._tmp_vect_file = 'tmp_vect_' + suffix
         self._tmp_rast_file = 'tmp_rast_' + suffix
-        self._threads = []
-        self._run_done = False
-        self._timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self._checkThreads, self._timer)
+        self._last_name_suffix = None
+        self.Bind(EVT_THREAD_DONE, self._on_thread_done)
 
     def set_root_URL(self, url):
         self._root = url
@@ -126,7 +126,6 @@ class PoPSDashboard(wx.EvtHandler):
             return None
 
     def update_run(self):
-        self._run_done = False
         try:
             if self._create_new:
                 name = self._run['name']
@@ -150,23 +149,22 @@ class PoPSDashboard(wx.EvtHandler):
         except requests.exceptions.HTTPError:
             return None
 
-    def upload_results(self, year, raster):
-        env = get_environment(raster=raster)
+    def upload_results(self, year, probability, infected):
+        env = get_environment(raster=probability)
         gscript.mapcalc("{n} = if({r} == 0, null(), {r})".format(n=self._tmp_rast_file,
-                        r=raster), env=env)
+                        r=infected), env=env)
         results = process_for_dashboard(self._run_id, year, self._tmp_rast_file)
-        t = threading.Thread(target=raster_to_proj_geojson_thread, args=(self._tmp_rast_file, self._env, results, self._root))
+        gscript.mapcalc("{n} = if({r} == 0, null(), {r})".format(n=self._tmp_rast_file,
+                        r=probability), env=env)
+
+        t = threading.Thread(target=raster_to_proj_geojson_thread, args=(self, self._tmp_rast_file, self._env, results, self._root, probability))
         t.start()
-        self._threads.append(t)
-        time.sleep(0.5)
-        if not self._timer.IsRunning():
-            self._timer.Start(500)
 
-
-    def run_done(self, success=True):
-        self._run_done = True
+    def run_done(self, last_name_suffix):
+        self._last_name_suffix = last_name_suffix
 
     def _report_status(self, success=True):
+        print "report_status_done"
         self._run['status'] = 'SUCCESS' if success else 'FAILURE'
         try:
             res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
@@ -192,15 +190,12 @@ class PoPSDashboard(wx.EvtHandler):
             j = f.read()
         return j
 
-    def _checkThreads(self, event):
-        if self._run_done:
-            for t in self._threads:
-                if t.isAlive():
-                    return
-            self._threads = []
+    def _on_thread_done(self, event):
+        print "on_thread_done"
+        res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', event.orig_name)
+        if res and res.group() == self._last_name_suffix:
             self._report_status()
-            self._run_done = False
-            self._timer.Stop()
+            self._last_name_suffix = None
 
     def _get_gisrc_environment(self):
         """Creates environment to be passed in run_command for example.
@@ -223,11 +218,9 @@ class PoPSDashboard(wx.EvtHandler):
         os.remove(self._tmpgisrc)
         gscript.run_command('g.remove', type='vector', name=self._tmp_vect_file, flags='f', quiet=True)
         gscript.run_command('g.remove', type='raster', name=self._tmp_rast_file, flags='f', quiet=True)
-        if self._timer.IsRunning():
-            self._timer.Stop()
 
 
-def raster_to_proj_geojson_thread(raster, gisrcenv, results, root):
+def raster_to_proj_geojson_thread(evtHandler, raster, gisrcenv, results, root, probability):
     tempdir = tempfile.mkdtemp()
     tmp_layer1 = os.path.basename(tempdir) + '1'
     tmp_layer2 = os.path.basename(tempdir) + '2'
@@ -257,6 +250,8 @@ def raster_to_proj_geojson_thread(raster, gisrcenv, results, root):
 
             out_id = res.json()['id']
             print 'out_id ' + str(out_id)
+            evt = threadDone(out_id=out_id, orig_name=probability)
+            wx.PostEvent(evtHandler, evt)
             return out_id
         except requests.exceptions.HTTPError, e:
             print e
@@ -264,6 +259,8 @@ def raster_to_proj_geojson_thread(raster, gisrcenv, results, root):
                 print res.json()
             except:
                 print 'no json'
+            evt = threadDone(out_id=None, orig_name=probability)
+            wx.PostEvent(evtHandler, evt)
             return None
 
 

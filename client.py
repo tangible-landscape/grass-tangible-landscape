@@ -198,7 +198,8 @@ class SteeringClient:
     def simulation_set_params(self, model_name, params, flags, region):
         message = "model_name=" + model_name
         message += "|region=" + region
-        message += "|flags=" + flags
+        if flags:
+            message += "|flags=" + flags
         for key in params:
             message += '|'
             message += '{k}={v}'.format(k=key, v=params[key])

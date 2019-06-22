@@ -23,10 +23,9 @@ def run_model(settings, steering):
         settings['port'] = port_computation
     region = settings.pop('region').split(',')
     env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
-    flags = settings.pop('flags')
     gscript.run_command('g.remove', flags='fe', type='raster', quiet=True,
                         pattern=settings['output_series'] + '_[0-9]{4}_[0-9]{2}_[0-9]{2}')
-    p = gscript.start_command(model, overwrite=True, flags=flags, env=env, **settings)
+    p = gscript.start_command(model, overwrite=True, env=env, **settings)
 
     return p
 
