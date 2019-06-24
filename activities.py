@@ -313,7 +313,7 @@ class ActivitiesPanel(wx.Panel):
         self.instructions.SetLabel(self._getInstructions())
         self.Layout()
 
-    def StartAutomated(self):
+    def StartAutomated(self, event):
         # Doesn't implement slides
         self._loadConfiguration(None)
         if 'calibrate' in self.tasks[self.current] and self.tasks[self.current]['calibrate']:
