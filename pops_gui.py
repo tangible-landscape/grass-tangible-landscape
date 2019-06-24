@@ -65,7 +65,8 @@ class PopsPanel(wx.Panel):
         self.showDisplayChange = True
         self.treatmentHistory = [0] * 50
 
-        self.webDashboard = PoPSDashboard()
+        self.webDashboard = None
+        self.params_from_dashboard = None
 
         # steering
         self.steeringClient = None
@@ -168,10 +169,12 @@ class PopsPanel(wx.Panel):
 
     def _connect(self):
         self._connectSteering()
-        self._connectDashboard()
+        if 'dashboard' in self.configuration['POPS'] and self.configuration['POPS']['dashboard']:
+            self._connectDashboard()
         self._bindButtons()
 
     def _connectDashboard(self):
+        self.webDashboard = PoPSDashboard()
         self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard']['url'])
         self.webDashboard.set_session_id(self.configuration['POPS']['dashboard']['session'])
         self.params_from_dashboard = self.webDashboard.get_run_params()
@@ -299,7 +302,7 @@ class PopsPanel(wx.Panel):
         evt = updateInfoBar(dismiss=True, message=None)
         wx.PostEvent(self, evt)
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', name)
-        if res:
+        if res and self.webDashboard:
             self.webDashboard.run_done(last_name_suffix=res.group())
 
     def _uploadStepToDashboard(self, event):
@@ -312,7 +315,8 @@ class PopsPanel(wx.Panel):
             year = int(date.split('_')[0])
             # assumes infected is already ready
             infected = event.name.strip(self.configuration['POPS']['model']['probability_series'] + '__')
-            print self.webDashboard.upload_results(year, event.name, infected)
+            if self.webDashboard:
+                print self.webDashboard.upload_results(year, event.name, infected)
 
     def _renameAllAfterSimulation(self, name):
         name_split = name.split('__')
@@ -320,6 +324,11 @@ class PopsPanel(wx.Panel):
             event, player, date = name.split('__')
         elif len(name_split) == 4:  # probability
             prob, event, player, date = name.split('__')
+        else:
+            print 'error renameaftersimulation'
+            print name
+            player = 'player'
+            event = 'tmpevent'
         a1, a2 = self.attempt.getCurrent()
         pattern = "{e}__{n}__[0-9]{{4}}_[0-9]{{2}}_[0-9]{{2}}".format(n=player, e=event)
         pattern_layers = gscript.list_grouped(type='raster', pattern=pattern, flag='e')[gscript.gisenv()['MAPSET']]
@@ -358,19 +367,22 @@ class PopsPanel(wx.Panel):
         self.ShowResults()
 
     def _createPlayerName(self):
-        try:
+        if self.webDashboard:
             name = self.webDashboard.get_run_name()
-            if not name:
-                name = 'run'
-            name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_')
-        except:
-            return 'run'
-        return name
+            if name:
+                name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_')
+                return name
+            else:
+                return 'run'
+        return 'run'
 
     def getEventName(self):
-        name = self.webDashboard.get_session_name()
-        if name:
-            return name
+        if self.webDashboard:
+            name = self.webDashboard.get_session_name()
+            if name:
+                return name
+            else:
+                return 'tmpevent'
         else:
             return 'tmpevent'
 
@@ -395,6 +407,7 @@ class PopsPanel(wx.Panel):
             self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
         if self.timeStatusDisplay:
             self.timeStatusDisplay.Update(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "infected")
+        event.Skip()
         
     def ShowResults(self):
         # change layers
@@ -438,7 +451,7 @@ class PopsPanel(wx.Panel):
         name = self._createPlayerName()
         name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt])
         cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'width=2',
-               'label_color=white', 'label_size=12', 'xref=center', 'yref=bottom', 'font=n019044l']
+               'label_color=white', 'label_size=22', 'xref=center', 'yref=bottom', 'font=n019044l']
 
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
@@ -490,7 +503,8 @@ class PopsPanel(wx.Panel):
         model_params['random_seed'] = self._get_model_param('random_seed')
         model_params['temperature_coefficient_file'] = os.path.join(self.workdir, self._get_model_param('temperature_coefficient_file'))
         model_params['moisture_coefficient_file'] = os.path.join(self.workdir, self._get_model_param('moisture_coefficient_file'))
-        model_params['temperature_file'] = os.path.join(self.workdir, self._get_model_param('temperature_file'))
+        if 'temperature_file' in self.configuration['POPS']['model']:
+            model_params['temperature_file'] = os.path.join(self.workdir, self._get_model_param('temperature_file'))
         #model_params['end_time'] = self.params_from_dashboard['final_year']
 
         # run simulation
@@ -498,7 +512,8 @@ class PopsPanel(wx.Panel):
         self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
-        self.params_from_dashboard = self.webDashboard.get_run_params()
+        if self.webDashboard:
+            self.params_from_dashboard = self.webDashboard.get_run_params()
 
         if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
@@ -545,8 +560,9 @@ class PopsPanel(wx.Panel):
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
 
-        self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent, area=self.treated_area)
-        self.webDashboard.update_run()
+        if self.webDashboard:
+            self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent, area=self.treated_area)
+            self.webDashboard.update_run()
 
         # compute proportion - disable for now
         resampling_treatments = False
@@ -1061,7 +1077,9 @@ class PopsPanel(wx.Panel):
         self.timeStatusDisplay = TimeStatusDisplay(self, start=self.configuration['POPS']['model']['start_time'],
                                        end=self.configuration['POPS']['model']['end_time'] + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_status_display']['fontsize'],
-                                       beginning_of_year=self.configuration['tasks'][self.current]['time_status_display']['beginning_of_year'])
+                                       beginning_of_year=self.configuration['tasks'][self.current]['time_status_display']['beginning_of_year'],
+                                       fgcolor=self.configuration['tasks'][self.current]['time_status_display'].get('fgcolor', None),
+                                       bgcolor=self.configuration['tasks'][self.current]['time_status_display'].get('bgcolor', None))
 
         pos = self._getDashboardPosition(key='time_status_display')
         size = self._getDashboardSize(key='time_status_display')
@@ -1112,6 +1130,40 @@ class TimeDisplay(wx.Frame):
         delim_prob = '&#9776;'
         delim_split = '&#9887;'
         html = ''
+        style = {'past': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
+                 'current':  'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
+                 'future': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
+        for year in self.years:
+            if year < current:
+                styl = style['past']
+            elif year == current:
+                styl = style['current']
+            else:
+                styl = style['future']
+            html += ' <font {style}>{year}</font> '.format(year=year, style=styl)
+            if year != self.years[-1]:
+                d = delim_single
+                if vtype == 'probability':
+                    if year == self.years[0]:
+                        d = delim_split
+                    else:
+                        d = delim_prob
+                elif vtype == 'combined':
+                    # TODO fix None
+                    if year == current:
+                        d = delim_split
+                    elif year > current:
+                        d = delim_prob
+                # for now, keep simple until I figure it out
+                #d = delim_single
+                html += '<font {style}> {d} </font>'.format(style=style['future'], d=d)
+        return html
+
+    def GenerateHTML2(self, current, currentView, vtype):
+        delim_single = '&#9148;'
+        delim_prob = '&#9776;'
+        delim_split = '&#9887;'
+        html = ''
         style = {'lastTreatment': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
                  'currentView':  'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
                  'default': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
@@ -1143,7 +1195,7 @@ class TimeDisplay(wx.Frame):
 
 
 class TimeStatusDisplay(wx.Frame):
-    def __init__(self, parent, fontsize, start, end, beginning_of_year):
+    def __init__(self, parent, fontsize, start, end, beginning_of_year, bgcolor=None, fgcolor=None):
         wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
         panel = wx.Panel(self)
         self.years = range(start, end + 1)
@@ -1157,9 +1209,11 @@ class TimeStatusDisplay(wx.Frame):
         self.yearCtrl.SetFont(wx.Font(fontsize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
         self.typeCtrl = wx.StaticText(panel, -1, "forecast", style=wx.ALIGN_CENTRE_HORIZONTAL)
         self.typeCtrl.SetFont(wx.Font(s, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        panel.SetBackgroundColour(wx.Colour(25, 25, 26))
-        self.yearCtrl.SetForegroundColour(wx.Colour(255, 255, 255))
-        self.typeCtrl.SetForegroundColour(wx.Colour(255, 255, 255))
+        if bgcolor:
+            panel.SetBackgroundColour(wx.Colour(*bgcolor))
+        if fgcolor:
+            self.yearCtrl.SetForegroundColour(wx.Colour(*fgcolor))
+            self.typeCtrl.SetForegroundColour(wx.Colour(*fgcolor))
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.sizer.Add(self.yearCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
         self.sizer.Add(self.typeCtrl, 0, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
