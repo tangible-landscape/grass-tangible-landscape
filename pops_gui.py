@@ -978,10 +978,10 @@ class PopsPanel(wx.Panel):
         pl_layer = ll.GetLayersByName(self.placeholders[resultType])[0]
 
         if useEvent:
-            evt = changeLayer(layer=pl_layer, cmd=cmd)
+            evt = changeLayer(layer=pl_layer, cmd=cmd, opacity=opacity)
             self.scaniface.postEvent(self.scaniface, evt)
         else:
-            ll.ChangeLayer(pl_layer, cmd=cmd)
+            ll.ChangeLayer(pl_layer, cmd=cmd, opacity=opacity)
         self.placeholders[resultType] = name
 
     def HideResultsLayers(self, useEvent=False):
