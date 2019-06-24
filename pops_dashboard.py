@@ -13,6 +13,7 @@ import wx
 import re
 
 import grass.script as gscript
+from grass.exceptions import CalledModuleError
 
 from tangible_utils import get_environment
 
@@ -28,7 +29,12 @@ class PoPSDashboard(wx.EvtHandler):
         self._session_id = None
         self._create_new = False
         self._temp_location = 'temp_export_location_' + str(os.getpid())
-        gscript.run_command('g.proj', epsg=4326, location=self._temp_location, quiet=True)
+        try:
+            gscript.run_command('g.proj', epsg=4326, location=self._temp_location, quiet=True)
+        except CalledModuleError:
+            # assume it's because it is already there
+            pass
+
         gisrc, env = self._get_gisrc_environment()
         self._tmpgisrc = gisrc
         self._env = env
