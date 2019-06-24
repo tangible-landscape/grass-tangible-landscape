@@ -95,15 +95,14 @@ class PoPSDashboard(wx.EvtHandler):
         if not self._run_id:
             return None
 
-        if False:
-            run = self._get_run(self._run_id)
-            if not run:
-                self._create_new = True
-                return
-            if self._compare_runs(run, self._run):
-                self._create_new = True
-            else:
-                self._create_new = False
+        run = self._get_run(self._run_id)
+        if not run:
+            self._create_new = True
+            return
+        if self._compare_runs(run, self._run):
+            self._create_new = True
+        else:
+            self._create_new = False
         self._run = self._get_run(self._run_id)
         return self._run
 
@@ -128,18 +127,18 @@ class PoPSDashboard(wx.EvtHandler):
     def update_run(self):
         try:
             if self._create_new:
-                name = self._run['name']
-                namesp = name.split('-')
-                if len(namesp) > 1:
-                    try:
-                        order = int(namesp[-1])
-                        namesp[:-1].append(order +  1)
-                        name = '-'.join(namesp)
-                    except ValueError:
-                        name += '-1'
-                else:
-                    name += '-1'
-                self._run['name'] = name
+#                name = self._run['name']
+#                namesp = name.split('-')
+#                if len(namesp) > 1:
+#                    try:
+#                        order = int(namesp[-1])
+#                        namesp[:-1].append(order +  1)
+#                        name = '-'.join(namesp)
+#                    except ValueError:
+#                        name += '-1'
+#                else:
+#                    name += '-1'
+#                self._run['name'] = name
                 res = requests.post(self._root + 'run/', data=self._run)
             else:
                 res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
