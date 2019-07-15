@@ -233,11 +233,21 @@ def run_freeplay(scanned_elev, eventHandler, env, **kwargs):
 Specifies whether dashboard widget should be displayed:
 ```json
 "display": {"multiple": true, "average": 2, "size": [600, 180], "position": [2800, 900],
-            "fontsize": 12, "maximum": [100, 20, 6, 60, 2.5, 8],
-            "formatting_string": ["{:.0f} %", "{:g}", "{:g}","{:.1f}","{:.2f}","{:.1f}"],
-            "title": ["Remediated", "Patch #", "Richness", "Mean size", "Shannon", "Shape ind." ]}
+            "fontsize": 12, "maximum": [10, 100],
+            "formatting_string": ["{:.1f}", "{:.1f}"], "title": ["Min", "Max"]}
     },
 ```
+
+This is how the dashboard gets updated from a Python workflow file:
+
+ ```python
+ from activities import updateDisplay
+
+def run_freeplay(scanned_elev, eventHandler, env, **kwargs):
+     info = gscript.raster_info(scanned_elev)
+     event = updateDisplay(value=[info['min'], info['max']])
+     eventHandler.postEvent(receiver=eventHandler.activities_panel, event=event)
+ ```
 
 In both cases (profile and widget), size and position can be specified in absolute or relative coordinates. 
 
