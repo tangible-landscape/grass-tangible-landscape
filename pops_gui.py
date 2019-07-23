@@ -450,8 +450,12 @@ class PopsPanel(wx.Panel):
         attempt = str(self.attempt.getCurrent()[0])
         name = self._createPlayerName()
         name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt])
-        cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'width=2',
-               'label_color=white', 'label_size=22', 'xref=center', 'yref=bottom', 'font=n019044l']
+        style = {'fill_color': 'none', 'width': 2, 'label_color': 'white',
+                 'label_size': 22, 'font': 'n019044l'}
+        if 'treatments_vstyle' in self.configuration['POPS']:
+            style.update(self.configuration['POPS']['treatments_vstyle'])
+        style = [key + '=' + str(style[key]) for key in style]
+        cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'xref=center', 'yref=bottom'] + style
 
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
