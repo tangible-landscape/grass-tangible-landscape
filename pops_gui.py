@@ -565,17 +565,17 @@ class PopsPanel(wx.Panel):
             self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent, area=self.treated_area)
             self.webDashboard.update_run()
 
-        # compute proportion - disable for now
-        resampling_treatments = False
+        # compute proportion
+        resampling_treatments = True
         if resampling_treatments:
             if gscript.raster_info(tr_name)['ewres'] < gscript.raster_info(host)['ewres']:
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='count', env=env)
                 maxvalue = gscript.raster_info(treatments_resampled)['max']
-                gscript.mapcalc("{p} = if(isnull({t}), 0, {t} / {m})".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue), env=env)
-                gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', treatments_resampled], env=env)
+                gscript.mapcalc("{p} = if(isnull({t}), 0, ({t} / {m}) * ({eff} / 100)".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue), env=env)
             else:
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
-                gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
+                gscript.mapcalc("{p} = if(isnull({t}), 0, {t} * ({eff} / 100)".format(p=treatments_resampled + '_proportion', t=treatments_resampled), env=env)
+            gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', tr_name], env=env)
         else:
             gscript.mapcalc("{tr_new} = if(isnull({tr}), 0, float({tr}) * {eff} / 100)".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
             gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
