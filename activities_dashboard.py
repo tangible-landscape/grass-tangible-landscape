@@ -89,7 +89,7 @@ class MultipleDashboardFrame(wx.Frame):
 
     def show_value(self, values):
         if len(self.gauges) != len(values):
-            print 'wrong number of values!'
+            print('wrong number of values!')
             return
         for i in range(len(self.gauges)):
             if values[i] is None:

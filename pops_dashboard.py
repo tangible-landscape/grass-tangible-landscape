@@ -169,7 +169,7 @@ class PoPSDashboard(wx.EvtHandler):
         self._last_name_suffix = last_name_suffix
 
     def _report_status(self, success=True):
-        print "report_status_done"
+        print("report_status_done")
         self._run['status'] = 'SUCCESS' if success else 'FAILURE'
         try:
             res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
@@ -190,13 +190,13 @@ class PoPSDashboard(wx.EvtHandler):
         gscript.run_command('v.out.ogr', input=name, flags='sm', output=self._tmp_out_file,
                             format_='GeoJSON', lco="COORDINATE_PRECISION=4", quiet=True, overwrite=True,
                             env=self._env)
-        print self._tmp_out_file
+        print(self._tmp_out_file)
         with open(self._tmp_out_file) as f:
             j = f.read()
         return j
 
     def _on_thread_done(self, event):
-        print "on_thread_done"
+        print("on_thread_done")
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', event.orig_name)
         if res and res.group() == self._last_name_suffix:
             self._report_status()
@@ -254,16 +254,16 @@ def raster_to_proj_geojson_thread(evtHandler, raster, gisrcenv, results, root, p
             res.raise_for_status()
 
             out_id = res.json()['id']
-            print 'out_id ' + str(out_id)
+            print ('out_id ' + str(out_id))
             evt = threadDone(out_id=out_id, orig_name=probability)
             wx.PostEvent(evtHandler, evt)
             return out_id
-        except requests.exceptions.HTTPError, e:
-            print e
+        except requests.exceptions.HTTPError as e:
+            print (e)
             try:
-                print res.json()
+                print (res.json())
             except:
-                print 'no json'
+                print ('no json')
             evt = threadDone(out_id=None, orig_name=probability)
             wx.PostEvent(evtHandler, evt)
             return None
@@ -285,7 +285,7 @@ def main():
     dashboard.set_root_URL('https://popsmodel.org/api/')
     dashboard.set_session_id(15)
     run = dashboard.get_run_params()
-    print run['id']
+    print (run['id'])
 #    dashboard.set_run_params(params={"name": "testTLconn3", "reproductive_rate": 4,
 #                                     "distance_scale": 20, "cost_per_hectare": 1,
 #                                     "efficacy": 1, "session": 1})

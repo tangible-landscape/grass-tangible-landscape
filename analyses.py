@@ -184,7 +184,7 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
     except CalledModuleError as e:
         gcore.run_command('g.remove', flags='f', type='vector', name=[name], env=env)
         remove_vector(new, deleteTable=False)
-        print e
+        print(e)
 
 def change_detection_area(before, after, change, height_threshold, filter_slope_threshold, add, env):
     """Detects change in area. Result are areas with value
@@ -229,7 +229,7 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
         gcore.run_command('r.clump', input=diff_thr, output=diff_thr_clump, env=env)
         stats = gcore.read_command('r.stats', flags='cn', input=diff_thr_clump, sort='desc', env=env).strip().splitlines()
         if debug:
-            print 'DEBUG: {}'.format(stats)
+            print('DEBUG: {}'.format(stats))
         if len(stats) > 0 and stats[0]:
             cats = []
             found = 0
@@ -445,9 +445,9 @@ def classify_colors(new, group, compactness=2, threshold=0.3, minsize=10, useSup
         try:
             gcore.run_command('i.superpixels.slic', input=group, output=segment, compactness=compactness,
                               minsize=minsize, env=env)
-        except CalledModuleError, e:
-            print 'i.superpixels.slic failed'
-            print e
+        except CalledModuleError as e:
+            print ('i.superpixels.slic failed')
+            print (e)
     else:
         gcore.run_command('i.segment', group=group, output=segment, threshold=threshold, minsize=minsize, env=env)
         gcore.run_command('r.clump', input=segment, output=segment_clump, env=env)

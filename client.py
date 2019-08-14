@@ -83,7 +83,7 @@ class SteeringClient:
     def connect(self):
         try:
             self._socket.connect((self._url[0], int(self._url[1])))
-        except socket.error, exc:
+        except socket.error as exc:
             if self._log:
                 self._log.WriteError("Error connecting to steering server: {}".format(exc))
             self._socket = None
@@ -105,8 +105,8 @@ class SteeringClient:
             # then we receive empty response, see above
             if self._socket:
                 self._socket.shutdown(socket.SHUT_WR)
-        except socket.error, e:
-            print e
+        except socket.error as e:
+            print (e)
             pass
         # wait for ending the thread
         if self._client_thread and self._client_thread.isAlive():
@@ -140,7 +140,7 @@ class SteeringClient:
                     try:
                         self._socket.sendall(data)
                     except socket.error:
-                        print 'erroro sending file'
+                        print ('erroro sending file')
             elif message[0] == 'serverfile':
                 # receive file
                 fsize, path = int(message[1]), message[2]
@@ -166,8 +166,9 @@ class SteeringClient:
                 if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
                     results_queue.put(name)
                     self._debug('_step_done: ' + name)
-                    evt = ProcessForDashboardEvent(name=name)
-                    wx.PostEvent(self._eventHandler, evt)
+                    if self._eventHandler:
+                        evt = ProcessForDashboardEvent(name=name)
+                        wx.PostEvent(self._eventHandler, evt)
 
                 ##########
             elif message[0] == 'info':
@@ -175,8 +176,9 @@ class SteeringClient:
                     name = message[2]
                     if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
                         results_queue.put(name)
-                        evt = ProcessForDashboardEvent(name=name)
-                        wx.PostEvent(self._eventHandler, evt)
+                        if self._eventHandler:
+                            evt = ProcessForDashboardEvent(name=name)
+                            wx.PostEvent(self._eventHandler, evt)
                     self._socket.sendall('info:received')
                 elif message[1] == 'last':
                     if self._simulation_done:

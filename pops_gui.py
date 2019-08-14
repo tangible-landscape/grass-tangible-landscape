@@ -316,7 +316,7 @@ class PopsPanel(wx.Panel):
             # assumes infected is already ready
             infected = event.name.strip(self.configuration['POPS']['model']['probability_series'] + '__')
             if self.webDashboard:
-                print self.webDashboard.upload_results(year, event.name, infected)
+                print(self.webDashboard.upload_results(year, event.name, infected))
 
     def _renameAllAfterSimulation(self, name):
         name_split = name.split('__')
@@ -325,8 +325,6 @@ class PopsPanel(wx.Panel):
         elif len(name_split) == 4:  # probability
             prob, event, player, date = name.split('__')
         else:
-            print 'error renameaftersimulation'
-            print name
             player = 'player'
             event = 'tmpevent'
         a1, a2 = self.attempt.getCurrent()
@@ -460,7 +458,7 @@ class PopsPanel(wx.Panel):
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
     def _RunSimulation(self, event=None):
-        print '_runSimulation'
+        print('_runSimulation')
         if self.switchCurrentResult == 0:
             # it's allowed to interact now
             # just to be sure remove results
@@ -534,7 +532,6 @@ class PopsPanel(wx.Panel):
         self.infoBar.ShowMessage("Running...")
         playerName = self._createPlayerName()
         new_attempt = self.attempt.getCurrent()
-        print new_attempt
 
         # grab a new raster of conditions
         # process new input layer
@@ -976,7 +973,7 @@ class PopsPanel(wx.Panel):
     def _changeResultsLayer(self, cmd, name, resultType, useEvent, opacity=1):
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'ChangeLayer'):
-            print "Changing layer in Layer Manager requires GRASS GIS version > 7.8"
+            print("Changing layer in Layer Manager requires GRASS GIS version > 7.8")
             return
         # TODO: check there is exactly one layer
         pl_layer = ll.GetLayersByName(self.placeholders[resultType])[0]
