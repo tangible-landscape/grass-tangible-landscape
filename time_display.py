@@ -9,6 +9,7 @@ This program is free software under the GNU General Public License
 """
 import wx
 import wx.html as wxhtml
+import wx.html2 as webview
 
 
 template = """
@@ -18,7 +19,7 @@ template = """
     <meta charset="utf-8">
     <title>Steering</title>
   </head>
-  <body bgcolor="#F2F1F0" >
+  <body bgcolor="#F2F1F0"  style="font-size:{fontsize}px;">
     <div><center>
     {body}
     </center></div>
@@ -35,8 +36,8 @@ class SteeringDisplay(wx.Panel):
         self.textCtrl = wxhtml.HtmlWindow(self, style=wx.NO_FULL_REPAINT_ON_RESIZE |
                                           wxhtml.HW_SCROLLBAR_NEVER |
                                           wxhtml.HW_NO_SELECTION)
-        self.textCtrl.SetStandardFonts(fontsize)
-        self.textCtrl.SetPage(template.format(body="", fontsize=self.fontsize))
+        self.textCtrl = webview.WebView.New(self)
+        self.textCtrl.SetPage(template.format(body="", fontsize=self.fontsize), '')
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
         self.SetSizer(self.sizer)
@@ -45,15 +46,17 @@ class SteeringDisplay(wx.Panel):
     def Update(self, current, currentView, vtype=None):
         text = self.GenerateHTMLSimple(current + self.years[0], currentView + self.years[0], vtype=vtype)
         html = template.format(body=text, fontsize=self.fontsize)
-        self.textCtrl.SetPage(html)
+        self.textCtrl.SetPage(html, '')
 
     def GenerateHTMLSimple(self, current, currentView, vtype):
         delimiter = '&#8594;'
         html = ''
-        style = {'past': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
-                 'current':  'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
-                 'future': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
+        highlight_style = "border-radius: 0.2em;border:0.1em solid #ccc;background-color:#ccc;"
+        style = {'past': 'weight="bold" color="black"'.format(self.fontsize),
+                 'current':  'weight="bold" color="black"'.format(int(self.fontsize * 1.5)),
+                 'future': 'weight="bold" color="gray"'.format(self.fontsize)}
         for year in self.years:
+            highlight = ''
             if year < current:
                 styl = style['past']
                 delim_styl = style['past']
@@ -63,8 +66,9 @@ class SteeringDisplay(wx.Panel):
             else:
                 styl = style['future']
                 delim_styl = style['future']
-
-            html += ' <font {style}>{year}</font> '.format(year=year, style=styl)
+            if year == currentView:
+                highlight = highlight_style
+            html += ' <span style=\"{h}\"><font {style}>{year}</font></span> '.format(h=highlight, year=year, style=styl)
             if year != self.years[-1]:
                 d = delimiter
                 html += '<font {style}> {d} </font>'.format(style=delim_styl, d=d)
@@ -187,7 +191,7 @@ class SimpleTimeDisplayFrame(wx.Frame):
 
 if __name__ == "__main__":
     app = wx.App()
-    disp = SteeringDisplayFrame(None, 10, 2016, 2021, None, True)
+    disp = SteeringDisplayFrame(None, 40, 2016, 2021, None, True)
     disp.SetSize((800, 200))
     disp.Show()
     app.MainLoop()
