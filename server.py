@@ -86,9 +86,9 @@ def clientInterface(conn, connections, event, steering):
                         sod_process = run_model(params, False)
                         start_new_thread(check_output, (connections['interface'], params['output_series'], sod_process, event))
             elif message[1] == 'end':
-                print "server: get stop from GUI"
+                print ("server: get stop from GUI")
                 if 'computation' in connections:
-                    print "server: send stop from GUI to SOD"
+                    print ("server: send stop from GUI to SOD")
                     connections['computation'].sendall('cmd:stop;')
                     sod_process.wait()
                     sod_process = None
@@ -96,9 +96,9 @@ def clientInterface(conn, connections, event, steering):
                     connections['computation'].close()
                     del connections['computation']
             elif message[1] == 'restart':
-                print "server: get restart from GUI"
+                print ("server: get restart from GUI")
                 if 'computation' in connections:
-                    print "server: send stop from GUI to SOD"
+                    print ("server: send stop from GUI to SOD")
                     connections['computation'].sendall('cmd:stop;')
                     sod_process.wait()
                     sod_process = None
@@ -145,14 +145,14 @@ def clientInterface(conn, connections, event, steering):
                 if 'interface' in connections:
                     try:
                         if sod_process and sod_process.poll() is None:
-                            print 'sod_processes is running'
+                            print ('sod_processes is running')
                             connections['interface'].sendall('info:model_running:yes')
                         else:
-                            print 'sod_processes is not running'
+                            print ('sod_processes is not running')
                             connections['interface'].sendall('info:model_running:no')
-                            print 'sod_processes is not running after'
+                            print ('sod_processes is not running after')
                     except socket.error:
-                        print "timeout"
+                        print ("timeout")
                         break
 
         # client closed
@@ -247,7 +247,7 @@ if __name__ == '__main__':
         local_gdbase = int(sys.argv[2])
         port_computation = None
     else:
-        print 'Incorrect number of arguments, is {a1}, should be {a2}'.format(a1=len(sys.argv) - 1, a2=" 2 or 3")
+        print ('Incorrect number of arguments, is {a1}, should be {a2}'.format(a1=len(sys.argv) - 1, a2=" 2 or 3"))
         sys.exit(1)
 
     host = ''   # Symbolic name, meaning all available interfaces
@@ -262,13 +262,13 @@ if __name__ == '__main__':
         s_c.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     else:
         s_c = None
-    print 'Sockets created'
+    print ('Sockets created')
 
     # Bind socket to local host and port
     try:
         s.bind((host, port_interface))
     except socket.error as msg:
-        print 'Bind ' + str(port_interface) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+        print ('Bind ' + str(port_interface) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
         sys.exit(1)
 
     # Bind socket to local host and port
@@ -276,16 +276,16 @@ if __name__ == '__main__':
         try:
             s_c.bind((host, port_computation))
         except socket.error as msg:
-            print 'Bind ' + str(port_computation) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+            print ('Bind ' + str(port_computation) + ' failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
             sys.exit(1)
 
-    print 'Sockets bind complete'
+    print ('Sockets bind complete')
 
     # Start listening on socket
     s.listen(10)
     if s_c:
         s_c.listen(10)
-    print 'Socket now listening'
+    print ('Socket now listening')
     connections = {}
 
     event = Event()

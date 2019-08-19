@@ -26,7 +26,7 @@ def _removeShapefile(path, pattern):
 def blender_send_file(name, path, text=''):
     """Save file with given name to path, can contain text"""
     if not (path and os.path.exists(path)):
-        print 'Blender path does not exist:\n{p}'.format(p=path)
+        print('Blender path does not exist:\n{p}'.format(p=path))
         return
     with open(os.path.join(path, name), 'w') as f:
         f.write(text)
@@ -36,7 +36,7 @@ def blender_send_file(name, path, text=''):
 def blender_export_DEM(raster, path, name=None, tmp_path='/tmp', time_suffix=True, env=None):
     """Export raster DEM under  certain name to be used by Blender"""
     if not (path and os.path.exists(path)):
-        print 'Blender path does not exist:\n{p}'.format(p=path)
+        print('Blender path does not exist:\n{p}'.format(p=path))
         return
     local = True
     if 'server=' in path:
@@ -71,7 +71,7 @@ def blender_export_DEM(raster, path, name=None, tmp_path='/tmp', time_suffix=Tru
 def blender_export_vector(vector, path, vtype, name=None, z=False, tmp_path='/tmp', time_suffix=False, env=None):
     """Export Shapfile of any vector type (point, line, area)"""
     if not (path and os.path.exists(path)):
-        print 'Blender path does not exist:\n{p}'.format(p=path)
+        print('Blender path does not exist:\n{p}'.format(p=path))
         return
 
     local = True
@@ -107,8 +107,8 @@ def blender_export_vector(vector, path, vtype, name=None, z=False, tmp_path='/tm
             params['lco'] += 'Z'
         gscript.run_command('v.out.ogr', input=vector, output=out, env=env, format='ESRI_Shapefile',
                             **params)
-    except CalledModuleError, e:
-        print e
+    except CalledModuleError as e:
+        print(e)
 
     if not local:
         for each in glob.glob(os.path.join(tmp_path, '{name}{suffix}.*'.format(name=name, suffix=suffix))):
@@ -123,7 +123,7 @@ def blender_export_vector(vector, path, vtype, name=None, z=False, tmp_path='/tm
 def blender_export_PNG(raster, path, name=None, tmp_path='/tmp', time_suffix=True, env=None):
     """Export raster as PNG to be used by Blender, assumes 8bit"""
     if not (path and os.path.exists(path)):
-        print 'Blender path does not exist:\n{p}'.format(p=path)
+        print('Blender path does not exist:\n{p}'.format(p=path))
         return
     local = True
     if 'server=' in path:

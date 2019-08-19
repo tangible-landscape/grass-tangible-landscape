@@ -198,7 +198,7 @@ class ActivitiesPanel(wx.Panel):
             try:
                 exec('myanalyses.' + func + "(eventHandler=wx.GetTopLevelParent(self), env=env)")
             except (CalledModuleError, StandardError, ScriptError):
-                print traceback.print_exc()
+                print (traceback.print_exc())
 
     def OnNextTask(self, event):
         if self.timer.IsRunning():
@@ -552,7 +552,7 @@ class ActivitiesPanel(wx.Panel):
         try:
             postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
-            print e
+            print(e)
             return
 
         functions = [func for func in dir(postprocess) if func.startswith('post_')]
@@ -561,7 +561,7 @@ class ActivitiesPanel(wx.Panel):
         try:
             postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except StandardError as e:
-            print e
+            print(e)
             return
         functions = [func for func in dir(postprocess) if func.startswith('post_')]
         for func in functions:
@@ -586,7 +586,7 @@ class ActivitiesPanel(wx.Panel):
 
     def StartProfile(self):
         if not ProfileFrame:
-            print 'WARNING: DEM profile is not available, requires matplotlib library'
+            print ('WARNING: DEM profile is not available, requires matplotlib library')
             return
         self.profileFrame = ProfileFrame(self)
         pos = self._getDashboardPosition(key='profile')

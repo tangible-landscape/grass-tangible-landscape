@@ -104,7 +104,7 @@ class ColorInteractionPanel(wx.Panel):
             gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group, env=self.env)
         except CalledModuleError:
             gscript.run_command('i.group', group=self.group, subgroup=self.group,
-                                input=[self.group + '_' + ext for ext in 'r', 'g', 'b'], env=self.env)
+                                input=[self.group + '_' + ext for ext in ('r', 'g', 'b')], env=self.env)
         maps = gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group).strip()
         if maps:
             self.env = get_environment(raster=maps.splitlines()[0])

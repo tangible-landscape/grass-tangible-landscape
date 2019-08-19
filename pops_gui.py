@@ -317,7 +317,7 @@ class PopsPanel(wx.Panel):
             # assumes infected is already ready
             infected = event.name.strip(self.configuration['POPS']['model']['probability_series'] + '__')
             if self.webDashboard:
-                print self.webDashboard.upload_results(year, event.name, infected)
+                print(self.webDashboard.upload_results(year, event.name, infected))
 
     def _renameAllAfterSimulation(self, name):
         name_split = name.split('__')
@@ -326,8 +326,6 @@ class PopsPanel(wx.Panel):
         elif len(name_split) == 4:  # probability
             prob, event, player, date = name.split('__')
         else:
-            print 'error renameaftersimulation'
-            print name
             player = 'player'
             event = 'tmpevent'
         a1, a2 = self.attempt.getCurrent()
@@ -451,13 +449,17 @@ class PopsPanel(wx.Panel):
         attempt = str(self.attempt.getCurrent()[0])
         name = self._createPlayerName()
         name = '__'.join([self.configuration['POPS']['treatments'], event, name, attempt])
-        cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'fill_color=none', 'width=2',
-               'label_color=white', 'label_size=22', 'xref=center', 'yref=bottom', 'font=n019044l']
+        style = {'fill_color': 'none', 'width': 2, 'label_color': 'white',
+                 'label_size': 22, 'font': 'n019044l'}
+        if 'treatments_vstyle' in self.configuration['POPS']:
+            style.update(self.configuration['POPS']['treatments_vstyle'])
+        style = [key + '=' + str(style[key]) for key in style]
+        cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'xref=center', 'yref=bottom'] + style
 
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
 
     def _RunSimulation(self, event=None):
-        print '_runSimulation'
+        print('_runSimulation')
         if self.switchCurrentResult == 0:
             # it's allowed to interact now
             # just to be sure remove results
@@ -531,7 +533,6 @@ class PopsPanel(wx.Panel):
         self.infoBar.ShowMessage("Running...")
         playerName = self._createPlayerName()
         new_attempt = self.attempt.getCurrent()
-        print new_attempt
 
         # grab a new raster of conditions
         # process new input layer
@@ -565,17 +566,17 @@ class PopsPanel(wx.Panel):
             self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent, area=self.treated_area)
             self.webDashboard.update_run()
 
-        # compute proportion - disable for now
-        resampling_treatments = False
+        # compute proportion
+        resampling_treatments = True
         if resampling_treatments:
             if gscript.raster_info(tr_name)['ewres'] < gscript.raster_info(host)['ewres']:
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='count', env=env)
                 maxvalue = gscript.raster_info(treatments_resampled)['max']
-                gscript.mapcalc("{p} = if(isnull({t}), 0, {t} / {m})".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue), env=env)
-                gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', treatments_resampled], env=env)
+                gscript.mapcalc("{p} = if(isnull({t}), 0, ({t} / {m}) * ({eff} / 100)".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue), env=env)
             else:
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
-                gscript.run_command('r.null', map=treatments_resampled, null=0, env=env)
+                gscript.mapcalc("{p} = if(isnull({t}), 0, {t} * ({eff} / 100)".format(p=treatments_resampled + '_proportion', t=treatments_resampled), env=env)
+            gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', tr_name], env=env)
         else:
             gscript.mapcalc("{tr_new} = if(isnull({tr}), 0, float({tr}) * {eff} / 100)".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
             gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
@@ -973,7 +974,7 @@ class PopsPanel(wx.Panel):
     def _changeResultsLayer(self, cmd, name, resultType, useEvent, opacity=1):
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'ChangeLayer'):
-            print "Changing layer in Layer Manager requires GRASS GIS version > 7.8"
+            print("Changing layer in Layer Manager requires GRASS GIS version > 7.8")
             return
         # TODO: check there is exactly one layer
         pl_layer = ll.GetLayersByName(self.placeholders[resultType])[0]
