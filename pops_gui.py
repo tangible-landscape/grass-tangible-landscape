@@ -27,6 +27,7 @@ from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT
 from pops_dashboard import PoPSDashboard
+from time_display import SteeringDisplayFrame, CurrentViewDisplayFrame
 
 
 updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
@@ -1058,7 +1059,7 @@ class PopsPanel(wx.Panel):
         return (size[0] * mdSize[0], size[1] * mdSize[1])
 
     def StartTimeDisplay(self):
-        self.timeDisplay = TimeDisplay(self, start=self.configuration['POPS']['model']['start_time'],
+        self.timeDisplay = SteeringDisplayFrame(self, start=self.configuration['POPS']['model']['start_time'],
                                        end=self.configuration['POPS']['model']['end_time'] + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'],
                                        vtype=self.visualizationModes[self.visualizationMode])
@@ -1074,7 +1075,7 @@ class PopsPanel(wx.Panel):
         self.scaniface.postEvent(self, evt)
 
     def StartTimeStatusDisplay(self):
-        self.timeStatusDisplay = TimeStatusDisplay(self, start=self.configuration['POPS']['model']['start_time'],
+        self.timeStatusDisplay = CurrentViewDisplayFrame(self, start=self.configuration['POPS']['model']['start_time'],
                                        end=self.configuration['POPS']['model']['end_time'] + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_status_display']['fontsize'],
                                        beginning_of_year=self.configuration['tasks'][self.current]['time_status_display']['beginning_of_year'],
@@ -1090,143 +1091,6 @@ class PopsPanel(wx.Panel):
                                 currentView=self.currentCheckpoint,
                                 vtype=self.visualizationModes[self.visualizationMode])
         self.scaniface.postEvent(self, evt)
-
-
-
-class SimpleTimeDisplay(wx.Frame):
-    def __init__(self, parent, fontsize):
-        wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
-        self.label = wx.StaticText(self, style=wx.ALIGN_CENTRE_HORIZONTAL)
-        font = wx.Font(fontsize, wx.DEFAULT, wx.NORMAL, wx.BOLD)
-        self.label.SetFont(font)
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.label, 1, wx.ALL|wx.ALIGN_CENTER|wx.GROW, border=10)
-        self.SetSizer(self.sizer)
-        self.sizer.Fit(self)
-
-    def Update(self, current):
-        self.label.SetLabel(str(current + self.years[0]))
-
-
-class TimeDisplay(wx.Frame):
-    def __init__(self, parent, fontsize, start, end, vtype):
-        wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
-        self.years = range(start, end + 1)
-        self.fontsize = fontsize
-        text = self.GenerateHTML(0, start, vtype)
-        self.textCtrl = StaticFancyText(self, -1, text)
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
-        self.SetSizer(self.sizer)
-        self.sizer.Fit(self)
-
-    def Update(self, current, currentView, vtype):
-        text = self.GenerateHTML(current + self.years[0], currentView + self.years[0], vtype)
-        bmp = RenderToBitmap(text)
-        self.textCtrl.SetBitmap(bmp)
-
-    def GenerateHTML(self, current, currentView, vtype):
-        delim_single = '&#9148;'
-        delim_prob = '&#9776;'
-        delim_split = '&#9887;'
-        html = ''
-        style = {'past': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
-                 'current':  'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
-                 'future': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
-        for year in self.years:
-            if year < current:
-                styl = style['past']
-            elif year == current:
-                styl = style['current']
-            else:
-                styl = style['future']
-            html += ' <font {style}>{year}</font> '.format(year=year, style=styl)
-            if year != self.years[-1]:
-                d = delim_single
-                if vtype == 'probability':
-                    if year == self.years[0]:
-                        d = delim_split
-                    else:
-                        d = delim_prob
-                elif vtype == 'combined':
-                    # TODO fix None
-                    if year == current:
-                        d = delim_split
-                    elif year > current:
-                        d = delim_prob
-                # for now, keep simple until I figure it out
-                #d = delim_single
-                html += '<font {style}> {d} </font>'.format(style=style['future'], d=d)
-        return html
-
-    def GenerateHTML2(self, current, currentView, vtype):
-        delim_single = '&#9148;'
-        delim_prob = '&#9776;'
-        delim_split = '&#9887;'
-        html = ''
-        style = {'lastTreatment': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
-                 'currentView':  'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
-                 'default': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
-        for year in self.years:
-            if year == currentView:
-                styl = style['currentView']
-            elif year == current:
-                styl = style['lastTreatment']
-            else:
-                styl = style['default']
-            html += ' <font {style}>{year}</font> '.format(year=year, style=styl)
-            if year != self.years[-1]:
-                d = delim_single
-                if vtype == 'probability':
-                    if year == self.years[0]:
-                        d = delim_split
-                    else:
-                        d = delim_prob
-                elif vtype == 'combined':
-                    # TODO fix None
-                    if year == current:
-                        d = delim_split
-                    elif year > current:
-                        d = delim_prob
-                # for now, keep simple until I figure it out
-                #d = delim_single
-                html += '<font {style}> {d} </font>'.format(style=style['default'], d=d)
-        return html
-
-
-class TimeStatusDisplay(wx.Frame):
-    def __init__(self, parent, fontsize, start, end, beginning_of_year, bgcolor=None, fgcolor=None):
-        wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
-        panel = wx.Panel(self)
-        self.years = range(start, end + 1)
-        self.beginning_of_year = beginning_of_year
-        s = int(fontsize / 2.)
-        if self.beginning_of_year:
-            year = str(self.years[0])
-        else:
-            year = str(self.years[0] - 1)
-        self.yearCtrl = wx.StaticText(panel, -1, year, style=wx.ALIGN_CENTRE_HORIZONTAL)
-        self.yearCtrl.SetFont(wx.Font(fontsize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        self.typeCtrl = wx.StaticText(panel, -1, "forecast", style=wx.ALIGN_CENTRE_HORIZONTAL)
-        self.typeCtrl.SetFont(wx.Font(s, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        if bgcolor:
-            panel.SetBackgroundColour(wx.Colour(*bgcolor))
-        if fgcolor:
-            self.yearCtrl.SetForegroundColour(wx.Colour(*fgcolor))
-            self.typeCtrl.SetForegroundColour(wx.Colour(*fgcolor))
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.yearCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
-        self.sizer.Add(self.typeCtrl, 0, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
-        panel.SetSizer(self.sizer)
-        self.sizer.Fit(panel)
-
-    def Update(self, year, dtype):
-        if self.beginning_of_year:
-            year = str(int(year) + self.years[0])
-        else:
-            year = str(int(year) + self.years[0] - 1)
-        self.yearCtrl.SetLabel(year)
-        self.typeCtrl.SetLabel(dtype)
 
 
 class Attempt(object):
