@@ -247,9 +247,9 @@ class PopsPanel(wx.Panel):
 
     def OnTimeDisplayUpdate(self, event):
         if self.timeDisplay:
-            self.timeDisplay.Update(event.current, event.currentView, self.visualizationModes[self.visualizationMode])
+            self.timeDisplay.UpdateText(event.current, event.currentView, self.visualizationModes[self.visualizationMode])
         if self.timeStatusDisplay:
-            self.timeStatusDisplay.Update(event.currentView, "forecast" if self._ifShowProbability() else "infected")
+            self.timeStatusDisplay.UpdateText(event.currentView, "forecast" if self._ifShowProbability() else "occurrence")
 
     def OnUpdateInfoBar(self, event):
         if event.dismiss:
@@ -270,7 +270,7 @@ class PopsPanel(wx.Panel):
 
     def _get_model_param(self, param):
         if self.params_from_dashboard:
-            if param == 'short_distance_scale':
+            if param == 'natural_distance':
                 return self.params_from_dashboard['distance_scale']
             if param in ('temperature_file', 'moisture_coefficient_file', 'temperature_coefficient_file'):
                 weather = self.params_from_dashboard['weather']
@@ -299,7 +299,9 @@ class PopsPanel(wx.Panel):
             f.write('\n')
 
     def _afterSimulation(self, name):
-        self._renameAllAfterSimulation(name)
+        new_layers = self._renameAllAfterSimulation(name)
+        #if new_layers:
+        #    self._computeDifference(new_layers)
         evt = updateInfoBar(dismiss=True, message=None)
         wx.PostEvent(self, evt)
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', name)
@@ -319,6 +321,38 @@ class PopsPanel(wx.Panel):
             if self.webDashboard:
                 print(self.webDashboard.upload_results(year, event.name, infected))
 
+    def _computeDifference(self, names):
+        difference = self.configuration['POPS']['difference']
+        env = get_environment(raster=names[0])
+        resulting = []
+        for each in names:
+            name_split = each.split('__')
+            if len(name_split) == 4:
+                event, player, att, date = each.split('__')
+                prob = ''
+            elif len(name_split) == 5:  # probability
+                prob, event, player, att, date = each.split('__')
+            else:
+                return
+            major, minor = att.split('_')
+            if minor == '0':
+                return
+            minor = int(minor) - 1
+            att_prev = "{a1}_{a2}".format(a1=major, a2=minor)
+            if prob:
+                new_name = '__'.join((difference, prob, event, player, att, date))
+                previous = '__'.join((prob, event, player, att_prev, date))
+            else:
+                new_name = '__'.join((difference, event, player, att, date))
+                previous = '__'.join((event, player, att_prev, date))
+            try:
+                gscript.mapcalc("{n} = {c} - {p}".format(n=new_name, c=each, p=previous), env=env)
+            except CalledModuleError:
+                print('difference computation failed')
+                continue
+            resulting.append(new_name)
+        gscript.run_command('r.colors', maps=','.join(resulting), env=env)
+
     def _renameAllAfterSimulation(self, name):
         name_split = name.split('__')
         if len(name_split) == 3:
@@ -331,11 +365,14 @@ class PopsPanel(wx.Panel):
         a1, a2 = self.attempt.getCurrent()
         pattern = "{e}__{n}__[0-9]{{4}}_[0-9]{{2}}_[0-9]{{2}}".format(n=player, e=event)
         pattern_layers = gscript.list_grouped(type='raster', pattern=pattern, flag='e')[gscript.gisenv()['MAPSET']]
+        new_names = []
         if pattern_layers:
             for layer in pattern_layers:
                 components = layer.split('__')
                 new_name = '__'.join(components[:-1] + ['{a1}_{a2}'.format(a1=a1, a2=a2)] + components[-1:])
                 gscript.run_command('g.copy', raster=[layer, new_name], quiet=True, overwrite=True)
+                new_names.append(new_name)
+        return new_names
 
     def SwitchVizMode(self, event=None):
         # clear the queue to stop animation
@@ -358,10 +395,10 @@ class PopsPanel(wx.Panel):
                 self.visualizationChoice.SetSelection(self.visualizationMode)
 
         if self.timeDisplay:
-            self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
+            self.timeDisplay.UpdateText(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
 
         if self.timeStatusDisplay:
-            self.timeStatusDisplay.Update(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "infected")
+            self.timeStatusDisplay.UpdateText(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "occurrence")
 
         self.ShowResults()
 
@@ -403,9 +440,9 @@ class PopsPanel(wx.Panel):
         self.currentRealityCheckpoint = 0
         self.treatmentHistory = [0] * 50
         if self.timeDisplay:
-            self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
+            self.timeDisplay.UpdateText(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
         if self.timeStatusDisplay:
-            self.timeStatusDisplay.Update(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "infected")
+            self.timeStatusDisplay.UpdateText(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "occurrence")
         event.Skip()
         
     def ShowResults(self):
@@ -501,7 +538,7 @@ class PopsPanel(wx.Panel):
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
 
-        model_params['short_distance_scale'] = self._get_model_param('short_distance_scale')
+        model_params['natural_distance'] = self._get_model_param('natural_distance')
         model_params['reproductive_rate'] = self._get_model_param('reproductive_rate')
         model_params['random_seed'] = self._get_model_param('random_seed')
         model_params['temperature_coefficient_file'] = os.path.join(self.workdir, self._get_model_param('temperature_coefficient_file'))
@@ -572,10 +609,12 @@ class PopsPanel(wx.Panel):
             if gscript.raster_info(tr_name)['ewres'] < gscript.raster_info(host)['ewres']:
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='count', env=env)
                 maxvalue = gscript.raster_info(treatments_resampled)['max']
-                gscript.mapcalc("{p} = if(isnull({t}), 0, ({t} / {m}) * ({eff} / 100)".format(p=treatments_resampled + '_proportion', t=treatments_resampled, m=maxvalue), env=env)
+                gscript.mapcalc("{p} = if((isnull({t}) || {m} == 0), 0, ({t} / {m}) * ({eff} / 100))".format(p=treatments_resampled + '_proportion',
+                                t=treatments_resampled, m=maxvalue, eff=treatment_efficacy), env=env)
             else:
                 gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
-                gscript.mapcalc("{p} = if(isnull({t}), 0, {t} * ({eff} / 100)".format(p=treatments_resampled + '_proportion', t=treatments_resampled), env=env)
+                gscript.mapcalc("{p} = if(isnull({t}), 0, {t} * ({eff} / 100))".format(p=treatments_resampled + '_proportion',
+                                t=treatments_resampled, eff=treatment_efficacy), env=env)
             gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', tr_name], env=env)
         else:
             gscript.mapcalc("{tr_new} = if(isnull({tr}), 0, float({tr}) * {eff} / 100)".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
@@ -859,9 +898,9 @@ class PopsPanel(wx.Panel):
             return
         self.currentCheckpoint = self.currentCheckpoint + 1 if forward else self.currentCheckpoint - 1
         if self.timeDisplay:
-            self.timeDisplay.Update(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
+            self.timeDisplay.UpdateText(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
         if self.timeStatusDisplay:
-            self.timeStatusDisplay.Update(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "infected")
+            self.timeStatusDisplay.UpdateText(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "occurrence")
 
         self.ShowResults()
 

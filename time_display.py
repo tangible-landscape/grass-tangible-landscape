@@ -43,7 +43,7 @@ class SteeringDisplay(wx.Panel):
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
-    def Update(self, current, currentView, vtype=None):
+    def UpdateText(self, current, currentView, vtype=None):
         text = self.GenerateHTMLSimple(current + self.years[0], currentView + self.years[0], vtype=vtype)
         html = template.format(body=text, fontsize=self.fontsize)
         self.textCtrl.SetPage(html, '')
@@ -133,11 +133,14 @@ class SteeringDisplayFrame(wx.Frame):
             self.slider1.Bind(wx.EVT_SLIDER, self.OnChangeCurrent)
             self.slider2.Bind(wx.EVT_SLIDER, self.OnChangeCurrent)
 
+    def UpdateText(self, current, currentView, vtype=None):
+        self.timedisplay.UpdateText(current, currentView, vtype=None)
+
     def OnChangeCurrent(self, evt):
         if self.test:
             val1 = self.slider1.GetValue()
             val2 = self.slider2.GetValue()
-            self.timedisplay.Update(val1, val2)
+            self.timedisplay.UpdateText(val1, val2)
 
 
 class CurrentViewDisplayFrame(wx.Frame):
@@ -166,7 +169,7 @@ class CurrentViewDisplayFrame(wx.Frame):
         panel.SetSizer(self.sizer)
         self.sizer.Fit(panel)
 
-    def Update(self, year, dtype):
+    def UpdateText(self, year, dtype):
         if self.beginning_of_year:
             year = str(int(year) + self.years[0])
         else:
@@ -186,7 +189,7 @@ class SimpleTimeDisplayFrame(wx.Frame):
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
-    def Update(self, current):
+    def UpdateText(self, current):
         self.label.SetLabel(str(current + self.years[0]))
 
 if __name__ == "__main__":
