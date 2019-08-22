@@ -26,7 +26,7 @@ from tangible_utils import get_environment, changeLayer
 from activities_dashboard import DashboardFrame, MultipleDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT
-from pops_dashboard import PoPSDashboard
+from pops_dashboard import PoPSDashboard, ModelParameters
 from time_display import SteeringDisplayFrame, CurrentViewDisplayFrame
 
 
@@ -67,7 +67,7 @@ class PopsPanel(wx.Panel):
         self.treatmentHistory = [0] * 50
 
         self.webDashboard = None
-        self.params_from_dashboard = None
+        self.params = ModelParameters()
 
         # steering
         self.steeringClient = None
@@ -178,7 +178,7 @@ class PopsPanel(wx.Panel):
         self.webDashboard = PoPSDashboard()
         self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard']['url'])
         self.webDashboard.set_session_id(self.configuration['POPS']['dashboard']['session'])
-        self.params_from_dashboard = self.webDashboard.get_run_params()
+        self.params.set_web_dashboard(self.webDashboard)
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -228,7 +228,7 @@ class PopsPanel(wx.Panel):
 
         if self.showDisplayChange:
             cumulativeArea = sum(self.treatmentHistory[:self.currentRealityCheckpoint]) + event.area
-            cost = float(self._get_model_param('cost_per_meter_squared'))
+            cost = float(self.params.pops['cost_per_meter_squared'])
             unit = self.configuration['POPS'].get('unit', 'acre')
             if unit == 'acre':
                 coef = 4046.86
@@ -265,33 +265,9 @@ class PopsPanel(wx.Panel):
                 self.configuration = json.load(f)
                 self.tasks = self.configuration['tasks']
             self.workdir = os.path.dirname(self.configFile)
+            self.params.set_config(self.configuration['POPS'], self.workdir)
         else:
             self.settings['POPS']['config'] = ''
-
-    def _get_model_param(self, param):
-        if self.params_from_dashboard:
-            if param == 'natural_distance':
-                return self.params_from_dashboard['distance_scale']
-            if param in ('temperature_file', 'moisture_coefficient_file', 'temperature_coefficient_file'):
-                weather = self.params_from_dashboard['weather']
-                if weather in self.configuration['POPS']['model'][param]:
-                    return self.configuration['POPS']['model'][param][weather]
-                else:
-                    return self.configuration['POPS']['model'][param]
-            else:
-                return self.params_from_dashboard[param]
-        else:
-            if param in self.configuration['POPS']['model']:
-                if param in ('temperature_file', 'moisture_coefficient_file', 'temperature_coefficient_file'):
-                    weather = self.configuration['POPS']['weather']
-                    if weather in self.configuration['POPS']['model'][param]:
-                        return self.configuration['POPS']['model'][param][weather]
-                    else:
-                        return self.configuration['POPS']['model'][param]
-                else:
-                    return self.configuration['POPS']['model'][param]
-            else:
-                return self.configuration['POPS'][param]
 
     def _debug(self, msg):
         with open('/tmp/debug.txt', 'a+') as f:
@@ -311,15 +287,17 @@ class PopsPanel(wx.Panel):
     def _uploadStepToDashboard(self, event):
         if not 'probability' in event.name:
             return
-
+        print(event.name)
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', event.name)
         if res:
             date = res.group()
             year = int(date.split('_')[0])
             # assumes infected is already ready
-            infected = event.name.strip(self.configuration['POPS']['model']['probability_series'] + '__')
+            remove = self.configuration['POPS']['model']['probability_series'] + '__'
+            infected = event.name[len(remove):]
+            spread_file = self.params.model['spread_rate_output']
             if self.webDashboard:
-                print(self.webDashboard.upload_results(year, event.name, infected))
+                print(self.webDashboard.upload_results(year, event.name, infected, spread_file))
 
     def _computeDifference(self, names):
         difference = self.configuration['POPS']['difference']
@@ -404,7 +382,7 @@ class PopsPanel(wx.Panel):
 
     def _createPlayerName(self):
         if self.webDashboard:
-            name = self.webDashboard.get_run_name()
+            name = self.webDashboard.get_runcollection_name()
             if name:
                 name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_')
                 return name
@@ -443,8 +421,11 @@ class PopsPanel(wx.Panel):
             self.timeDisplay.UpdateText(self.currentRealityCheckpoint, self.currentCheckpoint, self.visualizationModes[self.visualizationMode])
         if self.timeStatusDisplay:
             self.timeStatusDisplay.UpdateText(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "occurrence")
+        if self.webDashboard:
+            # call this after running through all steps?
+            self.webDashboard.report_runcollection_status(success=True)
         event.Skip()
-        
+
     def ShowResults(self):
         # change layers
         self.ShowTreatment()
@@ -523,8 +504,8 @@ class PopsPanel(wx.Panel):
         # grab a new raster of conditions
         # process new input layer
         studyArea = self.configuration['tasks'][self.current]['base']
-        host = self.configuration['POPS']['model']['host']
-        probability = self.configuration['POPS']['model']['probability_series']
+        host = self.params.model['host']
+        probability = self.params.model['probability_series']
 
         postfix = self.getEventName() + '__' + playerName + '_'
         probability = probability + '__' + postfix
@@ -532,29 +513,21 @@ class PopsPanel(wx.Panel):
         extent = gscript.raster_info(studyArea)
         region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
         region = '{n},{s},{w},{e},{align}'.format(**region)
-        model_params = self.configuration['POPS']['model'].copy()
-        model_name = model_params.pop('model_name')
-        flags = model_params.pop('flags')
+        model_params = self.params.model
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
 
-        model_params['natural_distance'] = self._get_model_param('natural_distance')
-        model_params['reproductive_rate'] = self._get_model_param('reproductive_rate')
-        model_params['random_seed'] = self._get_model_param('random_seed')
-        model_params['temperature_coefficient_file'] = os.path.join(self.workdir, self._get_model_param('temperature_coefficient_file'))
-        model_params['moisture_coefficient_file'] = os.path.join(self.workdir, self._get_model_param('moisture_coefficient_file'))
-        if 'temperature_file' in self.configuration['POPS']['model']:
-            model_params['temperature_file'] = os.path.join(self.workdir, self._get_model_param('temperature_file'))
-        #model_params['end_time'] = self.params_from_dashboard['final_year']
-
         # run simulation
-        self.steeringClient.simulation_set_params(model_name, model_params, flags, region)
+        self.steeringClient.simulation_set_params(self.params.model_name,
+                                                  model_params, self.params.model_flags, region)
         self.steeringClient.simulation_start(restart)
+        # update params, dashboard
+        if self.webDashboard:
+            # get new run collection
+            self.webDashboard.get_new_runcollection()
+            self.params.update()
 
     def RunSimulation(self, event=None):
-        if self.webDashboard:
-            self.params_from_dashboard = self.webDashboard.get_run_params()
-
         if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentCheckpoint == 0:
@@ -564,7 +537,8 @@ class PopsPanel(wx.Panel):
         else:
             self.InitSimulation()
 
-
+        if self.webDashboard:
+            self.webDashboard.create_run()
         #self.showDisplayChange = False
 
         self.infoBar.ShowMessage("Running...")
@@ -573,13 +547,13 @@ class PopsPanel(wx.Panel):
 
         # grab a new raster of conditions
         # process new input layer
-        treatments = self.configuration['POPS']['treatments']
+        treatments = self.params.pops['treatments']
         treatments_resampled = treatments + '_resampled'
         studyArea = self.configuration['tasks'][self.current]['base']
-        host = self.configuration['POPS']['model']['host']
-        probability = self.configuration['POPS']['model']['probability_series']
-        treatment_efficacy = float(self._get_model_param('efficacy'))
-        cost_per_meter_squared = float(self._get_model_param('cost_per_meter_squared'))
+        host = self.params.model['host']
+        probability = self.params.model['probability_series']
+        treatment_efficacy = self.params.pops['efficacy']
+        cost_per_meter_squared = self.params.pops['cost_per_meter_squared']
 
         env = get_environment(raster=studyArea, align=host)
 
@@ -598,10 +572,6 @@ class PopsPanel(wx.Panel):
         self.treated_area = self.computeTreatmentArea(treatments + '_exclude_host')
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
-
-        if self.webDashboard:
-            self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent, area=self.treated_area)
-            self.webDashboard.update_run()
 
         # compute proportion
         resampling_treatments = True
@@ -622,13 +592,19 @@ class PopsPanel(wx.Panel):
 
         self.currentRealityCheckpoint = self.currentCheckpoint + 1
 
+        if self.steeringClient.is_steering():
+            tr_year = self.params.model['start_time'] + self.currentCheckpoint
+        else:
+            tr_year = self.params.model['start_time']
+
+        if self.webDashboard:
+            self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent,
+                                             area=self.treated_area, year=tr_year)
+            self.webDashboard.update_run()
+
         # export treatments file to server
         self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
-        if self.steeringClient.is_steering():
-            tr_year = self.configuration['POPS']['model']['start_time'] + self.currentCheckpoint
-        else:
-            tr_year = self.configuration['POPS']['model']['start_time']
         self.steeringClient.simulation_load_data(tr_year, tr_name)
 
         self.steeringClient.simulation_goto(self.currentCheckpoint)
@@ -649,7 +625,7 @@ class PopsPanel(wx.Panel):
         tr, evt, plr, attempt, year = treatment_layer.split('__')
         postfix = 'cat_year'
         gscript.mapcalc("{n} = if({t} == 1, {y}, null())".format(n=treatment_layer + '__' + postfix,
-                        t=treatment_layer, y=int(year) + self.configuration['POPS']['model']['start_time']), env=env)
+                        t=treatment_layer, y=int(year) + self.params.model['start_time']), env=env)
         pattern = '__'.join([tr, evt, plr, attempt, '*', postfix])
         layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
         to_patch = []
@@ -662,7 +638,7 @@ class PopsPanel(wx.Panel):
         if len(to_patch) >= 2:
             to_patch = gscript.natural_sort(to_patch)[::-1]
             gscript.run_command('r.patch', input=to_patch, output=name, flags='z', env=env)
-        else:            
+        else:
             gscript.run_command('g.copy', raster=[treatment_layer + '__' + postfix, name], env=env)
         gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
         gscript.run_command('v.colors', map=name, use='cat', color=self.configuration['POPS']['color_treatments'], env=env)
@@ -706,10 +682,10 @@ class PopsPanel(wx.Panel):
             while not found and not self.steeringClient.results_empty():
                 name = self.steeringClient.results_get()
                 isProb = self._ifShowProbability(evalFuture=True)
-                if self.configuration['POPS']['model']['probability_series'] in name and isProb:
+                if self.params.model['probability_series'] in name and isProb:
                     found = True
                     rules = os.path.join(self.workdir, self.configuration['POPS']['color_probability'])
-                elif not (self.configuration['POPS']['model']['probability_series']  in name or isProb):
+                elif not (self.params.model['probability_series']  in name or isProb):
                     found = True
                     rules = os.path.join(self.workdir, self.configuration['POPS']['color_trees'])
                 else:
@@ -724,7 +700,7 @@ class PopsPanel(wx.Panel):
                     # if last checkpoint is the same date as current raster, we don't want it
                     if self.checkpoints[self.currentCheckpoint] == (int(year), int(month), int(day)):
                         return
-                    currentCheckpoint = int(year) - self.configuration['POPS']['model']['start_time'] + 1
+                    currentCheckpoint = int(year) - self.params.model['start_time'] + 1
                     self.checkpoints[currentCheckpoint] = (int(year), int(month), int(day))
                     # when steering, jump just one step but keep processing outputs
                     if self._one_step or self._one_step is None:
@@ -765,6 +741,7 @@ class PopsPanel(wx.Panel):
             self.steeringClient.stop_server()
         if self.webDashboard:
             self.webDashboard.close()
+        self.params.UnInit()
 
         # allow clean up in main dialog
         event.Skip()
@@ -782,11 +759,12 @@ class PopsPanel(wx.Panel):
             return
         self._connect()
         self._loadConfiguration(None)
+        self.params.read_initial_params()
         self._initVisualizationModes()
 
         self.currentCheckpoint = 0
-        start = self.configuration['POPS']['model']['start_time']
-        end = self.configuration['POPS']['model']['end_time']
+        start = self.params.model['start_time']
+        end = self.params.model['end_time']
         self.checkpoints.append((start, 1, 1))
         year = start
         while year <= end:
@@ -891,7 +869,7 @@ class PopsPanel(wx.Panel):
         self.steeringClient.results_clear()
 
         start = 0
-        end = self.configuration['POPS']['model']['end_time'] - self.configuration['POPS']['model']['start_time'] + 1
+        end = self.params.model['end_time'] - self.params.model['start_time'] + 1
         if forward and self.currentCheckpoint >= end:
             return
         if not forward and self.currentCheckpoint <= start:
@@ -1099,8 +1077,8 @@ class PopsPanel(wx.Panel):
         return (size[0] * mdSize[0], size[1] * mdSize[1])
 
     def StartTimeDisplay(self):
-        self.timeDisplay = SteeringDisplayFrame(self, start=self.configuration['POPS']['model']['start_time'],
-                                       end=self.configuration['POPS']['model']['end_time'] + 1,
+        self.timeDisplay = SteeringDisplayFrame(self, start=self.params.model['start_time'],
+                                       end=self.params.model['end_time'] + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'],
                                        vtype=self.visualizationModes[self.visualizationMode])
 
@@ -1115,8 +1093,8 @@ class PopsPanel(wx.Panel):
         self.scaniface.postEvent(self, evt)
 
     def StartTimeStatusDisplay(self):
-        self.timeStatusDisplay = CurrentViewDisplayFrame(self, start=self.configuration['POPS']['model']['start_time'],
-                                       end=self.configuration['POPS']['model']['end_time'] + 1,
+        self.timeStatusDisplay = CurrentViewDisplayFrame(self, start=self.params.model['start_time'],
+                                       end=self.params.model['end_time'] + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_status_display']['fontsize'],
                                        beginning_of_year=self.configuration['tasks'][self.current]['time_status_display']['beginning_of_year'],
                                        fgcolor=self.configuration['tasks'][self.current]['time_status_display'].get('fgcolor', None),

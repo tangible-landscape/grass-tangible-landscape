@@ -183,7 +183,7 @@ def check_output(connection, basename, sod_process, event):
             if each not in old_found:
                 event.wait(5)
                 pack_path = os.path.join(tmp_directory, each + '.pack')
-                gscript.run_command('r.pack', input=each, output=pack_path, overwrite=True)
+                gscript.run_command('r.pack', input=each, output=pack_path, overwrite=True, quiet=True)
                 event.clear()
                 connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
                 old_found.append(each)
@@ -212,7 +212,7 @@ def clientComputation(conn, connections, event):
             if lm[0] == 'output':
                 # r.pack
                 pack_path = os.path.join(tmp_directory, lm[1] + '.pack')
-                gscript.run_command('r.pack', input=lm[1], output=pack_path, overwrite=True)
+                gscript.run_command('r.pack', input=lm[1], output=pack_path, overwrite=True, quiet=True)
                 if 'interface' in connections:
                     event.clear()
                     connections['interface'].sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
