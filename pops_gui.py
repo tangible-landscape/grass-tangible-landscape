@@ -384,7 +384,7 @@ class PopsPanel(wx.Panel):
         if self.webDashboard:
             name = self.webDashboard.get_runcollection_name()
             if name:
-                name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_')
+                name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_').replace(' ', '_')
                 return name
             else:
                 return 'run'
@@ -394,6 +394,7 @@ class PopsPanel(wx.Panel):
         if self.webDashboard:
             name = self.webDashboard.get_session_name()
             if name:
+                name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_').replace(' ', '_')
                 return name
             else:
                 return 'tmpevent'

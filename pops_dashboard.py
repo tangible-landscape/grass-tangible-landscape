@@ -54,7 +54,9 @@ class ModelParameters:
         if 'temperature_file' in self._pops_config['model']:
             self.model['temperature_file'] = os.path.join(self._workdir, self._pops_config['model']['temperature_file'])
 
-        self.model['spread_rate_output'] = tempfile.mkstemp()
+        fh, path = tempfile.mkstemp()
+        self.model['spread_rate_output'] = path
+        os.close(fh)
 
         # assume dashboard is initialized
         if self._web:
@@ -73,7 +75,7 @@ class ModelParameters:
             self.pops['budget'] = float(run_collection['budget'])
 
     def UnInit(self):
-        os.remove(self.model['spread_rate_output'])
+        gscript.try_remove(self.model['spread_rate_output'])
 
 
 class PoPSDashboard(wx.EvtHandler):
@@ -134,6 +136,20 @@ class PoPSDashboard(wx.EvtHandler):
             except KeyError:
                 return False
         return same
+
+    def _create_runcollection_name(self, name):
+        namesp = name.split('_')
+        if len(namesp) == 1:
+            new = name + '_2'
+        else:
+            try:
+                order = int(namesp[-1])
+                order += 1
+                namesp[:-1].append(str(order))
+                new = '_'.join(namesp)
+            except ValueError:
+                new = name + "_2"
+        return new
 
     def _get_runcollection(self, runcollection_id):
         try:
@@ -201,6 +217,10 @@ class PoPSDashboard(wx.EvtHandler):
         runcollection = self._runcollection.copy()
         runcollection['status'] = 'PENDING'
         runcollection['date_created'] = None
+        new_name = self._create_runcollection_name(runcollection['name'])
+        runcollection['name'] = new_name
+        # change random seed so that the new collection looks different
+        runcollection['random_seed'] = int(runcollection['random_seed']) + 1
         try:
             res = requests.post(self._root + 'run_collection/', data=runcollection)
             res.raise_for_status()
@@ -437,23 +457,6 @@ def main():
         out_id = dashboard.upload_results(2021, 'tmpevent__player__7_0__2021_12_31')
         if out_id:
             dashboard.run_done()
-
-
-
-
-#            if self._create_new:
-#                name = self._run['name']
-#                namesp = name.split('-')
-#                if len(namesp) > 1:
-#                    try:
-#                        order = int(namesp[-1])
-#                        namesp[:-1].append(order +  1)
-#                        name = '-'.join(namesp)
-#                    except ValueError:
-#                        name += '-1'
-#                else:
-#                    name += '-1'
-#                self._run['name'] = name
 
 if __name__ == '__main__':
     main()
