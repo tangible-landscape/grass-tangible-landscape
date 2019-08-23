@@ -145,10 +145,11 @@ class PoPSDashboard(wx.EvtHandler):
             try:
                 order = int(namesp[-1])
                 order += 1
-                namesp[:-1].append(str(order))
+                namesp = namesp[:-1] + [str(order)]
                 new = '_'.join(namesp)
-            except ValueError:
+            except ValueError as e:
                 new = name + "_2"
+                print (e)
         return new
 
     def _get_runcollection(self, runcollection_id):
@@ -403,10 +404,10 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
     try:
         with open('/tmp/test.txt', 'w') as ff:
             ff.write(str(results))
-        res = requests.post(root + 'output/', data=results)
+        res = requests.post(root + 'output/', json=results)
         res.raise_for_status()
 
-        out_id = str(res.json()['id'])
+        out_id = str(res.json()['pk'])
         print ('out_id ' + out_id)
         evt = threadDone(out_id=out_id, orig_name=probability)
         wx.PostEvent(evtHandler, evt)
@@ -437,7 +438,8 @@ def process_for_dashboard(id_, year, raster, spread_rate_file):
         for line in lines:
             if line.startswith(str(year)):
                 y, n, s, e, w = line.split(',')
-    result['spreadrate'] = {'north_rate': int(n), 'south_rate': int(s), 'east_rate': int(e), 'west_rate': int(w)}
+    # TODO: remove abs when fixed in dashboard
+    result['spreadrate'] = {'north_rate': abs(int(n)), 'south_rate': abs(int(s)), 'east_rate': abs(int(e)), 'west_rate': abs(int(w))}
 
     return result
 
