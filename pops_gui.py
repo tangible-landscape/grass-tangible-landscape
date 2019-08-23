@@ -591,12 +591,18 @@ class PopsPanel(wx.Panel):
             gscript.mapcalc("{tr_new} = if(isnull({tr}), 0, float({tr}) * {eff} / 100)".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
             gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
 
-        self.currentRealityCheckpoint = self.currentCheckpoint + 1
-
         if self.steeringClient.is_steering():
-            tr_year = self.params.model['start_time'] + self.currentCheckpoint
+            if self.params.pops['steering']['move_current_year']:
+                tr_year = self.params.model['start_time'] + self.currentCheckpoint
+            else:
+                tr_year = self.params.model['start_time'] + self.currentRealityCheckpoint
         else:
             tr_year = self.params.model['start_time']
+
+        if self.params.pops['steering']['move_current_year']:
+            self.currentRealityCheckpoint = self.currentCheckpoint + 1
+        else:
+            self.currentRealityCheckpoint += 1
 
         if self.webDashboard:
             self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent,

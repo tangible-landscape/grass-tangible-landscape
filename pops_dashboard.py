@@ -255,14 +255,18 @@ class PoPSDashboard(wx.EvtHandler):
 
     def upload_results(self, year, probability, infected, spread_rate_file):
         env = get_environment(raster=probability)
+        mapset = gscript.gisenv()['MAPSET']
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_inf_file,
                         r=infected), env=env)
         results = process_for_dashboard(self._run_id, year, self._tmp_inf_file, spread_rate_file)
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_prob_file,
                         r=probability), env=env)
-        tgisrc, tenv = self._create_tmp_gisrc_environment()
-        t = threading.Thread(target=raster_to_proj_geojson_thread, args=(self, self._tmp_inf_file, self._tmp_prob_file,
-                                                                         tenv, tgisrc, results, self._root, probability))
+        export_gisrc, export_env = self._create_tmp_gisrc_environment(self._temp_location)
+        input_gisrc, input_env = self._create_tmp_gisrc_environment()
+        t = threading.Thread(target=raster_to_proj_geojson_thread, args=(self, self._tmp_inf_file + '@' + mapset,
+                                                                         self._tmp_prob_file + '@' + mapset,
+                                                                         input_gisrc, input_env, export_gisrc, export_env,
+                                                                         results, self._root, probability))
         t.start()
 
     def run_done(self, last_name_suffix):
@@ -330,21 +334,26 @@ class PoPSDashboard(wx.EvtHandler):
         env['GISRC'] = tmp_gisrc_file
         return tmp_gisrc_file, env
 
-    def _create_tmp_gisrc_environment(self):
+    def _create_tmp_gisrc_environment(self, location=None):
         """Creates environment to be passed in run_command for example.
         Returns tuple with temporary file path and the environment. The user
         of this function is responsile for deleting the file."""
         env = os.environ.copy()
         genv = gscript.gisenv()
+        if not location:
+            location = genv['LOCATION_NAME']
         tmp_gisrc_file = gscript.tempfile()
-        new_mapset = os.path.basename(os.path.normpath(tempfile.mkdtemp(dir=os.path.join(genv['GISDBASE'], self._temp_location))))
+        new_mapset = os.path.basename(os.path.normpath(tempfile.mkdtemp(dir=os.path.join(genv['GISDBASE'], location))))
         with open(tmp_gisrc_file, 'w') as f:
             f.write('MAPSET: {mapset}\n'.format(mapset=new_mapset))
             f.write('GISDBASE: {g}\n'.format(g=genv['GISDBASE']))
-            f.write('LOCATION_NAME: {l}\n'.format(l=self._temp_location))
+            f.write('LOCATION_NAME: {l}\n'.format(l=location))
             f.write('GUI: text\n')
         env['GISRC'] = tmp_gisrc_file
+        env['GRASS_MESSAGE_FORMAT'] = 'standard'
+        env['GRASS_VERBOSE'] = '0'
         gscript.run_command('g.region', flags='d', env=env, quiet=True)
+        gscript.run_command('db.connect', flags='c', env=env, quiet=True)
         return tmp_gisrc_file, env
 
     def close(self):
@@ -355,39 +364,45 @@ class PoPSDashboard(wx.EvtHandler):
         gscript.run_command('g.remove', type='raster', name=[self._tmp_inf_file, self._tmp_prob_file], flags='f', quiet=True)
 
 
-def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster, gisrcenv, gisrc, results, root, probability):
+def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
+                                  input_gisrc, input_env, export_gisrc, export_env,
+                                  results, root, probability):
     tempdir = tempfile.mkdtemp()
     tmp_layer1 = os.path.basename(tempdir) + '1'
     tmp_layer2 = os.path.basename(tempdir) + '2'
     tmp_file_single = os.path.join(tempdir, 'single.json')
     tmp_file_prob = os.path.join(tempdir, 'prob.json')
 
-    env = get_environment(raster=single_raster)
-    genv = gscript.gisenv()
-    print('thread with '+ single_raster + ' using mapset ' +  gscript.gisenv(env=gisrcenv)['MAPSET'])
+    input_env['GRASS_REGION'] = gscript.region_env(raster=single_raster)
+    genv = gscript.gisenv(env=input_env)
+    print('thread with '+ single_raster + ' using mapset ' +  gscript.gisenv(env=export_env)['MAPSET'])
     # single
     if single_raster:
         gscript.run_command('r.to.vect', input=single_raster, flags='v',
-                            output=tmp_layer1, type='area', column='outputs', env=env)
+                            output=tmp_layer1, type='area', column='outputs', env=input_env)
         gscript.run_command('v.proj', location=genv['LOCATION_NAME'], quiet=True,
-                            mapset=genv['MAPSET'], input=tmp_layer1, output=tmp_layer2, overwrite=True, env=gisrcenv)
-        gscript.run_command('v.db.addcolumn', map=tmp_layer2, columns="outputs integer", quiet=True, env=gisrcenv)
-        gscript.run_command('v.db.update', map=tmp_layer2, column='outputs', query_column='cat', quiet=True, env=gisrcenv)
+                            mapset=genv['MAPSET'], input=tmp_layer1, output=tmp_layer2, env=export_env)
+        gscript.run_command('v.db.addcolumn', map=tmp_layer2, columns="outputs integer", quiet=True, env=export_env)
+        gscript.run_command('v.db.update', map=tmp_layer2, column='outputs', query_column='cat', quiet=True, env=export_env)
         gscript.run_command('v.out.ogr', input=tmp_layer2, flags='sm', output=tmp_file_single,
                             format_='GeoJSON', lco="COORDINATE_PRECISION=4", quiet=True, overwrite=True,
-                            env=gisrcenv)
-    gscript.run_command('g.remove', name=[tmp_layer1, tmp_layer2], quiet=True, flags='f', type=['raster', 'vector'])
+                            env=export_env)
+        gscript.run_command('g.remove', name=tmp_layer1, quiet=True, flags='f', type_='vector', env=input_env)
+        gscript.run_command('g.remove', name=tmp_layer2, quiet=True, flags='f', type_='vector', env=export_env)
     # probability
     if probability_raster:
         gscript.run_command('r.to.vect', input=probability_raster, flags='v',
-                            output=tmp_layer1, type='area', column='outputs', env=env)
+                            output=tmp_layer1, type='area', column='outputs', env=input_env)
         gscript.run_command('v.proj', location=genv['LOCATION_NAME'], quiet=True,
-                            mapset=genv['MAPSET'], input=tmp_layer1, output=tmp_layer2, overwrite=True, env=gisrcenv)
-        gscript.run_command('v.db.addcolumn', map=tmp_layer2, columns="outputs integer", quiet=True, env=gisrcenv)
-        gscript.run_command('v.db.update', map=tmp_layer2, column='outputs', query_column='cat', quiet=True, env=gisrcenv)
+                            mapset=genv['MAPSET'], input=tmp_layer1, output=tmp_layer2, env=export_env)
+        gscript.run_command('v.db.addcolumn', map=tmp_layer2, columns="outputs integer", quiet=True, env=export_env)
+        gscript.run_command('v.db.update', map=tmp_layer2, column='outputs', query_column='cat', quiet=True, env=export_env)
         gscript.run_command('v.out.ogr', input=tmp_layer2, flags='sm', output=tmp_file_prob,
                             format_='GeoJSON', lco="COORDINATE_PRECISION=4", quiet=True, overwrite=True,
-                            env=gisrcenv)
+                            env=export_env)
+        gscript.run_command('g.remove', name=tmp_layer1, quiet=True, flags='f', type_='vector', env=input_env)
+        gscript.run_command('g.remove', name=tmp_layer2, quiet=True, flags='f', type_='vector', env=export_env)
+
     if single_raster:
         with open(tmp_file_single) as f:
             j = f.read()
@@ -399,8 +414,9 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
             results['probability_map'] = j
 
     shutil.rmtree(tempdir)
-    gscript.run_command('g.remove', name=[tmp_layer1, tmp_layer2], quiet=True, flags='f', type=['raster', 'vector'])
-    os.remove(gisrc)
+
+    os.remove(export_gisrc)
+    os.remove(input_gisrc)
     try:
         with open('/tmp/test.txt', 'w') as ff:
             ff.write(str(results))
