@@ -86,6 +86,7 @@ class PoPSDashboard(wx.EvtHandler):
         self._runcollection_id = None
         self._run = None
         self._run_id = None
+        self._session = None
         self._session_id = None
         self._create_new = False
         self._temp_location = 'temp_export_location_' + str(os.getpid())
@@ -165,33 +166,42 @@ class PoPSDashboard(wx.EvtHandler):
             res = requests.get(self._root + 'session/' + self._session_id + '/')
             res.raise_for_status()
             runcollection_id = str(res.json()['most_recent_runcollection'])
+            if runcollection_id == 'null':
+                return None
             return runcollection_id
         except requests.exceptions.HTTPError:
             return None
 
-    def get_new_runcollection(self):
+    def new_runcollection(self):
         self._runcollection_id = self._get_runcollection_id()
+        # if something fails or there is no collection yet (when new session is created)
         if not self._runcollection_id:
-            return None
-        runcollection = self._get_runcollection(self._runcollection_id)
-        if not runcollection:
+            self._runcollection_id = self._create_runcollection(reuse=False)
+            return
+        self._runcollection = self._get_runcollection(self._runcollection_id)
+        # this should never happen
+        if not self._runcollection:
             self._runcollection_id = self._create_runcollection()
             return
-        if self._compare_runcollections(runcollection, self._runcollection):
-            self._runcollection_id = self._create_runcollection()
-        else:
-            # when everything is as expected
-            self._runcollection = runcollection
+
+        if self._runcollection['status'] != 'PENDING':
+            # needs to be created by TL
+            self._runcollection_id = self._create_runcollection(reuse=True)
 
     def get_runcollection_params(self):
         return self._runcollection
+
+    def session_name(self):
+        if not self._session:
+            return None
+        return self._session['name']
 
     def get_session_name(self):
         try:
             res = requests.get(self._root + 'session/' + self._session_id + '/')
             res.raise_for_status()
-            name = res.json()['name']
-            return name
+            self._session = res.json()
+            return self._session['name']
         except requests.exceptions.HTTPError:
             return None
 
@@ -199,9 +209,26 @@ class PoPSDashboard(wx.EvtHandler):
         try:
             res = requests.get(self._root + 'session/' + self._session_id + '/')
             res.raise_for_status()
+            self._session = res.json()
             return res.json()
         except requests.exceptions.HTTPError:
             return {}
+
+    def runcollection_name(self):
+        if not self._runcollection:
+            return None
+        return self._runcollection['name']
+
+    def get_runcollection(self):
+        if not self._runcollection_id:
+            self.get_new_runcollection()
+        try:
+            res = requests.get(self._root + 'run_collection/' + self._runcollection_id + '/')
+            res.raise_for_status()
+            name = res.json()['name']
+            return name
+        except requests.exceptions.HTTPError:
+            return None
 
     def get_runcollection_name(self):
         if not self._runcollection_id:
@@ -214,21 +241,32 @@ class PoPSDashboard(wx.EvtHandler):
         except requests.exceptions.HTTPError:
             return None
 
-    def _create_runcollection(self):
+    def _create_runcollection(self, reuse=True):
         runcollection = self._runcollection.copy()
         runcollection['status'] = 'PENDING'
         runcollection['date_created'] = None
-        new_name = self._create_runcollection_name(runcollection['name'])
-        runcollection['name'] = new_name
-        # change random seed so that the new collection looks different
-        runcollection['random_seed'] = int(runcollection['random_seed']) + 1
+        if reuse:
+            runcollection['name'] = self._create_runcollection_name(runcollection['name'])
+            # change random seed so that the new collection looks different
+            runcollection['random_seed'] = int(runcollection['random_seed']) + 1
+        else:
+            runcollection['session'] = self._session_id
+            runcollection['name'] = 'First run'
+            runcollection['random_seed'] = 1
+            runcollection['budget'] = 1e6
+            runcollection['cost_per_meter_squared'] = 1
+        runcollection['status'] = 'PENDING'
+
         try:
+            print(runcollection)
             res = requests.post(self._root + 'run_collection/', data=runcollection)
             res.raise_for_status()
             self._runcollection = res.json()
+            print(res.json())
             self._runcollection_id = str(res.json()['id'])
             return self._runcollection_id
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def create_run(self):
@@ -350,7 +388,7 @@ class PoPSDashboard(wx.EvtHandler):
             f.write('LOCATION_NAME: {l}\n'.format(l=location))
             f.write('GUI: text\n')
         env['GISRC'] = tmp_gisrc_file
-        env['GRASS_MESSAGE_FORMAT'] = 'standard'
+        env['GRASS_MESSAGE_FORMAT'] = 'silent'
         env['GRASS_VERBOSE'] = '0'
         gscript.run_command('g.region', flags='d', env=env, quiet=True)
         gscript.run_command('db.connect', flags='c', env=env, quiet=True)
@@ -375,6 +413,7 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
 
     input_env['GRASS_REGION'] = gscript.region_env(raster=single_raster)
     genv = gscript.gisenv(env=input_env)
+    export_genv = gscript.gisenv(env=export_env)
     print('thread with '+ single_raster + ' using mapset ' +  gscript.gisenv(env=export_env)['MAPSET'])
     # single
     if single_raster:
@@ -415,6 +454,8 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
 
     shutil.rmtree(tempdir)
 
+    shutil.rmtree(os.path.join(export_genv['GISDBASE'], export_genv['LOCATION_NAME'], export_genv['MAPSET']))
+    shutil.rmtree(os.path.join(genv['GISDBASE'], genv['LOCATION_NAME'], genv['MAPSET']))
     os.remove(export_gisrc)
     os.remove(input_gisrc)
     try:
@@ -455,7 +496,10 @@ def process_for_dashboard(id_, year, raster, spread_rate_file):
             if line.startswith(str(year)):
                 y, n, s, e, w = line.split(',')
     # TODO: remove abs when fixed in dashboard
-    result['spreadrate'] = {'north_rate': abs(int(n)), 'south_rate': abs(int(s)), 'east_rate': abs(int(e)), 'west_rate': abs(int(w))}
+    result['spreadrate'] = {'north_rate': abs(int(n)) if n != 'nan' else 0,
+                            'south_rate': abs(int(s)) if s != 'nan' else 0,
+                            'east_rate': abs(int(e)) if e != 'nan' else 0,
+                            'west_rate': abs(int(w)) if w != 'nan' else 0}
 
     return result
 

@@ -85,6 +85,11 @@ class PopsPanel(wx.Panel):
 
         self.treated_area = 0
         self.money_spent = 0
+        
+        self.env = os.environ.copy()
+        self.env['GRASS_OVERWRITE'] = '1'
+        self.env['GRASS_VERBOSE'] = '0'
+        self.env['GRASS_MESSAGE_FORMAT'] = 'standard'
 
         if 'POPS' not in self.settings:
             self.settings['POPS'] = {}
@@ -287,7 +292,7 @@ class PopsPanel(wx.Panel):
     def _uploadStepToDashboard(self, event):
         if not 'probability' in event.name:
             return
-        print(event.name)
+
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', event.name)
         if res:
             date = res.group()
@@ -382,7 +387,7 @@ class PopsPanel(wx.Panel):
 
     def _createPlayerName(self):
         if self.webDashboard:
-            name = self.webDashboard.get_runcollection_name()
+            name = self.webDashboard.runcollection_name()
             if name:
                 name = name.replace('-', '_').replace('.', '_').replace('__', '_').replace(':', '_').replace(' ', '_')
                 return name
@@ -457,7 +462,9 @@ class PopsPanel(wx.Panel):
             try:
                 # need to set the colors, sometimes color tables are not copied
                 # flag w will end in error if there is already table
-                gscript.run_command('r.colors', map=name, quiet=True, rules=rules, flags='w')
+                env = self.env.copy()
+                env['GRASS_MESSAGE_FORMAT'] = 'silent'
+                gscript.run_command('r.colors', map=name, quiet=True, rules=rules, flags='w', env=env)
             except CalledModuleError:
                 pass
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
@@ -500,6 +507,12 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
 
     def _initSimulation(self, restart):
+        # update params, dashboard
+        if self.webDashboard:
+            # get new run collection
+            self.webDashboard.new_runcollection()
+            self.params.update()
+
         playerName = self._createPlayerName()
 
         # grab a new raster of conditions
@@ -514,7 +527,7 @@ class PopsPanel(wx.Panel):
         extent = gscript.raster_info(studyArea)
         region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
         region = '{n},{s},{w},{e},{align}'.format(**region)
-        model_params = self.params.model
+        model_params = self.params.model.copy()
         model_params.update({'output_series': postfix,
                              'probability_series': probability})
 
@@ -522,11 +535,6 @@ class PopsPanel(wx.Panel):
         self.steeringClient.simulation_set_params(self.params.model_name,
                                                   model_params, self.params.model_flags, region)
         self.steeringClient.simulation_start(restart)
-        # update params, dashboard
-        if self.webDashboard:
-            # get new run collection
-            self.webDashboard.get_new_runcollection()
-            self.params.update()
 
     def RunSimulation(self, event=None):
         if self.steeringClient.simulation_is_running():
@@ -598,11 +606,10 @@ class PopsPanel(wx.Panel):
                 tr_year = self.params.model['start_time'] + self.currentRealityCheckpoint
         else:
             tr_year = self.params.model['start_time']
-
-        if self.params.pops['steering']['move_current_year']:
-            self.currentRealityCheckpoint = self.currentCheckpoint + 1
-        else:
-            self.currentRealityCheckpoint += 1
+            
+            
+        print("Current checkpoint: " + str(self.currentCheckpoint))
+        print("Current reality checkpoint: " + str(self.currentRealityCheckpoint))
 
         if self.webDashboard:
             self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent,
@@ -613,8 +620,16 @@ class PopsPanel(wx.Panel):
         self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
         self.steeringClient.simulation_load_data(tr_year, tr_name)
-
-        self.steeringClient.simulation_goto(self.currentCheckpoint)
+        if self.params.pops['steering']['move_current_year']:
+            self.steeringClient.simulation_goto(self.currentCheckpoint)
+        else:
+            self.steeringClient.simulation_goto(self.currentRealityCheckpoint)
+            
+        if self.params.pops['steering']['move_current_year']:
+            self.currentRealityCheckpoint = self.currentCheckpoint + 1
+        else:
+            self.currentCheckpoint = self.currentRealityCheckpoint
+            self.currentRealityCheckpoint += 1
 
         if self.visualizationModes[self.visualizationMode] != 'probability':
             self.steeringClient.simulation_sync_runs()
