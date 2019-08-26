@@ -12,6 +12,11 @@ import numpy as np
 from collections import deque
 
 import wx
+try:
+    import wx.html2 as webview
+except ImportError:
+    webview = None
+
 
 class DashboardFrame(wx.Frame):
     def __init__(self, parent, fontsize, average, maximum, title, formatting_string):
@@ -105,9 +110,118 @@ class MultipleDashboardFrame(wx.Frame):
         self.Layout()
 
 
+
+class MultipleHTMLDashboardFrame(wx.Frame):
+    def __init__(self, parent, fontsize, average, maximum, title, formatting_string, vertical=False):
+        wx.Frame.__init__(self, parent)#, style=wx.NO_BORDER)
+        self.panel = wx.Panel(parent=self)
+        self.fontsize = fontsize
+        self.average = average
+        self.vertical = vertical
+        # TODO: average not used yet here
+        # TODO: vertical not supported
+
+        # maximum, title and formatting_string are lists
+        self.list_maximum = maximum
+        self.list_title = title
+        self.list_formatting_string = formatting_string
+
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        if webview:
+            self.textCtrl = webview.WebView.New(self)
+            html = self._content(values=[None] * len(title))
+            self.textCtrl.SetPage(html, '')
+            self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+
+        self.SetSizer(self.sizer)
+        self.sizer.Fit(self.panel)
+
+    def _head(self):
+        return \
+        """<!DOCTYPE html><html><head><style>
+        .grid-container {{
+          display: grid;
+          grid-template-columns: {auto} ;
+          padding: 0px;
+        }}
+        .grid-item {{
+          background-color: rgba(255, 255, 255, 0.8);
+          padding: 0px;
+          font-size: {fontsize}px;
+          text-align: left;
+        }}
+        progress {{
+            display:inline-block;
+            padding:0px 0 0 0;
+            margin:0;
+            background:none;
+            border: 0;
+            border-radius: 15px;
+            text-align: left;
+            position:relative;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 0.8em;
+        }}
+        progress::-webkit-progress-bar {{
+            margin:0 auto;
+            background-color: #CCC;
+            border-radius: 15px;
+            box-shadow:0px 0px 6px #777 inset;
+        }}
+        progress::-webkit-progress-value {{
+            display:inline-block;
+            float:left;
+            margin:0px 0px 0 0;
+            background: #F70;
+            border-radius: 15px;
+            box-shadow:0px 0px 6px #666 inset;
+        }}
+        progress:after {{
+            display:inline-block;
+            float:left;
+            content: attr(value) '%';
+        }}
+        </style></head><body>
+        <div class="grid-container">
+        """
+
+    def _end(self):
+        return "</div></body></html>"
+
+    def _content(self, values):
+        div = '<div class="grid-item">{item}</div>'
+        html = self._head().format(auto=' '.join(['auto'] * 3), fontsize=self.fontsize)
+        for i in range(len(self.list_title)):
+            if values[i] is None:
+                values[i] = 0
+                label = ''
+            else:
+                label = self.list_formatting_string[i].format(values[i])
+            html += div.format(item=self.list_title[i] + ':')
+            html += div.format(item='<progress id="progressBar" max="{max}" value="{val}">'.format(max=self.list_maximum[i], val=values[i]))
+            html += div.format(item=label)
+        html += self._end()
+        return html
+
+    def show_value(self, values):
+        if len(self.list_title) != len(values):
+            print('wrong number of values!')
+            return
+        html = self._content(values)
+        if webview:
+            self.textCtrl.SetPage(html, '')
+
+
 if __name__ == "__main__":
     app = wx.App()
-    if True:
+    test = 'html'
+    if test == 'html':
+        fr = MultipleHTMLDashboardFrame(parent=None, fontsize=10, average=1, maximum=[200, 100, 20],
+                                        title=['T 1', 'T 2', 'T 3'], formatting_string=['{}', '{}', '{}'], vertical=True)
+        fr.SetPosition((700, 200))
+        fr.SetSize((850, 800))
+        fr.show_value([5000, 20, 1000000])
+    elif test == 'wx':
         fr = MultipleDashboardFrame(parent=None, fontsize=10, average=1, maximum=[200, 100, 20],
                                     title=['T 1', 'T 2', 'T 3'], formatting_string=['{}', '{}', '{}'], vertical=True)
         fr.SetPosition((700, 200))

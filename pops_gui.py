@@ -23,7 +23,7 @@ from grass.exceptions import CalledModuleError
 
 from tangible_utils import get_environment, changeLayer
 
-from activities_dashboard import DashboardFrame, MultipleDashboardFrame
+from activities_dashboard import DashboardFrame, MultipleHTMLDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT
 from pops_dashboard import PoPSDashboard, ModelParameters
@@ -1055,8 +1055,8 @@ class PopsPanel(wx.Panel):
         maximum = self.tasks[self.current]['display']['maximum']
         formatting_string = self.tasks[self.current]['display']['formatting_string']
         if multiple:
-            self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
-                                                     title=title, formatting_string=formatting_string, vertical=vertical)
+            self.dashboardFrame = MultipleHTMLDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
+                                                             title=title, formatting_string=formatting_string, vertical=vertical)
         else:
             self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
 

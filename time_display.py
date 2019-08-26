@@ -33,9 +33,6 @@ class SteeringDisplay(wx.Panel):
         wx.Panel.__init__(self, parent=parent)
         self.years = range(start, end + 1)
         self.fontsize = fontsize
-        self.textCtrl = wxhtml.HtmlWindow(self, style=wx.NO_FULL_REPAINT_ON_RESIZE |
-                                          wxhtml.HW_SCROLLBAR_NEVER |
-                                          wxhtml.HW_NO_SELECTION)
         self.textCtrl = webview.WebView.New(self)
         self.textCtrl.SetPage(template.format(body="", fontsize=self.fontsize), '')
         self.sizer = wx.BoxSizer(wx.VERTICAL)
