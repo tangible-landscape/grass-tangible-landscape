@@ -451,6 +451,7 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
         with open(tmp_file_prob) as f:
             j = f.read()
             results['probability_map'] = j
+    results['susceptible_map'] = 'null'
 
     shutil.rmtree(tempdir)
 
@@ -495,11 +496,11 @@ def process_for_dashboard(id_, year, raster, spread_rate_file):
         for line in lines:
             if line.startswith(str(year)):
                 y, n, s, e, w = line.split(',')
-    # TODO: remove abs when fixed in dashboard
-    result['spreadrate'] = {'north_rate': abs(int(n)) if n != 'nan' else 0,
-                            'south_rate': abs(int(s)) if s != 'nan' else 0,
-                            'east_rate': abs(int(e)) if e != 'nan' else 0,
-                            'west_rate': abs(int(w)) if w != 'nan' else 0}
+
+    result['spreadrate'] = {'north_rate': int(n) if n != 'nan' else 0,
+                            'south_rate': int(s) if s != 'nan' else 0,
+                            'east_rate': int(e) if e != 'nan' else 0,
+                            'west_rate': int(w) if w != 'nan' else 0}
 
     return result
 
