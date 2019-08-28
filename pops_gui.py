@@ -85,7 +85,7 @@ class PopsPanel(wx.Panel):
 
         self.treated_area = 0
         self.money_spent = 0
-        
+
         self.env = os.environ.copy()
         self.env['GRASS_OVERWRITE'] = '1'
         self.env['GRASS_VERBOSE'] = '0'
@@ -515,17 +515,20 @@ class PopsPanel(wx.Panel):
 
         playerName = self._createPlayerName()
 
-        # grab a new raster of conditions
-        # process new input layer
-        studyArea = self.configuration['tasks'][self.current]['base']
         host = self.params.model['host']
-        probability = self.params.model['probability_series']
+        if 'region' in self.params.pops:
+            region = self.params.pops['region']
+            extent = gscript.parse_command('g.region', flags='gu', region=region)
+            region = {'n': extent['n'], 's': extent['s'], 'w': extent['w'], 'e': extent['e'], 'align': host}
+        else:
+            studyArea = self.configuration['tasks'][self.current]['base']
+            extent = gscript.raster_info(studyArea)
+            region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
 
+        probability = self.params.model['probability_series']
         postfix = self.getEventName() + '__' + playerName + '_'
         probability = probability + '__' + postfix
 
-        extent = gscript.raster_info(studyArea)
-        region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
         region = '{n},{s},{w},{e},{align}'.format(**region)
         model_params = self.params.model.copy()
         model_params.update({'output_series': postfix,
@@ -606,8 +609,8 @@ class PopsPanel(wx.Panel):
                 tr_year = self.params.model['start_time'] + self.currentRealityCheckpoint
         else:
             tr_year = self.params.model['start_time']
-            
-            
+
+
         print("Current checkpoint: " + str(self.currentCheckpoint))
         print("Current reality checkpoint: " + str(self.currentRealityCheckpoint))
 
@@ -624,7 +627,7 @@ class PopsPanel(wx.Panel):
             self.steeringClient.simulation_goto(self.currentCheckpoint)
         else:
             self.steeringClient.simulation_goto(self.currentRealityCheckpoint)
-            
+
         if self.params.pops['steering']['move_current_year']:
             self.currentRealityCheckpoint = self.currentCheckpoint + 1
         else:
