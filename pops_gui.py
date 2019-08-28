@@ -473,7 +473,8 @@ class PopsPanel(wx.Panel):
             except CalledModuleError:
                 pass
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-            self._changeResultsLayer(cmd=cmd, name=name, opacity=0.7, resultType='results', useEvent=False)
+            opacity = float(self.params.pops['results_opacity']) if 'results_opacity' in self.params.pops else 1
+            self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=False)
 
     def ShowTreatment(self):
         event = self.getEventName()
@@ -671,7 +672,14 @@ class PopsPanel(wx.Panel):
         else:
             gscript.run_command('g.copy', raster=[treatment_layer + '__' + postfix, name], env=env)
         gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
-        gscript.run_command('v.colors', map=name, use='cat', color=self.configuration['POPS']['color_treatments'], env=env)
+
+        if 'color_treatments' in self.params.pops and self.params.pops['color_treatments']:
+            color = self.params.pops['color_treatments'].split('.')
+            if len(color) == 1:  # grass color table
+                param = {'color': color[0]}
+            else:  # user-defined color rules in file
+                param = {'rules': os.path.join(self.workdir, self.configuration['POPS']['color_treatments'])}
+            gscript.run_command('v.colors', map=name, use='cat', env=env, **param)
         return name
         # for nicer look
         #gscript.run_command('v.generalize', input=name + '_tmp', output=name, method='snakes', threshold=10, env=env)
@@ -742,7 +750,9 @@ class PopsPanel(wx.Panel):
                                                 currentView=self.currentCheckpoint,
                                                 vtype=self.visualizationModes[self.visualizationMode])
                         self.scaniface.postEvent(self, evt)
-                        self._changeResultsLayer(cmd=cmd, name=name, opacity=0.7, resultType='results', useEvent=True)
+
+                        opacity = float(self.params.pops['results_opacity']) if 'results_opacity' in self.params.pops else 1
+                        self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=True)
                         if self._one_step:
                             self._one_step = False
 
