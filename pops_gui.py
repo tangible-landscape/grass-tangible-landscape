@@ -21,7 +21,7 @@ import grass.script as gscript
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
-from tangible_utils import get_environment, changeLayer
+from tangible_utils import get_environment, changeLayer, checkLayers
 
 from activities_dashboard import DashboardFrame, MultipleHTMLDashboardFrame
 
@@ -453,6 +453,11 @@ class PopsPanel(wx.Panel):
         if self.currentRealityCheckpoint == 0:
             name = ''
 
+        if self.currentCheckpoint == 0:
+            self.ShowInitalInfection(useEvent=False, show=True)
+        else:
+            self.ShowInitalInfection(useEvent=False, show=False)
+
         f = gscript.find_file(name=name, element='raster')
         if not f['fullname']:
             # display empty raster
@@ -727,6 +732,9 @@ class PopsPanel(wx.Panel):
                         return
                     currentCheckpoint = int(year) - self.params.model['start_time'] + 1
                     self.checkpoints[currentCheckpoint] = (int(year), int(month), int(day))
+                    # hide infection in case it's visible
+                    self.ShowInitalInfection(useEvent=True, show=False)
+
                     # when steering, jump just one step but keep processing outputs
                     if self._one_step or self._one_step is None:
                         self.currentCheckpoint = currentCheckpoint
@@ -1033,6 +1041,21 @@ class PopsPanel(wx.Panel):
                                  name=self.empty_placeholders['results'], resultType='results', useEvent=useEvent)
         self._changeResultsLayer(cmd=['d.vect', 'map=' + self.empty_placeholders['treatments']],
                                  name=self.empty_placeholders['treatments'], resultType='treatments', useEvent=useEvent)
+
+    def ShowInitalInfection(self, useEvent, show=True):
+        # assumes initial infection is named the same way as infected raster
+        infected = self.params.model['infected']
+        ll = self.giface.GetLayerList()
+        for l in ll:
+            if l.maplayer.name:
+                name = l.maplayer.name.split('@')[0]
+                if name == infected and (show is not ll.IsLayerChecked(l)):
+                    if useEvent:
+                        evt = checkLayers(layers=[l], checked=show)
+                        self.scaniface.postEvent(self.scaniface, evt)
+                    else:
+                        ll.CheckLayer(l, checked=show)
+                    break
 
     def RemoveLayers(self, etype='raster', pattern=None, layers=None):
         # works only for raster/vector at this point
