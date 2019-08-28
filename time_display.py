@@ -10,6 +10,7 @@ This program is free software under the GNU General Public License
 import wx
 import wx.html as wxhtml
 import wx.html2 as webview
+from itertools import cycle
 
 
 template = """
@@ -29,10 +30,11 @@ template = """
 
 
 class SteeringDisplay(wx.Panel):
-    def __init__(self, parent, fontsize, start, end, vtype):
+    def __init__(self, parent, fontsize, start, end, vtype, color_scheme):
         wx.Panel.__init__(self, parent=parent)
         self.years = range(start, end + 1)
         self.fontsize = fontsize
+        self.color_scheme = cycle(color_scheme)
         self.textCtrl = webview.WebView.New(self)
         self.textCtrl.SetPage(template.format(body="", fontsize=self.fontsize), '')
         self.sizer = wx.BoxSizer(wx.VERTICAL)
@@ -48,10 +50,10 @@ class SteeringDisplay(wx.Panel):
     def GenerateHTMLSimple(self, current, currentView, vtype):
         delimiter = '&#8594;'
         html = ''
-        highlight_style = "border-radius: 0.2em;border:0.1em solid #ccc;background-color:#ccc;"
-        style = {'past': 'weight="bold" color="black"'.format(self.fontsize),
-                 'current':  'weight="bold" color="black"'.format(int(self.fontsize * 1.5)),
-                 'future': 'weight="bold" color="gray"'.format(self.fontsize)}
+        highlight_style = "border-radius: 0.2em;border:0.1em solid #CCC;background-color:#CCC;"
+        style = {'past': 'weight="bold" color="black"',
+                 'current':  'weight="bold" color="black"',
+                 'future': 'weight="bold" color="gray"'}
         for year in self.years:
             highlight = ''
             if year < current:
@@ -107,13 +109,13 @@ class SteeringDisplay(wx.Panel):
 
 
 class SteeringDisplayFrame(wx.Frame):
-    def __init__(self, parent, fontsize, start, end, vtype, test=False):
+    def __init__(self, parent, fontsize, start, end, vtype, color_scheme, test=False):
         if test:
             wx.Frame.__init__(self, parent)
         else:
             wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.test = test
-        self.timedisplay = SteeringDisplay(self, fontsize, start, end, vtype)
+        self.timedisplay = SteeringDisplay(self, fontsize, start, end, vtype, color_scheme)
         if test:
             self.slider1 = wx.Slider(self, minValue=0, maxValue=(end - start), value=0)
             self.slider2 = wx.Slider(self, minValue=0, maxValue=(end - start), value=0)
@@ -191,7 +193,7 @@ class SimpleTimeDisplayFrame(wx.Frame):
 
 if __name__ == "__main__":
     app = wx.App()
-    disp = SteeringDisplayFrame(None, 40, 2016, 2021, None, True)
+    disp = SteeringDisplayFrame(None, 40, 2016, 2021, None, ['green', 'yellow'], True)
     disp.SetSize((800, 200))
     disp.Show()
     app.MainLoop()
