@@ -112,12 +112,13 @@ class MultipleDashboardFrame(wx.Frame):
 
 
 class MultipleHTMLDashboardFrame(wx.Frame):
-    def __init__(self, parent, fontsize, average, maximum, title, formatting_string, vertical=False):
+    def __init__(self, parent, fontsize, average, maximum, title, formatting_string, vertical=False, grid=False):
         wx.Frame.__init__(self, parent)#, style=wx.NO_BORDER)
         self.panel = wx.Panel(parent=self)
         self.fontsize = fontsize
         self.average = average
         self.vertical = vertical
+        self.grid = grid  # grid layout may not be implemented in webkit
         # TODO: average not used yet here
         # TODO: vertical not supported
 
@@ -129,27 +130,17 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         if webview:
             self.textCtrl = webview.WebView.New(self)
-            html = self._content(values=[None] * len(title))
+            values=[None] * len(title)
+            html = self._content_grid(values) if self.grid else self._content_table(values)
             self.textCtrl.SetPage(html, '')
             self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
 
         self.SetSizer(self.sizer)
         self.sizer.Fit(self.panel)
 
-    def _head(self):
+    def _progressbar(self):
         return \
-        """<!DOCTYPE html><html><head><style>
-        .grid-container {{
-          display: grid;
-          grid-template-columns: {auto} ;
-          padding: 0px;
-        }}
-        .grid-item {{
-          background-color: rgba(255, 255, 255, 0.8);
-          padding: 0px;
-          font-size: {fontsize}px;
-          text-align: left;
-        }}
+        """
         progress {{
             display:inline-block;
             padding:0px 0 0 0;
@@ -181,16 +172,45 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             float:left;
             content: attr(value) '%';
         }}
+        """
+    def _head_grid(self):
+        return \
+        """<!DOCTYPE html><html><head><style>
+        .grid-container {{
+          display: grid;
+          grid-template-columns: {auto} ;
+          padding: 0px;
+        }}
+        .grid-item {{
+          background-color: rgba(255, 255, 255, 0.8);
+          padding: 0px;
+          font-size: {fontsize}px;
+          text-align: left;
+        }}
+        """ \
+        + self._progressbar() + \
+        """
         </style></head><body>
         <div class="grid-container">
         """
+    def _head_table(self):
+        return \
+        """<!DOCTYPE html><html><head><style>""" \
+        + self._progressbar() + \
+        """
+        </style></head><body>
+        <table style="width:100%">
+        """
 
-    def _end(self):
+    def _end_grid(self):
         return "</div></body></html>"
 
-    def _content(self, values):
+    def _end_table(self):
+        return "</table></body></html>"
+
+    def _content_grid(self, values):
         div = '<div class="grid-item">{item}</div>'
-        html = self._head().format(auto=' '.join(['auto'] * 3), fontsize=self.fontsize)
+        html = self._head_grid().format(auto=' '.join(['auto'] * 3), fontsize=self.fontsize)
         for i in range(len(self.list_title)):
             if values[i] is None:
                 values[i] = 0
@@ -200,14 +220,32 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             html += div.format(item=self.list_title[i] + ':')
             html += div.format(item='<progress id="progressBar" max="{max}" value="{val}">'.format(max=self.list_maximum[i], val=values[i]))
             html += div.format(item=label)
-        html += self._end()
+        html += self._end_grid()
+        return html
+
+    def _content_table(self, values):
+        div = '<td>{item}</td>'
+        html = self._head_table()
+        html += '<tr>'
+        for i in range(len(self.list_title)):
+            html += '<tr>'
+            if values[i] is None:
+                values[i] = 0
+                label = ''
+            else:
+                label = self.list_formatting_string[i].format(values[i])
+            html += div.format(item=self.list_title[i] + ':')
+            html += div.format(item='<progress id="progressBar" max="{max}" value="{val}">'.format(max=self.list_maximum[i], val=values[i]))
+            html += div.format(item=label)
+            html += '</tr>'
+        html += self._end_table()
         return html
 
     def show_value(self, values):
         if len(self.list_title) != len(values):
             print('wrong number of values!')
             return
-        html = self._content(values)
+        html = self._content_grid(values) if self.grid else self._content_table(values)
         if webview:
             self.textCtrl.SetPage(html, '')
 
