@@ -117,8 +117,8 @@ class PoPSDashboard(wx.EvtHandler):
         if gscript.vector_info_topo(polygons)['areas']:
             geojson = self._vector_to_proj_geojson(polygons, 'treatment')
             self._run['management_polygons'] = geojson
-            self._run['management_cost'] = cost
-            self._run['management_area'] = area
+            self._run['management_cost'] = "{v:.2f}".format(v=cost)
+            self._run['management_area'] = "{v:.2f}".format(v=area)
         else:
             self._run['management_polygons'] = None
             self._run['management_cost'] = 0
@@ -158,7 +158,8 @@ class PoPSDashboard(wx.EvtHandler):
             res = requests.get(self._root + 'run_collection/' + runcollection_id + '/')
             res.raise_for_status()
             return res.json()
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def _get_runcollection_id(self):
@@ -169,7 +170,8 @@ class PoPSDashboard(wx.EvtHandler):
             if runcollection_id == 'null':
                 return None
             return runcollection_id
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def new_runcollection(self):
@@ -202,7 +204,8 @@ class PoPSDashboard(wx.EvtHandler):
             res.raise_for_status()
             self._session = res.json()
             return self._session['name']
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def get_session(self):
@@ -211,7 +214,8 @@ class PoPSDashboard(wx.EvtHandler):
             res.raise_for_status()
             self._session = res.json()
             return res.json()
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return {}
 
     def runcollection_name(self):
@@ -227,7 +231,8 @@ class PoPSDashboard(wx.EvtHandler):
             res.raise_for_status()
             name = res.json()['name']
             return name
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def get_runcollection_name(self):
@@ -238,7 +243,8 @@ class PoPSDashboard(wx.EvtHandler):
             res.raise_for_status()
             name = res.json()['name']
             return name
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def _create_runcollection(self, reuse=True):
@@ -258,11 +264,9 @@ class PoPSDashboard(wx.EvtHandler):
         runcollection['status'] = 'PENDING'
 
         try:
-            print(runcollection)
             res = requests.post(self._root + 'run_collection/', data=runcollection)
             res.raise_for_status()
             self._runcollection = res.json()
-            print(res.json())
             self._runcollection_id = str(res.json()['id'])
             return self._runcollection_id
         except requests.exceptions.HTTPError as e:
@@ -279,7 +283,8 @@ class PoPSDashboard(wx.EvtHandler):
             self._run = res.json()
             self._run_id = str(res.json()['id'])
             return self._run_id
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def update_run(self):
@@ -288,7 +293,8 @@ class PoPSDashboard(wx.EvtHandler):
             res.raise_for_status()
             run_id = str(res.json()['id'])
             return run_id
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def upload_results(self, year, probability, infected, spread_rate_file):
@@ -311,15 +317,17 @@ class PoPSDashboard(wx.EvtHandler):
         self._last_name_suffix = last_name_suffix
 
     def _report_run_status(self, success=True):
-        print("report_status_done")
+        print("report_status_done for run " + self._run_id)
         self._run['status'] = 'SUCCESS' if success else 'FAILURE'
         try:
-            res = requests.put(self._root + 'run/' + self._run_id + '/', data=self._run)
+            res = requests.put(self._root + 'run/' + self._run_id + '/', json=self._run)
             res.raise_for_status()
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def report_runcollection_status(self, success=True):
+        print('Report run collection done for ' + self._runcollection_id)
         if not self._runcollection:
             return None
         self._runcollection['status'] = 'SUCCESS' if success else 'FAILURE'
@@ -327,7 +335,8 @@ class PoPSDashboard(wx.EvtHandler):
             res = requests.put(self._root + 'run_collection/' + self._runcollection_id + '/', data=self._runcollection)
             res.raise_for_status()
             return res.json()['id']
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
+            print(e)
             return None
 
     def _raster_to_proj_geojson(self, raster, env):
@@ -348,7 +357,6 @@ class PoPSDashboard(wx.EvtHandler):
         return j
 
     def _on_thread_done(self, event):
-        print("on_thread_done")
         if event.out_id is None:
             self._report_run_status(success=False)
             return
@@ -414,7 +422,6 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
     input_env['GRASS_REGION'] = gscript.region_env(raster=single_raster)
     genv = gscript.gisenv(env=input_env)
     export_genv = gscript.gisenv(env=export_env)
-    print('thread with '+ single_raster + ' using mapset ' +  gscript.gisenv(env=export_env)['MAPSET'])
     # single
     if single_raster:
         gscript.run_command('r.to.vect', input=single_raster, flags='v',
@@ -466,7 +473,7 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
         res.raise_for_status()
 
         out_id = str(res.json()['pk'])
-        print ('out_id ' + out_id)
+        print ('Uploaded output with id ' + out_id)
         evt = threadDone(out_id=out_id, orig_name=probability)
         wx.PostEvent(evtHandler, evt)
         return out_id
@@ -483,9 +490,10 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
 
 def process_for_dashboard(id_, year, raster, spread_rate_file):
     result = {'run': id_, 'year': year}
-    data = gscript.parse_command('r.univar', map=raster, flags='gr')
+    env = get_environment(raster=raster)
+    data = gscript.parse_command('r.univar', map=raster, flags='gr', env=env)
     info = gscript.raster_info(raster)
-    result['infected_area'] = int(data['n']) * info['nsres'] * info['ewres']
+    result['infected_area'] = "{v:.2f}".format(v=int(data['n']) * info['nsres'] * info['ewres'])
     result['number_infected'] = int(data['sum'])
     result['timetoboundary'] = {'north_time': 0, 'south_time': 0, 'east_time': 0, 'west_time': 0}
     result['distancetoboundary'] = {'north_distance': 0, 'south_distance': 0, 'east_distance': 0, 'west_distance': 0}

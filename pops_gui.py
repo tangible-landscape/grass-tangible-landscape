@@ -21,7 +21,7 @@ import grass.script as gscript
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
-from tangible_utils import get_environment, changeLayer
+from tangible_utils import get_environment, changeLayer, checkLayers
 
 from activities_dashboard import DashboardFrame, MultipleHTMLDashboardFrame
 
@@ -85,7 +85,7 @@ class PopsPanel(wx.Panel):
 
         self.treated_area = 0
         self.money_spent = 0
-        
+
         self.env = os.environ.copy()
         self.env['GRASS_OVERWRITE'] = '1'
         self.env['GRASS_VERBOSE'] = '0'
@@ -453,6 +453,11 @@ class PopsPanel(wx.Panel):
         if self.currentRealityCheckpoint == 0:
             name = ''
 
+        if self.currentCheckpoint == 0:
+            self.ShowInitalInfection(useEvent=False, show=True)
+        else:
+            self.ShowInitalInfection(useEvent=False, show=False)
+
         f = gscript.find_file(name=name, element='raster')
         if not f['fullname']:
             # display empty raster
@@ -468,7 +473,8 @@ class PopsPanel(wx.Panel):
             except CalledModuleError:
                 pass
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
-            self._changeResultsLayer(cmd=cmd, name=name, opacity=0.7, resultType='results', useEvent=False)
+            opacity = float(self.params.pops['results_opacity']) if 'results_opacity' in self.params.pops else 1
+            self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=False)
 
     def ShowTreatment(self):
         event = self.getEventName()
@@ -515,17 +521,20 @@ class PopsPanel(wx.Panel):
 
         playerName = self._createPlayerName()
 
-        # grab a new raster of conditions
-        # process new input layer
-        studyArea = self.configuration['tasks'][self.current]['base']
         host = self.params.model['host']
-        probability = self.params.model['probability_series']
+        if 'region' in self.params.pops:
+            region = self.params.pops['region']
+            extent = gscript.parse_command('g.region', flags='gu', region=region)
+            region = {'n': extent['n'], 's': extent['s'], 'w': extent['w'], 'e': extent['e'], 'align': host}
+        else:
+            studyArea = self.configuration['tasks'][self.current]['base']
+            extent = gscript.raster_info(studyArea)
+            region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
 
+        probability = self.params.model['probability_series']
         postfix = self.getEventName() + '__' + playerName + '_'
         probability = probability + '__' + postfix
 
-        extent = gscript.raster_info(studyArea)
-        region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
         region = '{n},{s},{w},{e},{align}'.format(**region)
         model_params = self.params.model.copy()
         model_params.update({'output_series': postfix,
@@ -606,8 +615,8 @@ class PopsPanel(wx.Panel):
                 tr_year = self.params.model['start_time'] + self.currentRealityCheckpoint
         else:
             tr_year = self.params.model['start_time']
-            
-            
+
+
         print("Current checkpoint: " + str(self.currentCheckpoint))
         print("Current reality checkpoint: " + str(self.currentRealityCheckpoint))
 
@@ -624,7 +633,7 @@ class PopsPanel(wx.Panel):
             self.steeringClient.simulation_goto(self.currentCheckpoint)
         else:
             self.steeringClient.simulation_goto(self.currentRealityCheckpoint)
-            
+
         if self.params.pops['steering']['move_current_year']:
             self.currentRealityCheckpoint = self.currentCheckpoint + 1
         else:
@@ -663,7 +672,14 @@ class PopsPanel(wx.Panel):
         else:
             gscript.run_command('g.copy', raster=[treatment_layer + '__' + postfix, name], env=env)
         gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
-        gscript.run_command('v.colors', map=name, use='cat', color=self.configuration['POPS']['color_treatments'], env=env)
+
+        if 'color_treatments' in self.params.pops and self.params.pops['color_treatments']:
+            color = self.params.pops['color_treatments'].split('.')
+            if len(color) == 1:  # grass color table
+                param = {'color': color[0]}
+            else:  # user-defined color rules in file
+                param = {'rules': os.path.join(self.workdir, self.configuration['POPS']['color_treatments'])}
+            gscript.run_command('v.colors', map=name, use='cat', env=env, **param)
         return name
         # for nicer look
         #gscript.run_command('v.generalize', input=name + '_tmp', output=name, method='snakes', threshold=10, env=env)
@@ -724,6 +740,9 @@ class PopsPanel(wx.Panel):
                         return
                     currentCheckpoint = int(year) - self.params.model['start_time'] + 1
                     self.checkpoints[currentCheckpoint] = (int(year), int(month), int(day))
+                    # hide infection in case it's visible
+                    self.ShowInitalInfection(useEvent=True, show=False)
+
                     # when steering, jump just one step but keep processing outputs
                     if self._one_step or self._one_step is None:
                         self.currentCheckpoint = currentCheckpoint
@@ -731,7 +750,9 @@ class PopsPanel(wx.Panel):
                                                 currentView=self.currentCheckpoint,
                                                 vtype=self.visualizationModes[self.visualizationMode])
                         self.scaniface.postEvent(self, evt)
-                        self._changeResultsLayer(cmd=cmd, name=name, opacity=0.7, resultType='results', useEvent=True)
+
+                        opacity = float(self.params.pops['results_opacity']) if 'results_opacity' in self.params.pops else 1
+                        self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=True)
                         if self._one_step:
                             self._one_step = False
 
@@ -1030,6 +1051,21 @@ class PopsPanel(wx.Panel):
                                  name=self.empty_placeholders['results'], resultType='results', useEvent=useEvent)
         self._changeResultsLayer(cmd=['d.vect', 'map=' + self.empty_placeholders['treatments']],
                                  name=self.empty_placeholders['treatments'], resultType='treatments', useEvent=useEvent)
+
+    def ShowInitalInfection(self, useEvent, show=True):
+        # assumes initial infection is named the same way as infected raster
+        infected = self.params.model['infected']
+        ll = self.giface.GetLayerList()
+        for l in ll:
+            if l.maplayer.name:
+                name = l.maplayer.name.split('@')[0]
+                if name == infected and (show is not ll.IsLayerChecked(l)):
+                    if useEvent:
+                        evt = checkLayers(layers=[l], checked=show)
+                        self.scaniface.postEvent(self.scaniface, evt)
+                    else:
+                        ll.CheckLayer(l, checked=show)
+                    break
 
     def RemoveLayers(self, etype='raster', pattern=None, layers=None):
         # works only for raster/vector at this point
