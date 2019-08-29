@@ -493,6 +493,8 @@ def process_for_dashboard(id_, year, raster, spread_rate_file):
     result = {'run': id_, 'year': year}
     env = get_environment(raster=raster)
     data = gscript.parse_command('r.univar', map=raster, flags='gr', env=env)
+    if not data:
+        data['n'] = data['sum'] = 0
     info = gscript.raster_info(raster)
     result['infected_area'] = "{v:.2f}".format(v=int(data['n']) * info['nsres'] * info['ewres'])
     result['number_infected'] = int(data['sum'])
