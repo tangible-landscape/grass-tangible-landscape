@@ -75,7 +75,8 @@ class ModelParameters:
             self.pops['budget'] = float(run_collection['budget'])
 
     def UnInit(self):
-        gscript.try_remove(self.model['spread_rate_output'])
+        if 'spread_rate_output' in self.model:
+            gscript.try_remove(self.model['spread_rate_output'])
 
 
 class PoPSDashboard(wx.EvtHandler):
@@ -124,6 +125,7 @@ class PoPSDashboard(wx.EvtHandler):
             self._run['management_cost'] = 0
             self._run['management_area'] = 0
         self._run['steering_year'] = year
+        print(self._run)
 
     def _compare_runcollections(self, runc1, runc2):
         same = True
@@ -281,7 +283,9 @@ class PoPSDashboard(wx.EvtHandler):
             res = requests.post(self._root + 'run/', data=self._run)
             res.raise_for_status()
             self._run = res.json()
+            print(self._run)
             self._run_id = str(res.json()['id'])
+            print("Created run id " + self._run_id)
             return self._run_id
         except requests.exceptions.HTTPError as e:
             print(e)
@@ -289,9 +293,12 @@ class PoPSDashboard(wx.EvtHandler):
 
     def update_run(self):
         try:
-            res = requests.post(self._root + 'run/', data=self._run)
+            print(self._run)
+            res = requests.put(self._root + 'run/' + self._run_id + '/', json=self._run)
             res.raise_for_status()
-            run_id = str(res.json()['id'])
+            self._run = res.json()
+            run_id = str(self._run['id'])
+            print("Updated run id " + self._run_id)
             return run_id
         except requests.exceptions.HTTPError as e:
             print(e)
