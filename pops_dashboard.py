@@ -11,6 +11,7 @@ import tempfile
 import threading
 import wx
 import re
+import json
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
@@ -116,16 +117,15 @@ class PoPSDashboard(wx.EvtHandler):
 
     def set_management(self, polygons, cost, area, year):
         if gscript.vector_info_topo(polygons)['areas']:
-            geojson = self._vector_to_proj_geojson(polygons, 'treatment')
+            geojson = self._management_to_proj_geojson(polygons, 'treatment', year)
             self._run['management_polygons'] = geojson
             self._run['management_cost'] = "{v:.2f}".format(v=cost)
             self._run['management_area'] = "{v:.2f}".format(v=area)
         else:
-            self._run['management_polygons'] = None
+            self._run['management_polygons'] = 0
             self._run['management_cost'] = 0
             self._run['management_area'] = 0
         self._run['steering_year'] = year
-        print(self._run)
 
     def _compare_runcollections(self, runc1, runc2):
         same = True
@@ -283,7 +283,6 @@ class PoPSDashboard(wx.EvtHandler):
             res = requests.post(self._root + 'run/', data=self._run)
             res.raise_for_status()
             self._run = res.json()
-            print(self._run)
             self._run_id = str(res.json()['id'])
             print("Created run id " + self._run_id)
             return self._run_id
@@ -293,7 +292,6 @@ class PoPSDashboard(wx.EvtHandler):
 
     def update_run(self):
         try:
-            print(self._run)
             res = requests.put(self._root + 'run/' + self._run_id + '/', json=self._run)
             res.raise_for_status()
             self._run = res.json()
@@ -346,21 +344,17 @@ class PoPSDashboard(wx.EvtHandler):
             print(e)
             return None
 
-    def _raster_to_proj_geojson(self, raster, env):
-        gscript.run_command('r.to.vect', input=raster, flags='vt',
-                            output=self._tmp_vect_file, type='area', column='outputs', env=env)
-        return self._vector_to_proj_geojson(self._tmp_vect_file, 'output')
-
-    def _vector_to_proj_geojson(self, vector, name):
+    def _management_to_proj_geojson(self, vector, name, cat):
         genv = gscript.gisenv()
         gscript.run_command('v.proj', location=genv['LOCATION_NAME'], quiet=True,
                             mapset=genv['MAPSET'], input=vector, output=name, overwrite=True, env=self._env)
         gscript.try_remove(self._tmp_out_file)
-        gscript.run_command('v.out.ogr', input=name, flags='sm', output=self._tmp_out_file,
+        gscript.run_command('v.extract', input=name, cats=cat, output=name + '_extracted', env=self._env, quiet=True, overwrite=True)
+        gscript.run_command('v.out.ogr', input=name + '_extracted', flags='sm', output=self._tmp_out_file,
                             format_='GeoJSON', lco="COORDINATE_PRECISION=4", quiet=True, overwrite=True,
                             env=self._env)
         with open(self._tmp_out_file) as f:
-            j = f.read()
+            j = json.load(f)
         return j
 
     def _on_thread_done(self, event):
@@ -458,12 +452,12 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
 
     if single_raster:
         with open(tmp_file_single) as f:
-            j = f.read()
+            j = json.load(f)
             results['single_spread_map'] = j
 
     if probability_raster:
         with open(tmp_file_prob) as f:
-            j = f.read()
+            j = json.load(f)
             results['probability_map'] = j
     results['susceptible_map'] = 'null'
 

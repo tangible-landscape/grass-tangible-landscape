@@ -302,7 +302,7 @@ class PopsPanel(wx.Panel):
             infected = event.name[len(remove):]
             spread_file = self.params.model['spread_rate_output']
             if self.webDashboard:
-                print(self.webDashboard.upload_results(year, event.name, infected, spread_file))
+                self.webDashboard.upload_results(year, event.name, infected, spread_file)
 
     def _computeDifference(self, names):
         difference = self.configuration['POPS']['difference']
@@ -615,10 +615,6 @@ class PopsPanel(wx.Panel):
                 tr_year = self.params.model['start_time'] + self.currentRealityCheckpoint
         else:
             tr_year = self.params.model['start_time']
-
-
-        print("Current checkpoint: " + str(self.currentCheckpoint))
-        print("Current reality checkpoint: " + str(self.currentRealityCheckpoint))
 
         if self.webDashboard:
             self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent,
@@ -1138,7 +1134,8 @@ class PopsPanel(wx.Panel):
         self.timeDisplay = SteeringDisplayFrame(self, start=self.params.model['start_time'],
                                        end=self.params.model['end_time'] + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'],
-                                       vtype=self.visualizationModes[self.visualizationMode])
+                                       vtype=self.visualizationModes[self.visualizationMode],
+                                       color_scheme=['red', 'green'])
 
         pos = self._getDashboardPosition(key='time_display')
         size = self._getDashboardSize(key='time_display')
