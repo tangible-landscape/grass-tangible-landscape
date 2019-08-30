@@ -420,6 +420,7 @@ class PopsPanel(wx.Panel):
 
     def ResetSimulation(self, event):
         self.HideResultsLayers()
+        self.ShowInitalInfection(useEvent=False, show=True)
         self.currentCheckpoint = 0
         self.currentRealityCheckpoint = 0
         self.treatmentHistory = [0] * 50
@@ -579,8 +580,12 @@ class PopsPanel(wx.Panel):
         postfix = event + '__' + playerName + '_'
         probability = probability + '__' + postfix
         # todo, save treatments
+        if self.params.pops['steering']['move_current_year']:
+            checkpoint = self.currentCheckpoint
+        else:
+            checkpoint = self.currentRealityCheckpoint
         tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
-                             str(max(0, self.currentCheckpoint))])
+                             str(max(0, checkpoint))])
         gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
         # create treatment vector of all used treatments in that scenario
         tr_vector = self.createTreatmentVector(tr_name, env=env)
