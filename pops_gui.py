@@ -128,6 +128,7 @@ class PopsPanel(wx.Panel):
         self.visualizationChoice.SetSelection(0)
         resetButton = wx.Button(modelingBox, label=u"\u21A9")
         resetButton.Bind(wx.EVT_BUTTON, self.ResetSimulation)
+        self.replaySelect = Select(modelingBox, size=(-1, -1), type='raster')
 
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
         self.visualizationChoice.Bind(wx.EVT_CHOICE, self.SwitchVizMode)
@@ -433,6 +434,34 @@ class PopsPanel(wx.Panel):
             self.webDashboard.report_runcollection_status(success=True)
         event.Skip()
 
+    def Replay(self, scenario):
+        displayTime = self.checkpoints[self.currentCheckpoint]
+        suffix = "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2])
+        name = scenario + '__' + suffix
+        if self.currentCheckpoint == 0:
+            self.ShowInitalInfection(useEvent=False, show=True)
+            return
+        else:
+            self.ShowInitalInfection(useEvent=False, show=False)
+
+        f = gscript.find_file(name=name, element='raster')
+        if not f['fullname']:
+            # display empty raster
+            self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
+                                     name=self.empty_placeholders['results'], resultType='results', useEvent=False)
+        else:
+            try:
+                # need to set the colors, sometimes color tables are not copied
+                # flag w will end in error if there is already table
+                env = self.env.copy()
+                env['GRASS_MESSAGE_FORMAT'] = 'silent'
+                gscript.run_command('r.colors', map=name, quiet=True, rules=rules, flags='w', env=env)
+            except CalledModuleError:
+                pass
+            cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
+            opacity = float(self.params.pops['results_opacity']) if 'results_opacity' in self.params.pops else 1
+            self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=False)
+        
     def ShowResults(self):
         # change layers
         self.ShowTreatment()
@@ -924,7 +953,10 @@ class PopsPanel(wx.Panel):
         if self.timeStatusDisplay:
             self.timeStatusDisplay.UpdateText(self.currentCheckpoint, "forecast" if self._ifShowProbability() else "occurrence")
 
-        self.ShowResults()
+        if self.replaySelect.GetValue():
+            self.Replay(self.replaySelect.GetValue())
+        else:
+            self.ShowResults()
 
     def ChangeRegion(self):
         region = self.treatmentSelect.GetValue()
