@@ -105,6 +105,7 @@ class PoPSDashboard(wx.EvtHandler):
         suffix = os.path.basename(gscript.tempfile(False)).replace('.', '_')
         self._tmp_vect_file = 'tmp_vect_' + suffix
         self._tmp_inf_file = 'tmp_inf_' + suffix
+        self._tmp_infavg_file = 'tmp_infavg_' + suffix
         self._tmp_prob_file = 'tmp_prob_' + suffix
         self._last_name_suffix = None
         self.Bind(EVT_THREAD_DONE, self._on_thread_done)
@@ -302,12 +303,17 @@ class PoPSDashboard(wx.EvtHandler):
             print(e)
             return None
 
-    def upload_results(self, year, probability, infected, spread_rate_file):
+    def upload_results(self, year, probability, single_infected, average_infected, spread_rate_file, use_single):
         env = get_environment(raster=probability)
         mapset = gscript.gisenv()['MAPSET']
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_inf_file,
-                        r=infected), env=env)
-        results = process_for_dashboard(self._run_id, year, self._tmp_inf_file, spread_rate_file)
+                        r=single_infected), env=env)
+        gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_infavg_file,
+                        r=average_infected), env=env)
+        results = process_for_dashboard(self._run_id, year,
+                                        self._tmp_inf_file if use_single else self._tmp_infavg_file,
+                                        spread_rate_file)
+        
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_prob_file,
                         r=probability), env=env)
         export_gisrc, export_env = self._create_tmp_gisrc_environment(self._temp_location)
@@ -408,7 +414,8 @@ class PoPSDashboard(wx.EvtHandler):
         shutil.rmtree(path_to_location)
         os.remove(self._tmpgisrc)
         gscript.run_command('g.remove', type='vector', name=self._tmp_vect_file, flags='f', quiet=True)
-        gscript.run_command('g.remove', type='raster', name=[self._tmp_inf_file, self._tmp_prob_file], flags='f', quiet=True)
+        gscript.run_command('g.remove', type='raster', name=[self._tmp_inf_file, self._tmp_infavg_file,
+                                                             self._tmp_prob_file], flags='f', quiet=True)
 
 
 def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,

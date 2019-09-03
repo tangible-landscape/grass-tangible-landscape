@@ -162,6 +162,11 @@ class PopsPanel(wx.Panel):
         sizer.Add(defaultRegion, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
 
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(wx.StaticText(modelingBox, label="Replay scenario:"), flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(self.replaySelect, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
+
         self.mainSizer.Add(boxSizer, flag=wx.EXPAND | wx.ALL, border=5)
 
         self.SetSizer(self.mainSizer)
@@ -291,7 +296,7 @@ class PopsPanel(wx.Panel):
             self.webDashboard.run_done(last_name_suffix=res.group())
 
     def _uploadStepToDashboard(self, event):
-        if not 'probability' in event.name:
+        if not event.name.startswith(self.params.model['probability_series']):
             return
 
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', event.name)
@@ -299,11 +304,18 @@ class PopsPanel(wx.Panel):
             date = res.group()
             year = int(date.split('_')[0])
             # assumes infected is already ready
-            remove = self.configuration['POPS']['model']['probability_series'] + '__'
-            infected = event.name[len(remove):]
+            remove = self.params.model['probability_series'] + '__'
+            single_infected = event.name[len(remove):]
+            average_infected = '__'.join([self.params.model['average_series'], single_infected])
             spread_file = self.params.model['spread_rate_output']
             if self.webDashboard:
-                self.webDashboard.upload_results(year, event.name, infected, spread_file)
+                checkpoint = int(year) - self.params.model['start_time'] + 1
+                if checkpoint > self.currentRealityCheckpoint:
+                    use_single = False
+                else:
+                    use_single = True
+                self.webDashboard.upload_results(year, event.name, single_infected, average_infected,
+                                                 spread_file, use_single=use_single)
 
     def _computeDifference(self, names):
         difference = self.configuration['POPS']['difference']
@@ -341,7 +353,7 @@ class PopsPanel(wx.Panel):
         name_split = name.split('__')
         if len(name_split) == 3:
             event, player, date = name.split('__')
-        elif len(name_split) == 4:  # probability
+        elif len(name_split) == 4:  # probability or avg
             prob, event, player, date = name.split('__')
         else:
             player = 'player'
@@ -562,13 +574,16 @@ class PopsPanel(wx.Panel):
             region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
 
         probability = self.params.model['probability_series']
+        average = self.params.model['average_series']
         postfix = self.getEventName() + '__' + playerName + '_'
         probability = probability + '__' + postfix
+        average = average + '__' + postfix
 
         region = '{n},{s},{w},{e},{align}'.format(**region)
         model_params = self.params.model.copy()
-        model_params.update({'output_series': postfix,
-                             'probability_series': probability})
+        model_params.update({'single_series': postfix,
+                             'probability_series': probability,
+                             'average_series': average})
 
         # run simulation
         self.steeringClient.simulation_set_params(self.params.model_name,
@@ -599,15 +614,12 @@ class PopsPanel(wx.Panel):
         treatments_resampled = treatments + '_resampled'
         studyArea = self.configuration['tasks'][self.current]['base']
         host = self.params.model['host']
-        probability = self.params.model['probability_series']
         treatment_efficacy = self.params.pops['efficacy']
         cost_per_meter_squared = self.params.pops['cost_per_meter_squared']
 
         env = get_environment(raster=studyArea, align=host)
 
         event = self.getEventName()
-        postfix = event + '__' + playerName + '_'
-        probability = probability + '__' + postfix
         # todo, save treatments
         if self.params.pops['steering']['move_current_year']:
             checkpoint = self.currentCheckpoint
@@ -750,6 +762,8 @@ class PopsPanel(wx.Panel):
             while not found and not self.steeringClient.results_empty():
                 name = self.steeringClient.results_get()
                 isProb = self._ifShowProbability(evalFuture=True)
+                if self.params.model['average_series'] in name:
+                    continue
                 if self.params.model['probability_series'] in name and isProb:
                     found = True
                     rules = os.path.join(self.workdir, self.configuration['POPS']['color_probability'])
