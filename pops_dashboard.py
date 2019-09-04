@@ -64,7 +64,8 @@ class ModelParameters:
             session = self._web.get_session()
             self.model['treatment_month'] = int(session['management_month'])
             self.model['reproductive_rate'] = float(session['reproductive_rate'])
-            self.model['natural_distance'] = float(session['distance_scale'])
+            # disable this for now
+            #self.model['natural_distance'] = float(session['distance_scale'])
             self.pops['weather'] = session['weather']
 
 

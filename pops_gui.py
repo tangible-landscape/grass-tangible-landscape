@@ -128,7 +128,7 @@ class PopsPanel(wx.Panel):
         self.visualizationChoice.SetSelection(0)
         resetButton = wx.Button(modelingBox, label=u"\u21A9")
         resetButton.Bind(wx.EVT_BUTTON, self.ResetSimulation)
-        self.replaySelect = Select(modelingBox, size=(-1, -1), type='raster')
+        self.replaySelect = Select(modelingBox, size=(-1, -1), type='raster', fullyQualified=False)
 
         runBtn.Bind(wx.EVT_BUTTON, lambda evt: self.RunSimulation())
         self.visualizationChoice.Bind(wx.EVT_CHOICE, self.SwitchVizMode)
@@ -449,6 +449,9 @@ class PopsPanel(wx.Panel):
     def Replay(self, scenario):
         displayTime = self.checkpoints[self.currentCheckpoint]
         suffix = "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2])
+        res = re.search("__[0-9]{4}_[0-9]{2}_[0-9]{2}", scenario)
+        if res:
+            scenario = scenario.replace(res.group(), '')
         name = scenario + '__' + suffix
         if self.currentCheckpoint == 0:
             self.ShowInitalInfection(useEvent=False, show=True)
@@ -462,6 +465,11 @@ class PopsPanel(wx.Panel):
             self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
                                      name=self.empty_placeholders['results'], resultType='results', useEvent=False)
         else:
+            if name.startswith(self.params.model['probability_series']):
+                rules = os.path.join(self.workdir, self.configuration['POPS']['color_probability'])
+            else:
+                rules = os.path.join(self.workdir, self.configuration['POPS']['color_trees'])
+
             try:
                 # need to set the colors, sometimes color tables are not copied
                 # flag w will end in error if there is already table
@@ -1000,9 +1008,12 @@ class PopsPanel(wx.Panel):
     def AddTempLayers(self):
         # create empty placeholders
         f = gscript.find_file(name=self.placeholders['results'], element='raster')
+        env = get_environment(raster=self.configuration['tasks'][self.current]['base'])
         if not f['fullname']:
-            env = get_environment(raster=self.configuration['tasks'][self.current]['base'])
             gscript.mapcalc(self.empty_placeholders['results'] + " = null()", env=env)
+
+        f = gscript.find_file(name=self.placeholders['treatments'], element='vector')
+        if not f['fullname']:
             gscript.run_command('v.edit', tool='create', map=self.empty_placeholders['treatments'], env=env)
 
         ll = self.giface.GetLayerList()
