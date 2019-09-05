@@ -112,7 +112,8 @@ class MultipleDashboardFrame(wx.Frame):
 
 
 class MultipleHTMLDashboardFrame(wx.Frame):
-    def __init__(self, parent, fontsize, average, maximum, title, formatting_string, vertical=False, grid=False):
+    def __init__(self, parent, fontsize, average, maximum, title,
+                 formatting_string, vertical=False, grid=False):
         wx.Frame.__init__(self, parent)#, style=wx.NO_BORDER)
         self.panel = wx.Panel(parent=self)
         self.fontsize = fontsize
@@ -254,8 +255,15 @@ if __name__ == "__main__":
     app = wx.App()
     test = 'html'
     if test == 'html':
-        fr = MultipleHTMLDashboardFrame(parent=None, fontsize=10, average=1, maximum=[200, 100, 20],
-                                        title=['T 1', 'T 2', 'T 3'], formatting_string=['{}', '{}', '{}'], vertical=True)
+        fr = MultipleHTMLDashboardFrame(
+            parent=None,
+            fontsize=10,
+            average=1,
+            maximum=[200, 100, 20],
+            title=['T 1', 'T 2', 'T 3'],
+            formatting_string=['{}', '{}', '{}'],
+            vertical=True,
+            grid=False)
         fr.SetPosition((700, 200))
         fr.SetSize((850, 800))
         fr.show_value([5000, 20, 1000000])
