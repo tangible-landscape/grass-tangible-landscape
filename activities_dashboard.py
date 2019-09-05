@@ -144,6 +144,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         """
         progress {{
             display:inline-block;
+            width: 100%;
             padding:0px 0 0 0;
             margin:0;
             background:none;
@@ -155,6 +156,8 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             font-size: 0.8em;
         }}
         progress::-webkit-progress-bar {{
+            display: inline-block;
+            width: 100%;
             margin:0 auto;
             background-color: #CCC;
             border-radius: 15px;
@@ -164,6 +167,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             display:inline-block;
             float:left;
             margin:0px 0px 0 0;
+            width: 100%;
             background: #F70;
             border-radius: 15px;
             box-shadow:0px 0px 6px #666 inset;
@@ -196,7 +200,17 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         """
     def _head_table(self):
         return \
-        """<!DOCTYPE html><html><head><style>""" \
+        """<!DOCTYPE html><html><head><style>
+        td {{
+            white-space: nowrap;
+        }}
+        /* There are simpler solutions than
+           table width, but work only in presumably
+           newer browsers. */
+        table td:nth-child(2) {{
+            width: 100%;
+        }}
+        """ \
         + self._progressbar() + \
         """
         </style></head><body>
