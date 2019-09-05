@@ -503,8 +503,12 @@ def process_for_dashboard(id_, year, raster, spread_rate_file):
     data = gscript.parse_command('r.univar', map=raster, flags='gr', env=env)
     if not data:
         data['n'] = data['sum'] = 0
-    info = gscript.raster_info(raster)
-    result['infected_area'] = "{v:.2f}".format(v=int(data['n']) * info['nsres'] * info['ewres'])
+    info = gscript.parse_command('r.info', flags='ge', map=raster, env=env)
+    if info['title'].startswith('Average'):
+        text, area = info['description'].split(':')
+        result['infected_area'] = float(area)
+    else:
+        result['infected_area'] = "{v:.2f}".format(v=int(data['n']) * float(info['nsres']) * float(info['ewres']))
     result['number_infected'] = int(data['sum'])
     result['timetoboundary'] = {'north_time': 0, 'south_time': 0, 'east_time': 0, 'west_time': 0}
     result['distancetoboundary'] = {'north_distance': 0, 'south_distance': 0, 'east_distance': 0, 'west_distance': 0}
