@@ -152,30 +152,25 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             border-radius: 15px;
             text-align: left;
             position: relative;
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: sans-serif;
             font-size: {fontsize}px;
         }}
         progress::-webkit-progress-bar {{
             display: inline-block;
             width: 100%;
-            margin:0 auto;
+            margin: 0 auto;
             background-color: #CCC;
             border-radius: 15px;
             box-shadow: 0px 0px 6px #777 inset;
         }}
         progress::-webkit-progress-value {{
             display: inline-block;
+            width: 100%;
             float: left;
             margin: 0px 0px 0 0;
-            width: 100%;
             background: #F70;
             border-radius: 15px;
             box-shadow: 0px 0px 6px #666 inset;
-        }}
-        progress:after {{
-            display: inline-block;
-            float: left;
-            content: attr(value) '%';
         }}
         """
     def _head_grid(self):
