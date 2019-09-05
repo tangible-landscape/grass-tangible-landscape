@@ -191,6 +191,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
           padding: 0px;
           font-size: {fontsize}px;
           text-align: left;
+          white-space: nowrap;
         }}
         """ \
         + self._progressbar() + \
