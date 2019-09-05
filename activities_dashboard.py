@@ -224,6 +224,12 @@ class MultipleHTMLDashboardFrame(wx.Frame):
     def _end_table(self):
         return "</table></body></html>"
 
+    def _progress_element(self, max_value, value):
+        # minimum is needed to generate a valid progress element
+        value = min(max_value, value)
+        return '<progress max="{max}" value="{val}"></progress>'.format(
+            max=max_value, val=value)
+
     def _content_grid(self, values):
         div = '<div class="grid-item">{item}</div>'
         html = self._head_grid().format(fontsize=self.fontsize)
@@ -234,7 +240,8 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             else:
                 label = self.list_formatting_string[i].format(values[i])
             html += div.format(item=self.list_title[i] + ':')
-            html += div.format(item='<progress id="progressBar" max="{max}" value="{val}">'.format(max=self.list_maximum[i], val=values[i]))
+            html += div.format(item=self._progress_element(
+                max_value=self.list_maximum[i], value=values[i]))
             html += div.format(item=label)
         html += self._end_grid()
         return html
@@ -242,7 +249,6 @@ class MultipleHTMLDashboardFrame(wx.Frame):
     def _content_table(self, values):
         div = '<td>{item}</td>'
         html = self._head_table().format(fontsize=self.fontsize)
-        html += '<tr>'
         for i in range(len(self.list_title)):
             html += '<tr>'
             if values[i] is None:
@@ -251,7 +257,8 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             else:
                 label = self.list_formatting_string[i].format(values[i])
             html += div.format(item=self.list_title[i] + ':')
-            html += div.format(item='<progress id="progressBar" max="{max}" value="{val}">'.format(max=self.list_maximum[i], val=values[i]))
+            html += div.format(item=self._progress_element(
+                max_value=self.list_maximum[i], value=values[i]))
             html += div.format(item=label)
             html += '</tr>'
         html += self._end_table()
