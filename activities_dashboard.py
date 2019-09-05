@@ -112,7 +112,8 @@ class MultipleDashboardFrame(wx.Frame):
 
 
 class MultipleHTMLDashboardFrame(wx.Frame):
-    def __init__(self, parent, fontsize, average, maximum, title, formatting_string, vertical=False, grid=False):
+    def __init__(self, parent, fontsize, average, maximum, title,
+                 formatting_string, vertical=False, grid=False):
         wx.Frame.__init__(self, parent)#, style=wx.NO_BORDER)
         self.panel = wx.Panel(parent=self)
         self.fontsize = fontsize
@@ -142,35 +143,34 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         return \
         """
         progress {{
-            display:inline-block;
-            padding:0px 0 0 0;
-            margin:0;
-            background:none;
+            display: inline-block;
+            width: 100%;
+            padding: 0px 0 0 0;
+            margin: 0;
+            background: none;
             border: 0;
             border-radius: 15px;
             text-align: left;
-            position:relative;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 0.8em;
+            position: relative;
+            font-family: sans-serif;
+            font-size: {fontsize}px;
         }}
         progress::-webkit-progress-bar {{
-            margin:0 auto;
+            display: inline-block;
+            width: 100%;
+            margin: 0 auto;
             background-color: #CCC;
             border-radius: 15px;
-            box-shadow:0px 0px 6px #777 inset;
+            box-shadow: 0px 0px 6px #777 inset;
         }}
         progress::-webkit-progress-value {{
-            display:inline-block;
-            float:left;
-            margin:0px 0px 0 0;
+            display: inline-block;
+            width: 100%;
+            float: left;
+            margin: 0px 0px 0 0;
             background: #F70;
             border-radius: 15px;
-            box-shadow:0px 0px 6px #666 inset;
-        }}
-        progress:after {{
-            display:inline-block;
-            float:left;
-            content: attr(value) '%';
+            box-shadow: 0px 0px 6px #666 inset;
         }}
         """
     def _head_grid(self):
@@ -178,7 +178,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         """<!DOCTYPE html><html><head><style>
         .grid-container {{
           display: grid;
-          grid-template-columns: {auto} ;
+          grid-template-columns: auto 1fr auto;
           padding: 0px;
         }}
         .grid-item {{
@@ -186,6 +186,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
           padding: 0px;
           font-size: {fontsize}px;
           text-align: left;
+          white-space: nowrap;
         }}
         """ \
         + self._progressbar() + \
@@ -195,7 +196,17 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         """
     def _head_table(self):
         return \
-        """<!DOCTYPE html><html><head><style>""" \
+        """<!DOCTYPE html><html><head><style>
+        td {{
+            white-space: nowrap;
+        }}
+        /* There are simpler solutions than
+           table width, but work only in presumably
+           newer browsers. */
+        table td:nth-child(2) {{
+            width: 100%;
+        }}
+        """ \
         + self._progressbar() + \
         """
         </style></head><body>
@@ -208,9 +219,15 @@ class MultipleHTMLDashboardFrame(wx.Frame):
     def _end_table(self):
         return "</table></body></html>"
 
+    def _progress_element(self, max_value, value):
+        # minimum is needed to generate a valid progress element
+        value = min(max_value, value)
+        return '<progress max="{max}" value="{val}"></progress>'.format(
+            max=max_value, val=value)
+
     def _content_grid(self, values):
         div = '<div class="grid-item">{item}</div>'
-        html = self._head_grid().format(auto=' '.join(['auto'] * 3), fontsize=self.fontsize)
+        html = self._head_grid().format(fontsize=self.fontsize)
         for i in range(len(self.list_title)):
             if values[i] is None:
                 values[i] = 0
@@ -218,15 +235,15 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             else:
                 label = self.list_formatting_string[i].format(values[i])
             html += div.format(item=self.list_title[i] + ':')
-            html += div.format(item='<progress id="progressBar" max="{max}" value="{val}">'.format(max=self.list_maximum[i], val=values[i]))
+            html += div.format(item=self._progress_element(
+                max_value=self.list_maximum[i], value=values[i]))
             html += div.format(item=label)
         html += self._end_grid()
         return html
 
     def _content_table(self, values):
         div = '<td>{item}</td>'
-        html = self._head_table()
-        html += '<tr>'
+        html = self._head_table().format(fontsize=self.fontsize)
         for i in range(len(self.list_title)):
             html += '<tr>'
             if values[i] is None:
@@ -235,7 +252,8 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             else:
                 label = self.list_formatting_string[i].format(values[i])
             html += div.format(item=self.list_title[i] + ':')
-            html += div.format(item='<progress id="progressBar" max="{max}" value="{val}">'.format(max=self.list_maximum[i], val=values[i]))
+            html += div.format(item=self._progress_element(
+                max_value=self.list_maximum[i], value=values[i]))
             html += div.format(item=label)
             html += '</tr>'
         html += self._end_table()
@@ -254,8 +272,15 @@ if __name__ == "__main__":
     app = wx.App()
     test = 'html'
     if test == 'html':
-        fr = MultipleHTMLDashboardFrame(parent=None, fontsize=10, average=1, maximum=[200, 100, 20],
-                                        title=['T 1', 'T 2', 'T 3'], formatting_string=['{}', '{}', '{}'], vertical=True)
+        fr = MultipleHTMLDashboardFrame(
+            parent=None,
+            fontsize=10,
+            average=1,
+            maximum=[200, 100, 20],
+            title=['T 1', 'T 2', 'T 3'],
+            formatting_string=['{}', '{}', '{}'],
+            vertical=True,
+            grid=False)
         fr.SetPosition((700, 200))
         fr.SetSize((850, 800))
         fr.show_value([5000, 20, 1000000])
