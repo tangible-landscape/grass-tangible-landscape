@@ -183,7 +183,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         """<!DOCTYPE html><html><head><style>
         .grid-container {{
           display: grid;
-          grid-template-columns: {auto} ;
+          grid-template-columns: auto 1fr auto;
           padding: 0px;
         }}
         .grid-item {{
@@ -226,7 +226,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
 
     def _content_grid(self, values):
         div = '<div class="grid-item">{item}</div>'
-        html = self._head_grid().format(auto=' '.join(['auto'] * 3), fontsize=self.fontsize)
+        html = self._head_grid().format(fontsize=self.fontsize)
         for i in range(len(self.list_title)):
             if values[i] is None:
                 values[i] = 0
