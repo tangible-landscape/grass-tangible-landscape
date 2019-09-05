@@ -114,7 +114,7 @@ class MultipleDashboardFrame(wx.Frame):
 class MultipleHTMLDashboardFrame(wx.Frame):
     def __init__(self, parent, fontsize, average, maximum, title,
                  formatting_string, vertical=False, grid=False):
-        wx.Frame.__init__(self, parent)#, style=wx.NO_BORDER)
+        wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.panel = wx.Panel(parent=self)
         self.fontsize = fontsize
         self.average = average
