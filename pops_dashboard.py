@@ -190,7 +190,7 @@ class PoPSDashboard(wx.EvtHandler):
             self._runcollection_id = self._create_runcollection()
             return
 
-        if self._runcollection['status'] != 'PENDING':
+        if self._runcollection['second_most_recent_run'] != 'null':
             # needs to be created by TL
             self._runcollection_id = self._create_runcollection(reuse=True)
 
@@ -304,7 +304,7 @@ class PoPSDashboard(wx.EvtHandler):
             print(e)
             return None
 
-    def upload_results(self, year, probability, single_infected, average_infected, spread_rate_file, use_single):
+    def upload_results(self, year, probability, single_infected, average_infected, spread_rate_file, rotation, use_single):
         env = get_environment(raster=probability)
         mapset = gscript.gisenv()['MAPSET']
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_inf_file,
@@ -313,7 +313,7 @@ class PoPSDashboard(wx.EvtHandler):
                         r=average_infected), env=env)
         results = process_for_dashboard(self._run_id, year,
                                         self._tmp_inf_file if use_single else self._tmp_infavg_file,
-                                        spread_rate_file)
+                                        spread_rate_file, rotation)
         
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_prob_file,
                         r=probability), env=env)
@@ -497,7 +497,7 @@ def raster_to_proj_geojson_thread(evtHandler, single_raster, probability_raster,
         return None
 
 
-def process_for_dashboard(id_, year, raster, spread_rate_file):
+def process_for_dashboard(id_, year, raster, spread_rate_file, rotation=0):
     result = {'run': id_, 'year': year}
     env = get_environment(raster=raster)
     data = gscript.parse_command('r.univar', map=raster, flags='gr', env=env)
@@ -519,11 +519,16 @@ def process_for_dashboard(id_, year, raster, spread_rate_file):
         for line in lines:
             if line.startswith(str(year)):
                 y, n, s, e, w = line.split(',')
-
-    result['spreadrate'] = {'north_rate': int(n) if n != 'nan' else 0,
-                            'south_rate': int(s) if s != 'nan' else 0,
-                            'east_rate': int(e) if e != 'nan' else 0,
-                            'west_rate': int(w) if w != 'nan' else 0}
+    ee, nn, ww, ss = 0, 90, 180, 270
+    directions = {-90: s, 0: e, 90: n, 180: w, 270: s, 360: e}
+    nr = directions[nn + rotation]
+    sr = directions[ss + rotation]
+    er = directions[ee + rotation]
+    wr = directions[ww + rotation]
+    result['spreadrate'] = {'north_rate': int(nr) if nr != 'nan' else 0,
+                            'south_rate': int(sr) if sr != 'nan' else 0,
+                            'east_rate': int(er) if er != 'nan' else 0,
+                            'west_rate': int(wr) if wr != 'nan' else 0}
 
     return result
 

@@ -314,8 +314,11 @@ class PopsPanel(wx.Panel):
                     use_single = False
                 else:
                     use_single = True
+                rotation = 0
+                if 'rotation' in self.params.pops:
+                    rotation = self.params.pops['rotation']
                 self.webDashboard.upload_results(year, event.name, single_infected, average_infected,
-                                                 spread_file, use_single=use_single)
+                                                 spread_file, rotation, use_single=use_single)
 
     def _computeDifference(self, names):
         difference = self.configuration['POPS']['difference']
@@ -620,12 +623,16 @@ class PopsPanel(wx.Panel):
         # process new input layer
         treatments = self.params.pops['treatments']
         treatments_resampled = treatments + '_resampled'
-        studyArea = self.configuration['tasks'][self.current]['base']
         host = self.params.model['host']
         treatment_efficacy = self.params.pops['efficacy']
         cost_per_meter_squared = self.params.pops['cost_per_meter_squared']
 
-        env = get_environment(raster=studyArea, align=host)
+        if 'region' in self.params.pops:
+            region = self.params.pops['region']
+            env = get_environment(region=region, align=host)
+        else:
+            studyArea = self.configuration['tasks'][self.current]['base']
+            env = get_environment(raster=studyArea, align=host)
 
         event = self.getEventName()
         # todo, save treatments
