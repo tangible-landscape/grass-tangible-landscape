@@ -153,7 +153,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             text-align: left;
             position:relative;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 0.8em;
+            font-size: {fontsize}px;
         }}
         progress::-webkit-progress-bar {{
             display: inline-block;
@@ -240,7 +240,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
 
     def _content_table(self, values):
         div = '<td>{item}</td>'
-        html = self._head_table()
+        html = self._head_table().format(fontsize=self.fontsize)
         html += '<tr>'
         for i in range(len(self.list_title)):
             html += '<tr>'
