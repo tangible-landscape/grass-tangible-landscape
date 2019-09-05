@@ -143,15 +143,15 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         return \
         """
         progress {{
-            display:inline-block;
+            display: inline-block;
             width: 100%;
-            padding:0px 0 0 0;
-            margin:0;
-            background:none;
+            padding: 0px 0 0 0;
+            margin: 0;
+            background: none;
             border: 0;
             border-radius: 15px;
             text-align: left;
-            position:relative;
+            position: relative;
             font-family: Arial, Helvetica, sans-serif;
             font-size: {fontsize}px;
         }}
@@ -161,20 +161,20 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             margin:0 auto;
             background-color: #CCC;
             border-radius: 15px;
-            box-shadow:0px 0px 6px #777 inset;
+            box-shadow: 0px 0px 6px #777 inset;
         }}
         progress::-webkit-progress-value {{
-            display:inline-block;
-            float:left;
-            margin:0px 0px 0 0;
+            display: inline-block;
+            float: left;
+            margin: 0px 0px 0 0;
             width: 100%;
             background: #F70;
             border-radius: 15px;
-            box-shadow:0px 0px 6px #666 inset;
+            box-shadow: 0px 0px 6px #666 inset;
         }}
         progress:after {{
-            display:inline-block;
-            float:left;
+            display: inline-block;
+            float: left;
             content: attr(value) '%';
         }}
         """
