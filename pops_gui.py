@@ -251,8 +251,10 @@ class PopsPanel(wx.Panel):
                 coef = 1.
             money_coef = self.configuration['POPS'].get('cost_unit', 1)
             if self.steeringClient.is_steering():
-                self.dashboardFrame.show_value([event.area / coef, cumulativeArea / coef,
-                                               event.area * cost / money_coef, cumulativeArea * cost / money_coef])
+                self.dashboardFrame.show_value([event.area / coef,
+                                                event.area * cost / money_coef,
+                                                cumulativeArea / coef,
+                                                cumulativeArea * cost / money_coef])
             else:
                 self.dashboardFrame.show_value([event.area / coef, event.area * cost / money_coef])
 
