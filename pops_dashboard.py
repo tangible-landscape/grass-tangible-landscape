@@ -309,8 +309,9 @@ class PoPSDashboard(wx.EvtHandler):
         mapset = gscript.gisenv()['MAPSET']
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_inf_file,
                         r=single_infected), env=env)
-        gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_infavg_file,
-                        r=average_infected), env=env)
+        gscript.run_command('g.copy', raster=[average_infected, self._tmp_infavg_file], overwrite=True, env=env)
+        gscript.run_command('r.null', map=self._tmp_infavg_file, setnull=0, env=env)
+
         results = process_for_dashboard(self._run_id, year,
                                         self._tmp_inf_file if use_single else self._tmp_infavg_file,
                                         spread_rate_file, rotation)
@@ -504,12 +505,13 @@ def process_for_dashboard(id_, year, raster, spread_rate_file, rotation=0):
     if not data:
         data['n'] = data['sum'] = 0
     info = gscript.parse_command('r.info', flags='ge', map=raster, env=env)
-    if info['title'].startswith('Average'):
+
+    if info['title'].strip('"').startswith('Average'):
         text, area = info['description'].split(':')
-        result['infected_area'] = float(area)
+        result['infected_area'] = "{v:.2f}".format(v=float(area.strip('"')))
     else:
         result['infected_area'] = "{v:.2f}".format(v=int(data['n']) * float(info['nsres']) * float(info['ewres']))
-    result['number_infected'] = int(data['sum'])
+    result['number_infected'] = int(float(data['sum']))
     result['timetoboundary'] = {'north_time': 0, 'south_time': 0, 'east_time': 0, 'west_time': 0}
     result['distancetoboundary'] = {'north_distance': 0, 'south_distance': 0, 'east_distance': 0, 'west_distance': 0}
     # spread rate
