@@ -50,10 +50,10 @@ class SteeringDisplay(wx.Panel):
     def GenerateHTMLSimple(self, current, currentView, vtype):
         delimiter = '&#8594;'
         html = ''
-        highlight_style = "border-radius: 0.2em;border:0.1em solid #CCC;background-color:#CCC;"
-        style = {'past': 'weight="bold" color="black"',
-                 'current':  'weight="bold" color="black"',
-                 'future': 'weight="bold" color="gray"'}
+        highlight_style = "border-radius: 0.2em;border:0.15em solid gray;background-color:#CCC;"
+        style = {'past': 'style="font-weight:bold" color="black"',
+                 'current': 'style="font-weight:bold" color="black"',
+                 'future': 'style="font-weight:bold" color="gray"'}
         for year in self.years:
             highlight = ''
             if year < current:
