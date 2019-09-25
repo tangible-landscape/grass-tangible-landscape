@@ -25,7 +25,7 @@ from tangible_utils import get_environment, changeLayer, checkLayers
 
 from activities_dashboard import DashboardFrame, MultipleHTMLDashboardFrame
 
-from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT
+from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
 from pops_dashboard import PoPSDashboard, ModelParameters
 from time_display import SteeringDisplayFrame, CurrentViewDisplayFrame
 
@@ -126,6 +126,8 @@ class PopsPanel(wx.Panel):
         runBtn = wx.Button(modelingBox, label="Run simulation")
         self.visualizationChoice = wx.Choice(modelingBox, choices=self.visualizationModes)
         self.visualizationChoice.SetSelection(0)
+        baselineButton = wx.Button(modelingBox, label="Baseline")
+        baselineButton.Bind(wx.EVT_BUTTON, self.RunBaseline)
         resetButton = wx.Button(modelingBox, label=u"\u21A9")
         resetButton.Bind(wx.EVT_BUTTON, self.ResetSimulation)
         self.replaySelect = Select(modelingBox, size=(-1, -1), type='raster', fullyQualified=False)
@@ -153,6 +155,7 @@ class PopsPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(runBtn, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(self.visualizationChoice, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(baselineButton, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(resetButton, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         boxSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
 
@@ -176,6 +179,7 @@ class PopsPanel(wx.Panel):
 
         self.Bind(EVT_UPDATE_DISPLAY, self.OnDisplayUpdate)
         self.Bind(EVT_PROCESS_FOR_DASHBOARD_EVENT, self._uploadStepToDashboard)
+        self.Bind(EVT_BASELINE_DONE, self._baselineDone)
         self.Bind(EVT_UPDATE_TIME_DISPLAY, self.OnTimeDisplayUpdate)
         self.Bind(EVT_UPDATE_INFOBAR, self.OnUpdateInfoBar)
 
@@ -460,15 +464,13 @@ class PopsPanel(wx.Panel):
         name = scenario + '__' + suffix
         if self.currentCheckpoint == 0:
             self.ShowInitalInfection(useEvent=False, show=True)
-            return
         else:
             self.ShowInitalInfection(useEvent=False, show=False)
 
         f = gscript.find_file(name=name, element='raster')
         if not f['fullname']:
             # display empty raster
-            self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
-                                     name=self.empty_placeholders['results'], resultType='results', useEvent=False)
+            self.HideResultsLayers()
         else:
             if name.startswith(self.params.model['probability_series']):
                 rules = os.path.join(self.workdir, self.configuration['POPS']['color_probability'])
@@ -483,10 +485,44 @@ class PopsPanel(wx.Panel):
                 gscript.run_command('r.colors', map=name, quiet=True, rules=rules, flags='w', env=env)
             except CalledModuleError:
                 pass
+            self.ShowTreatmentReplay(name, self.currentCheckpoint)
             cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
             opacity = float(self.params.pops['results_opacity']) if 'results_opacity' in self.params.pops else 1
             self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=False)
-        
+
+    def ShowBaseline(self):
+        # change layers
+        displayTime = self.checkpoints[self.currentCheckpoint]
+        event = self.getEventName()
+        name = self.params.baseline['probability_series'] + '__' + event + '__'
+        suffix = "{y}_{m:02d}_{d:02d}".format(y=displayTime[0], m=displayTime[1], d=displayTime[2])
+
+        rules = os.path.join(self.workdir, self.params.pops['color_probability'])
+        name = name + suffix
+
+        if self.currentCheckpoint == 0:
+            self.ShowInitalInfection(useEvent=False, show=True)
+        else:
+            self.ShowInitalInfection(useEvent=False, show=False)
+
+        f = gscript.find_file(name=name, element='raster')
+        if not f['fullname']:
+            # display empty raster
+            self._changeResultsLayer(cmd=['d.rast', 'map=' + self.empty_placeholders['results']],
+                                     name=self.empty_placeholders['results'], resultType='results', useEvent=False)
+        else:
+            try:
+                # need to set the colors, sometimes color tables are not copied
+                # flag w will end in error if there is already table
+                env = self.env.copy()
+                env['GRASS_MESSAGE_FORMAT'] = 'silent'
+                gscript.run_command('r.colors', map=name, quiet=True, rules=rules, flags='w', env=env)
+            except CalledModuleError:
+                pass
+            cmd = ['d.rast', 'values=0', 'flags=i', 'map={}'.format(name)]
+            opacity = float(self.params.pops['results_opacity']) if 'results_opacity' in self.params.pops else 1
+            self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=False)
+
     def ShowResults(self):
         # change layers
         self.ShowTreatment()
@@ -544,6 +580,52 @@ class PopsPanel(wx.Panel):
         cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'xref=center', 'yref=bottom'] + style
 
         self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
+
+
+    def ShowTreatmentReplay(self, name, checkpoint):
+        parts = name.split('__')
+        if len(parts) >= 5:
+            parts = parts[-4:]
+        event, player, attempt, date = parts
+
+        name = '__'.join([self.configuration['POPS']['treatments'], event, player, attempt.split('_')[0]])
+
+        style = {'fill_color': 'none', 'width': 2, 'label_color': 'white',
+                 'label_size': 22, 'font': 'n019044l'}
+        if 'treatments_vstyle' in self.configuration['POPS']:
+            style.update(self.configuration['POPS']['treatments_vstyle'])
+        style = [key + '=' + str(style[key]) for key in style]
+
+        start = int(self.params.model['start_time'])
+        cats = [str(year) for year in range(start, start + checkpoint)]
+        selection = ['cats=' + ','.join(cats)]
+        cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'xref=center', 'yref=bottom'] + style + selection
+
+        self._changeResultsLayer(cmd=cmd, name=name, resultType='treatments', useEvent=False)
+
+    def RunBaseline(self, event):
+        host = self.params.baseline['host']
+        if 'region' in self.params.pops:
+            region = self.params.pops['region']
+            extent = gscript.parse_command('g.region', flags='gu', region=region)
+            region = {'n': extent['n'], 's': extent['s'], 'w': extent['w'], 'e': extent['e'], 'align': host}
+        else:
+            studyArea = self.configuration['tasks'][self.current]['base']
+            extent = gscript.raster_info(studyArea)
+            region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
+
+        probability = self.params.baseline['probability_series']
+        postfix = self.getEventName() + '_'
+        probability = probability + '__' + postfix
+
+        region = '{n},{s},{w},{e},{align}'.format(**region)
+        baseline_params = self.params.baseline.copy()
+        baseline_params.update({'probability_series': probability})
+        self.steeringClient.baseline_set_params(self.params.model_name,
+                                                  baseline_params, self.params.model_flags, region)
+        self.steeringClient.compute_baseline()
+        self.infoBar.ShowMessage("Computing baseline...")
+
 
     def _RunSimulation(self, event=None):
         print('_runSimulation')
@@ -833,6 +915,9 @@ class PopsPanel(wx.Panel):
         functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
         return myanalyses, functions
 
+    def _baselineDone(self, event):
+        self.infoBar.Dismiss()
+
 
 #        # TODO remove all layers
 
@@ -986,6 +1071,8 @@ class PopsPanel(wx.Panel):
 
         if self.replaySelect.GetValue():
             self.Replay(self.replaySelect.GetValue())
+        elif self.currentRealityCheckpoint == 0:
+            self.ShowBaseline()
         else:
             self.ShowResults()
 

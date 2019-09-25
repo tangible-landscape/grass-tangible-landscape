@@ -29,6 +29,13 @@ def run_model(settings, steering):
 
     return p
 
+def run_baseline(settings):
+    model = settings.pop('model_name')
+    region = settings.pop('region').split(',')
+    env = get_environment(n=region[0], s=region[1], w=region[2], e=region[3], align=region[4])
+    p = gscript.start_command(model, overwrite=True, env=env, **settings)
+
+    return p
 
 def clientInterface(conn, connections, event, steering):
     # Sending message to connected client
@@ -154,6 +161,17 @@ def clientInterface(conn, connections, event, steering):
                     except socket.error:
                         print ("timeout")
                         break
+        elif message[0] == 'baseline':
+            params = {}
+            for each in message[1].split('|'):
+                key, val = each.split('=')
+                try:
+                    params[key] = float(val)
+                except ValueError:
+                    params[key] = val
+            if 'computation' not in connections:
+                sod_process = run_baseline(params)
+                start_new_thread(check_baseline, (connections['interface'], params['probability_series'], sod_process, event))
 
         # client closed
         if not data:
@@ -194,6 +212,22 @@ def check_output(connection, basename, sod_process, event):
             connection.sendall('info:last:' + last)
     sod_process.wait()
     sod_process = None
+
+
+def check_baseline(connection, basename, sod_process, event):
+    sod_process.wait()
+    sod_process = None
+    event.set()
+    found = gscript.list_grouped(type='raster', flag='e',
+                                 pattern=basename + '_[0-9]{4}_[0-9]{2}_[0-9]{2}')[gscript.gisenv()['MAPSET']]
+    for each in found:
+        event.wait(5)
+        pack_path = os.path.join(tmp_directory, each + '.pack')
+        gscript.run_command('r.pack', input=each, output=pack_path, overwrite=True, quiet=True)
+        event.clear()
+        connection.sendall('serverfile:{}:{}'.format(os.path.getsize(pack_path), pack_path))
+    event.wait(5)
+    connection.sendall('info:baseline')
 
 
 def clientComputation(conn, connections, event):

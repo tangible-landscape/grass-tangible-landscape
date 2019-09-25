@@ -29,7 +29,9 @@ class ModelParameters:
         self.model_name = None
         self.model = {}
         self.pops = {}
+        self.baseline = {}
         self.model_flags = None
+        self.baseline_flags = None
 
     def set_web_dashboard(self, dashboard):
         self._web = dashboard
@@ -68,6 +70,12 @@ class ModelParameters:
             #self.model['natural_distance'] = float(session['distance_scale'])
             self.pops['weather'] = session['weather']
 
+        self.baseline = self.model.copy()
+        self.baseline.pop('single_series', None)
+        self.baseline.pop('average_series', None)
+        self.baseline.update(self._pops_config['baseline'])
+        self.baseline_flags = self.baseline.pop('flags')
+        self.pops.pop('baseline')
 
     def update(self):
         if self._web:
@@ -315,7 +323,7 @@ class PoPSDashboard(wx.EvtHandler):
         results = process_for_dashboard(self._run_id, year,
                                         self._tmp_inf_file if use_single else self._tmp_infavg_file,
                                         spread_rate_file, rotation)
-        
+
         gscript.mapcalc("{n} = int(if({r} == 0, null(), {r}))".format(n=self._tmp_prob_file,
                         r=probability), env=env)
         export_gisrc, export_env = self._create_tmp_gisrc_environment(self._temp_location)

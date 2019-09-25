@@ -21,6 +21,7 @@ import wx.lib.newevent
 import grass.script as gscript
 
 ProcessForDashboardEvent, EVT_PROCESS_FOR_DASHBOARD_EVENT = wx.lib.newevent.NewEvent()
+BaselineDoneEvent, EVT_BASELINE_DONE = wx.lib.newevent.NewEvent()
 
 
 class SteeringClient:
@@ -47,6 +48,7 @@ class SteeringClient:
         self._debug_file = open('/tmp/debug.txt', 'w')
         self._steering = True
         self._model_params = ''
+        self._baseline_params = ''
         if launch_server:
             # should be list
             if port_simulation:
@@ -189,6 +191,10 @@ class SteeringClient:
                 elif message[1] == 'model_running':
                     self._simulation_is_running = True if message[2] == 'yes' else False
                     event.set()
+                elif message[1] == 'baseline':
+                    if self._eventHandler:
+                        evt = BaselineDoneEvent()
+                        wx.PostEvent(self._eventHandler, evt)
 
     def _wait_for_confirmation(self):
         self._threading_event.clear()
@@ -206,6 +212,16 @@ class SteeringClient:
             message += '|'
             message += '{k}={v}'.format(k=key, v=params[key])
         self._model_params = message
+
+    def baseline_set_params(self, model_name, params, flags, region):
+        message = "model_name=" + model_name
+        message += "|region=" + region
+        if flags:
+            message += "|flags=" + flags
+        for key in params:
+            message += '|'
+            message += '{k}={v}'.format(k=key, v=params[key])
+        self._baseline_params = message
 
     def simulation_start(self, restart=False):
         if not self._steering:
@@ -272,6 +288,9 @@ class SteeringClient:
             self._wait_for_confirmation()
             return self._simulation_is_running
         return False
+
+    def compute_baseline(self):
+        self._socket.sendall('baseline:' + self._baseline_params)
 
     def set_on_done(self, func):
         self._simulation_done = func
