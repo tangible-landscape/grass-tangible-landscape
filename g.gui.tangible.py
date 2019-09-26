@@ -24,7 +24,7 @@ import grass.script as gscript
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
-
+from wxwrap import TextCtrl, Button, BitmapButton, SpinCtrl, CheckBox
 from tangible_utils import get_environment, run_analyses, updateGUIEvt, EVT_UPDATE_GUI
 from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS, EVT_SELECT_LAYERS, EVT_CHANGE_LAYER
 from drawing import DrawingPanel
@@ -51,8 +51,8 @@ class AnalysesPanel(wx.Panel):
         topoBox = wx.StaticBox(self, label='  Topographic analyses ')
         topoSizer = wx.StaticBoxSizer(topoBox, wx.VERTICAL)
         self.contoursSelect = Select(self, size=(-1, -1), type='vector')
-        self.contoursStepTextCtrl = wx.TextCtrl(self, size=(40, -1))
-        self.contoursStepTextCtrl.SetToolTipString("Contour step")
+        self.contoursStepTextCtrl = TextCtrl(self, size=(40, -1))
+        self.contoursStepTextCtrl.SetToolTip("Contour step")
 
         if 'contours' in self.settings['analyses'] and self.settings['analyses']['contours']:
             self.contoursStepTextCtrl.SetValue(str(self.settings['analyses']['contours_step']))
@@ -89,8 +89,8 @@ class AnalysesPanel(wx.Panel):
         calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
 
         bmp = get_show_layer_icon()
-        addLayerBtn = wx.BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth()+12, bmp.GetHeight()+8))
-        addLayerBtn.SetToolTipString("Add layer to display")
+        addLayerBtn = BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth()+12, bmp.GetHeight()+8))
+        addLayerBtn.SetToolTip("Add layer to display")
         addLayerBtn.Bind(wx.EVT_BUTTON, self._addCalibLayer)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -259,37 +259,37 @@ class ScanningPanel(wx.Panel):
         demSizer = wx.StaticBoxSizer(demBox, wx.VERTICAL)
 
         # create widgets
-        self.btnCalibrateTilt = wx.Button(self, label="Calibration 1")
-        self.btnCalibrateTilt.SetToolTipString('Calibrate to remove tilt of the scanner and to set suitable distance from the scanner')
-        self.btnCalibrateExtent = wx.Button(self, label="Calibration 2")
-        self.btnCalibrateExtent.SetToolTipString('Calibrate to identify the extent and position of the scanned object')
+        self.btnCalibrateTilt = Button(self, label="Calibration 1")
+        self.btnCalibrateTilt.SetToolTip('Calibrate to remove tilt of the scanner and to set suitable distance from the scanner')
+        self.btnCalibrateExtent = Button(self, label="Calibration 2")
+        self.btnCalibrateExtent.SetToolTip('Calibrate to identify the extent and position of the scanned object')
 
         # widgets for model
         self.elevInput = Select(self, size=(-1, -1), type='raster')
         self.elevInput.SetToolTipString('Raster from which we take the georeferencing information')
         self.regionInput = Select(self, size=(-1, -1), type='region')
         self.regionInput.SetToolTipString('Saved region from which we take the georeferencing information')
-        self.zexag = wx.TextCtrl(self)
-        self.zexag.SetToolTipString('Set vertical exaggeration of the physical model')
-        self.numscans = wx.SpinCtrl(self, min=1, max=5, initial=1)
-        self.numscans.SetToolTipString('Set number of scans to integrate')
-        self.rotate = wx.SpinCtrl(self, min=0, max=360, initial=180)
-        self.rotate.SetToolTipString('Set angle of rotation of the sensor around Z axis (typically 180 degrees)')
-        self.smooth = wx.TextCtrl(self)
-        self.smooth.SetToolTipString('Set smoothing of the DEM (typically between 7 to 12, higher value means more smoothing)')
-        self.resolution = wx.TextCtrl(self)
-        self.resolution.SetToolTipString('Raster resolution in mm of the ungeoreferenced scan')
+        self.zexag = TextCtrl(self)
+        self.zexag.SetToolTip('Set vertical exaggeration of the physical model')
+        self.numscans = SpinCtrl(self, min=1, max=5, initial=1)
+        self.numscans.SetToolTip('Set number of scans to integrate')
+        self.rotate = SpinCtrl(self, min=0, max=360, initial=180)
+        self.rotate.SetToolTip('Set angle of rotation of the sensor around Z axis (typically 180 degrees)')
+        self.smooth = TextCtrl(self)
+        self.smooth.SetToolTip('Set smoothing of the DEM (typically between 7 to 12, higher value means more smoothing)')
+        self.resolution = TextCtrl(self)
+        self.resolution.SetToolTip('Raster resolution in mm of the ungeoreferenced scan')
         self.trim = {}
         for each in 'tbnsew':
-            self.trim[each] = wx.TextCtrl(self, size=(40, -1))
+            self.trim[each] = TextCtrl(self, size=(40, -1))
             if each in 'tb':
-                self.trim[each].SetToolTipString('Distance from the scanner')
+                self.trim[each].SetToolTip('Distance from the scanner')
             else:
-                self.trim[each].SetToolTipString('Distance from the center of scanning to the scanning boundary')
-        self.trim_tolerance = wx.TextCtrl(self)
-        self.trim_tolerance.SetToolTipString('Automatic trimming of the edges for rectangular models')
-        self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
-        self.interpolate.SetToolTipString('Interpolation avoids gaps in the scan, but takes longer')
+                self.trim[each].SetToolTip('Distance from the center of scanning to the scanning boundary')
+        self.trim_tolerance = TextCtrl(self)
+        self.trim_tolerance.SetToolTip('Automatic trimming of the edges for rectangular models')
+        self.interpolate = CheckBox(self, label="Use interpolation instead of binning")
+        self.interpolate.SetToolTip('Interpolation avoids gaps in the scan, but takes longer')
 
         self.elevInput.SetValue(self.scan['elevation'])
         self.regionInput.SetValue(self.scan['region'])
@@ -733,7 +733,9 @@ class TangibleLandscapePlugin(wx.Dialog):
             if self.process and self.process.poll() is None:
                 params = self.GatherParameters(editMode=True, continuous=True)
                 new_input = ["{}={}".format(key, params[key]) for key in params]
-                self.process.stdin.write('\n'.join(new_input) + '\n\n')
+                self.process.stdin.write(gscript.encode('\n'.join(new_input) + '\n\n'))
+                # flush needs to be there for Py3, alternative is to use Popen bufsize
+                self.process.stdin.flush()
                 # SIGUSR1 is the signal r.in.kinect looks for
                 self.process.send_signal(signal.SIGUSR1)
 
@@ -815,7 +817,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def OnRemoveLayers(self, event):
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'DeleteLayer'):
-            print "Removing layers from layer Manager requires GRASS GIS version > 7.2"
+            print("Removing layers from layer Manager requires GRASS GIS version > 7.2")
             return
         for each in event.layers:
             ll.DeleteLayer(each)
@@ -823,7 +825,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def OnCheckLayers(self, event):
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'CheckLayer'):
-            print "Checking and unchecking layers in layer Manager requires GRASS GIS version > 7.2"
+            print("Checking and unchecking layers in layer Manager requires GRASS GIS version > 7.2")
             return
         for each in event.layers:
             ll.CheckLayer(each, checked=event.checked)
@@ -831,7 +833,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def OnSelectLayers(self, event):
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'SelectLayer'):
-            print "Selecting layers in Layer Manager requires GRASS GIS version >= 7.6"
+            print("Selecting layers in Layer Manager requires GRASS GIS version >= 7.6")
             return
         for each in event.layers:
             ll.SelectLayer(each, select=event.select)
@@ -839,7 +841,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def OnChangeLayer(self, event):
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'ChangeLayer'):
-            print "Changing layer in Layer Manager requires GRASS GIS version > 7.8"
+            print("Changing layer in Layer Manager requires GRASS GIS version > 7.8")
             return
         params = {}
         if hasattr(event, 'ltype'):
