@@ -27,7 +27,7 @@ try:
 except ImportError:
     ProfileFrame = None
 
-from activities_dashboard import DashboardFrame, MultipleDashboardFrame
+from activities_dashboard import MultipleDashboardFrame
 
 # lazy importing activities_slides
 
@@ -606,19 +606,13 @@ class ActivitiesPanel(wx.Panel):
         self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['profile']['raster'], env=env)
 
     def StartDisplay(self):
-        multiple = False if 'multiple' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['multiple']
         title = None if 'title' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['title']
         vertical = False if 'vertical' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['vertical']
         fontsize = self.tasks[self.current]['display']['fontsize']
-        average = self.tasks[self.current]['display']['average']
         maximum = self.tasks[self.current]['display']['maximum']
         formatting_string = self.tasks[self.current]['display']['formatting_string']
-        if multiple:
-            self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
+        self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, maximum=maximum,
                                                      title=title, formatting_string=formatting_string, vertical=vertical)
-        else:
-            self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
-
 
         pos = self._getDashboardPosition(key='display')
         size = self._getDashboardSize(key='display')
