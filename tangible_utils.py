@@ -11,11 +11,15 @@ import os
 import shutil
 import imp
 import traceback
-import StringIO
+try:
+    from StringIO import StringIO ## for Python 2
+except ImportError:
+    from io import BytesIO as StringIO ## for Python 3
 import base64
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError, ScriptError
+from wxwrap import BitmapFromImage, ImageFromStream
 
 import wx
 import wx.lib.newevent
@@ -50,7 +54,7 @@ def get_show_layer_icon():
     6W5sYTJpZlwSd20Hf9J4QjPADAXKBFY50FWpUclFJcvjK0PjA4eLH30qXOux/oHkBa9UeP2h4qM
     r1TbrM5vfWHSizmR8CybMbfiEYxcGVocToQuL0cibz/dX//SLY5+wLSKne7dZbc3Aa93uA26PUm
     Sqkk8AIfF8U7S8Efz/n9/vV77f9TwN/Vf/+H8z/g3wf8BtScfGRhgC1qAAAAAElFTkSuQmCC"""
-    return wx.BitmapFromImage(wx.ImageFromStream(StringIO.StringIO(base64.b64decode(SHOW_LAYER_ICON))))
+    return BitmapFromImage(ImageFromStream(StringIO(base64.b64decode(SHOW_LAYER_ICON))))
 
 def get_environment(**kwargs):
     """!Returns environment for running modules.
@@ -82,7 +86,7 @@ def remove_vector(name, deleteTable=False):
     if os.path.exists(path_to_vector):
         try:
             shutil.rmtree(path_to_vector)
-        except StandardError:
+        except Exception:
             pass
 
 
@@ -96,11 +100,11 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         try:
             info = gscript.raster_info(scan_name + 'tmp')
         except CalledModuleError:
-            print 'error in r.info'
+            print('error in r.info')
             return
         if scanFilter['debug']:
             try:
-                print info['max'] - info['min']
+                print(info['max'] - info['min'])
             except TypeError:  # unsupported operand type(s) for -: 'NoneType' and 'NoneType'
                 return
         threshold = scanFilter['threshold']
@@ -110,7 +114,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     try:
         gscript.run_command('g.copy', raster=[scan_name + 'tmp', scan_name], overwrite=True, quiet=True)
     except CalledModuleError:
-        print 'error copying scanned data from temporary name'
+        print('error copying scanned data from temporary name')
         return
     # workaround weird georeferencing
     # filters cases when extent and elev values are in inconsistent state
@@ -118,7 +122,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     try:
         info = gscript.raster_info(scan_name)
     except CalledModuleError:
-        print 'error in r.info'
+        print('error in r.info')
         return
     try:
         if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
@@ -131,8 +135,8 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     # run analyses
     try:
         myanalyses = imp.load_source('myanalyses', analysesFile)
-    except StandardError as e:
-        print e
+    except Exception as e:
+        print(e)
         return
 
     functions = [func for func in dir(myanalyses) \
@@ -141,8 +145,8 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         exec('del myanalyses.' + func)
     try:
         myanalyses = imp.load_source('myanalyses', analysesFile)
-    except StandardError as e:
-        print e
+    except Exception as e:
+        print(e)
         return
     # color output
     color = None
@@ -169,8 +173,8 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
                                             " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
-            except (CalledModuleError, StandardError, ScriptError) as e:
-                print traceback.print_exc()
+            except (CalledModuleError, Exception, ScriptError) as e:
+                print(traceback.print_exc())
     else:
         functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
         for func in functions:
@@ -182,5 +186,5 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
                                             " zexag=scan_params['zexag'],"
                                             " giface=giface, update=update,"
                                             " eventHandler=eventHandler, env=env, **kwargs)")
-            except (CalledModuleError, StandardError, ScriptError) as e:
-                print traceback.print_exc()
+            except (CalledModuleError, Exception, ScriptError) as e:
+                print(traceback.print_exc())

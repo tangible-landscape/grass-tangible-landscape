@@ -4,7 +4,8 @@
 The following settings do not depend on the activities.
 
 ### Path to workflow files
-Specification of directory where to find Python files with activity worflow for all activities. By default, it is the directory where this configuration file is.
+Specification of directory where to find Python files with activity worflow for all activities.
+It is optional, by default it is the directory where this configuration file is.
 
 ```json
    "taskDir": "/path/to/my/activities/",
@@ -99,13 +100,14 @@ This describes the activities (explained further below):
       "calibration": false,
       "base": "cutfill1_dem1",
       "time_limit": 300, 
-      "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1},
+      "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1, "interpolate": false},
+      "calibration_scanning_params": {"interpolate": true},
       "analyses": "experiment_freeplay.py", 
       "filter" : {"threshold": 200, "debug": true},
       "slides": {"switch": [93, 174], "file": "freeplay.html"},
       "profile": {"size": [400, 140], "position": [4272, 660],
                   "limitx": [0, 350], "limity": [90, 190], "ticks": 10, "raster": "freeplay_scan"},
-      "title": "Task 0: Freeplay"
+      "title": "Task 1: Freeplay"
     }
    ]
 ```
@@ -114,7 +116,7 @@ This describes the activities (explained further below):
 Specifies title of the activity:
 
 ```json
- "title": "Task 0: Freeplay"
+ "title": "Task 1: Freeplay"
 ```
 
 Specifies the instructions for the activity:
@@ -128,8 +130,8 @@ Specifies the instructions for the activity:
 
 Specification of GIS layers which should be loaded when the activity starts.
 The specification of the symbology is given using
-[d.rast](https://grass.osgeo.org/grass74/manuals/d.rast.html) and
-[d.vect](https://grass.osgeo.org/grass74/manuals/d.vect.html) GRASS GIS modules.
+[d.rast](https://grass.osgeo.org/grass78/manuals/d.rast.html) and
+[d.vect](https://grass.osgeo.org/grass78/manuals/d.vect.html) GRASS GIS modules.
 Note that the specified layers must exist when the activity starts,
 otherwise the loading will fail.
 This is __required__, however the layer list can be empty if needed.
@@ -232,12 +234,22 @@ def run_freeplay(scanned_elev, eventHandler, env, **kwargs):
 
 Specifies whether dashboard widget should be displayed:
 ```json
-"display": {"multiple": true, "average": 2, "size": [600, 180], "position": [2800, 900],
-            "fontsize": 12, "maximum": [100, 20, 6, 60, 2.5, 8],
-            "formatting_string": ["{:.0f} %", "{:g}", "{:g}","{:.1f}","{:.2f}","{:.1f}"],
-            "title": ["Remediated", "Patch #", "Richness", "Mean size", "Shannon", "Shape ind." ]}
+"display": {"size": [600, 180], "position": [2800, 900],
+            "fontsize": 12, "maximum": [10, 100],
+            "formatting_string": ["{:.1f}", "{:.1f}"], "title": ["Min", "Max"]}
     },
 ```
+
+This is how the dashboard gets updated from a Python workflow file:
+
+ ```python
+ from activities import updateDisplay
+
+def run_freeplay(scanned_elev, eventHandler, env, **kwargs):
+     info = gscript.raster_info(scanned_elev)
+     event = updateDisplay(value=[info['min'], info['max']])
+     eventHandler.postEvent(receiver=eventHandler.activities_panel, event=event)
+ ```
 
 In both cases (profile and widget), size and position can be specified in absolute or relative coordinates. 
 

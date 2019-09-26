@@ -27,7 +27,7 @@ try:
 except ImportError:
     ProfileFrame = None
 
-from activities_dashboard import DashboardFrame, MultipleDashboardFrame
+from activities_dashboard import MultipleDashboardFrame
 
 # lazy importing activities_slides
 
@@ -197,8 +197,8 @@ class ActivitiesPanel(wx.Panel):
         for func in functions:
             try:
                 exec('myanalyses.' + func + "(eventHandler=wx.GetTopLevelParent(self), env=env)")
-            except (CalledModuleError, StandardError, ScriptError):
-                print (traceback.print_exc())
+            except (CalledModuleError, Exception, ScriptError):
+                print(traceback.print_exc())
 
     def OnNextTask(self, event):
         if self.timer.IsRunning():
@@ -551,7 +551,7 @@ class ActivitiesPanel(wx.Panel):
         env = get_environment(rast=self.settings['output']['scan'])
         try:
             postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
-        except StandardError as e:
+        except Exception as e:
             print(e)
             return
 
@@ -560,7 +560,7 @@ class ActivitiesPanel(wx.Panel):
             exec('del postprocess.' + func)
         try:
             postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
-        except StandardError as e:
+        except Exception as e:
             print(e)
             return
         functions = [func for func in dir(postprocess) if func.startswith('post_')]
@@ -573,7 +573,7 @@ class ActivitiesPanel(wx.Panel):
                                              " subTask=self.currentSubtask,"
                                              " logDir=self.configuration['logDir'],"
                                              " env=env)")
-            except (CalledModuleError, StandardError, ScriptError) as e:
+            except (CalledModuleError, Exception, ScriptError) as e:
                 traceback.print_exc()
         wx.EndBusyCursor()
         if self.handsoff:
@@ -586,7 +586,7 @@ class ActivitiesPanel(wx.Panel):
 
     def StartProfile(self):
         if not ProfileFrame:
-            print ('WARNING: DEM profile is not available, requires matplotlib library')
+            print('WARNING: DEM profile is not available, requires matplotlib library')
             return
         self.profileFrame = ProfileFrame(self)
         pos = self._getDashboardPosition(key='profile')
@@ -606,19 +606,13 @@ class ActivitiesPanel(wx.Panel):
         self.profileFrame.compute_profile(points=event.points, raster=self.tasks[self.current]['profile']['raster'], env=env)
 
     def StartDisplay(self):
-        multiple = False if 'multiple' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['multiple']
         title = None if 'title' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['title']
         vertical = False if 'vertical' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['vertical']
         fontsize = self.tasks[self.current]['display']['fontsize']
-        average = self.tasks[self.current]['display']['average']
         maximum = self.tasks[self.current]['display']['maximum']
         formatting_string = self.tasks[self.current]['display']['formatting_string']
-        if multiple:
-            self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
+        self.dashboardFrame = MultipleDashboardFrame(self, fontsize=fontsize, maximum=maximum,
                                                      title=title, formatting_string=formatting_string, vertical=vertical)
-        else:
-            self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
-
 
         pos = self._getDashboardPosition(key='display')
         size = self._getDashboardSize(key='display')
@@ -754,14 +748,14 @@ class ActivitiesPanel(wx.Panel):
         analysesFile = os.path.join(self._getTaskDir(), self.configuration['tasks'][self.current]['analyses'])
         try:
             myanalyses = imp.load_source('myanalyses', analysesFile)
-        except StandardError:
+        except Exception:
             return None
         functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
         for func in functions:
             exec('del myanalyses.' + func)
         try:
             myanalyses = imp.load_source('myanalyses', analysesFile)
-        except StandardError:
+        except Exception:
             return None
         functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
         return myanalyses, functions
