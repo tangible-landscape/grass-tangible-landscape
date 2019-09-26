@@ -3,6 +3,7 @@
 set -e
 
 LIBFREENECT2_RELEASE=0.2.0
+GRASS_RELEASE=7.8.0
 PCL_RELEASE=1.8.0
 NCORES=`nproc --all`
 CDIR=`pwd`
@@ -17,6 +18,8 @@ sudo apt-get update && sudo apt-get install -y \
    python-opengl \
    python-wxversion python-wxtools python-wxgtk3.0 \
    python-dateutil libgsl-dev python-numpy python-pil python-matplotlib python-watchdog\
+   python3-numpy python3-pil python3-matplotlib python3-watchdog \
+   python3-wxgtk4.0 python3-wxgtk-webview4.0
    wx3.0-headers wx-common libwxgtk3.0-dev \
    libwxbase3.0-dev   \
    libncurses5-dev \
@@ -68,8 +71,9 @@ sudo make -j2 install
 cd ../..
 
 # GRASS GIS
-svn checkout https://svn.osgeo.org/grass/grass/branches/releasebranch_7_6 grass76_release
-cd grass76_release
+wget https://github.com/OSGeo/grass/archive/${GRASS_RELEASE}.tar.gz
+tar xvf ${GRASS_RELEASE}.tar.gz
+cd grass-${GRASS_RELEASE}
 CFLAGS="-O2 -Wall" LDFLAGS="-s" ./configure \
   --enable-largefile=yes \
   --with-nls \
@@ -92,8 +96,8 @@ cd ..
 # r.in.kinect
 git clone https://github.com/tangible-landscape/r.in.kinect.git
 cd r.in.kinect
-make MODULE_TOPDIR=../grass76_release
-make install MODULE_TOPDIR=../grass76_release
+make MODULE_TOPDIR=../grass-${GRASS_RELEASE}
+make install MODULE_TOPDIR=../grass-${GRASS_RELEASE}
 cd ..
 
 # TL plugin
@@ -102,8 +106,8 @@ cd ..
 # this is for the development of grass-tangible-landscape
 git clone https://github.com/tangible-landscape/grass-tangible-landscape.git
 cd grass-tangible-landscape
-make MODULE_TOPDIR=../grass76_release
-make install MODULE_TOPDIR=../grass76_release
+make MODULE_TOPDIR=../grass-${GRASS_RELEASE}
+make install MODULE_TOPDIR=../grass-${GRASS_RELEASE}
 cd ..
 
 # set up GRASS GIS icon in dash
@@ -112,8 +116,8 @@ cat << EOF > /tmp/grass.desktop
 Version=1.0
 Name=GRASS GIS
 Comment=Start GRASS GIS
-Exec=${CDIR}/grass76_release/bin.x86_64-pc-linux-gnu/grass76
-Icon=${CDIR}/grass76_release/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
+Exec=`ls -d ${CDIR}/grass-${GRASS_RELEASE}/bin.x86_64-pc-linux-gnu/*`
+Icon=${CDIR}/grass-${GRASS_RELEASE}/dist.x86_64-pc-linux-gnu/share/icons/hicolor/scalable/apps/grass.svg
 Terminal=true
 Type=Application
 Categories=GIS;Application;
