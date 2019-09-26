@@ -19,7 +19,7 @@ sudo apt-get update && sudo apt-get install -y \
    python-wxversion python-wxtools python-wxgtk3.0 \
    python-dateutil libgsl-dev python-numpy python-pil python-matplotlib python-watchdog\
    python3-numpy python3-pil python3-matplotlib python3-watchdog \
-   python3-wxgtk4.0 python3-wxgtk-webview4.0
+   python3-wxgtk4.0 python3-wxgtk-webview4.0 \
    wx3.0-headers wx-common libwxgtk3.0-dev \
    libwxbase3.0-dev   \
    libncurses5-dev \

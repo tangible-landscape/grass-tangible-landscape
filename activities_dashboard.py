@@ -27,11 +27,7 @@ class MultipleDashboardFrame(wx.Frame):
         self.labels = []
         self.titles = []
         self.gauges = []
-        if vertical:
-            #self.sizer = wx.BoxSizer(wx.VERTICAL)
-            self.sizer = wx.GridBagSizer(5, 5)
-        else:
-            self.sizer = wx.GridBagSizer(5, 5)
+        self.sizer = wx.GridBagSizer(5, 5)
         for i in range(len(self.list_maximum)):
             if vertical:
                 if title:
