@@ -1,15 +1,14 @@
 Tangible Landscape
 ==================
-![Tangible Landscape plugin](readme_image.jpg "Tangible Landscape plugin")
+![header image](readme_image.jpg "Tangible Landscape plugin")
 
-Tangible Landscape is an open source tangible interface powered by GRASS GIS. Tangible Landscape couples a physical model with a digital model of a landscape so that you can naturally feel, reshape, and interact with the landscape. This makes geographic information systems (GIS) far more intuitive and accessible for beginners, empowers geospatial experts, and creates new opportunities for developers.
+Tangible Landscape is an open source tangible interface for geospatial modeling powered by GRASS GIS. Tangible Landscape couples a physical model with a digital model of a landscape so that you can naturally feel, reshape, and interact with the landscape. This makes geographic information systems (GIS) far more intuitive and accessible for beginners, empowers geospatial experts, and creates new opportunities for developers.
 
 This repository contains Tangible Landscape plugin for GRASS GIS, which allows
-a real-time feedback cycle of interaction, 3D scanning, point cloud processing, geospatial computation and projection.
+a real-time feedback cycle of interaction, 3D scanning, point cloud processing, geospatial computation and projection
 
-
-
-
+<p align="center">
+<img src="https://github.com/tangible-landscape/tangible-landscape-media/blob/master/tl_logo/tl_logo.png?raw=true" alt="Tangible Landscape logo" width="150"/></p>
 
 Installation:
 ----------------------------------
