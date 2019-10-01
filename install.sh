@@ -44,7 +44,8 @@ sudo apt-get update && sudo apt-get install -y \
    libproj-dev proj-data proj-bin \
    libgeos-dev \
    libgdal-dev python-gdal gdal-bin \
-   liblas-bin liblas-dev
+   liblas-bin liblas-dev \
+   libzstd-dev
    
  
 # libfreenect2
