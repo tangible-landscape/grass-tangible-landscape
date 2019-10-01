@@ -33,7 +33,9 @@ We support installation on Ubuntu 18.04, for other versions and Linux distributi
        g.gui.tangible
 
 
-![Tangible Landscape plugin](tangible_landscape_dialog.png "Tangible Landscape plugin")
+<p align="center">
+<img src="tangible_landscape_dialog.png" alt="Tangible Landscape plugin" /></p>
+
 
 Resources
 --------
