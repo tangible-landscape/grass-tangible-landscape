@@ -21,7 +21,7 @@ We support installation on Ubuntu 18.04, for other versions and Linux distributi
 
 1. Make a folder where all the dependencies will be compiled:
 
-    mkdir tangiblelandscape && cd tangiblelandscape
+       mkdir tangiblelandscape && cd tangiblelandscape
 
 2. Download [install.sh](install.sh) to that folder and run it:
 
