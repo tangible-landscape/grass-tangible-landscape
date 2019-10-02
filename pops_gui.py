@@ -23,7 +23,7 @@ from grass.exceptions import CalledModuleError
 
 from tangible_utils import get_environment, changeLayer, checkLayers
 
-from activities_dashboard import DashboardFrame, MultipleHTMLDashboardFrame
+from activities_dashboard import MultipleHTMLDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
 from pops_dashboard import PoPSDashboard, ModelParameters
@@ -1237,20 +1237,13 @@ class PopsPanel(wx.Panel):
                     ll.DeleteLayer(l)
 
     def StartDisplay(self):
-        multiple = False if 'multiple' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['multiple']
         title = None if 'title' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['title']
         vertical = False if 'vertical' not in self.tasks[self.current]['display'] else self.tasks[self.current]['display']['vertical']
         fontsize = self.tasks[self.current]['display']['fontsize']
-        average = self.tasks[self.current]['display']['average']
         maximum = self.tasks[self.current]['display']['maximum']
         formatting_string = self.tasks[self.current]['display']['formatting_string']
-        if multiple:
-            self.dashboardFrame = MultipleHTMLDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
+        self.dashboardFrame = MultipleHTMLDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
                                                              title=title, formatting_string=formatting_string, vertical=vertical)
-        else:
-            self.dashboardFrame = DashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum, title=title, formatting_string=formatting_string)
-
-
         pos = self._getDashboardPosition(key='display')
         size = self._getDashboardSize(key='display')
         self.dashboardFrame.SetSize(size)
