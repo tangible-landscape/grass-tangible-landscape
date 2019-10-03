@@ -91,15 +91,13 @@ class MultipleDashboardFrame(wx.Frame):
 
 
 class MultipleHTMLDashboardFrame(wx.Frame):
-    def __init__(self, parent, fontsize, average, maximum, title,
+    def __init__(self, parent, fontsize, maximum, title,
                  formatting_string, vertical=False, grid=False):
         wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.panel = wx.Panel(parent=self)
         self.fontsize = fontsize
-        self.average = average
         self.vertical = vertical
         self.grid = grid  # grid layout may not be implemented in webkit
-        # TODO: average not used yet here
         # TODO: vertical not supported
 
         # maximum, title and formatting_string are lists

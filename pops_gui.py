@@ -1242,8 +1242,8 @@ class PopsPanel(wx.Panel):
         fontsize = self.tasks[self.current]['display']['fontsize']
         maximum = self.tasks[self.current]['display']['maximum']
         formatting_string = self.tasks[self.current]['display']['formatting_string']
-        self.dashboardFrame = MultipleHTMLDashboardFrame(self, fontsize=fontsize, average=average, maximum=maximum,
-                                                             title=title, formatting_string=formatting_string, vertical=vertical)
+        self.dashboardFrame = MultipleHTMLDashboardFrame(self, fontsize=fontsize, maximum=maximum,
+                                                         title=title, formatting_string=formatting_string, vertical=vertical)
         pos = self._getDashboardPosition(key='display')
         size = self._getDashboardSize(key='display')
         self.dashboardFrame.SetSize(size)
