@@ -70,7 +70,10 @@ def get_environment(**kwargs):
     env['GRASS_OVERWRITE'] = '1'
     env['GRASS_VERBOSE'] = '0'
     env['GRASS_MESSAGE_FORMAT'] = 'standard'
-    env['GRASS_REGION'] = gscript.region_env(**kwargs)
+    region3d = False
+    if 'raster_3d' in kwargs:
+        region3d = True
+    env['GRASS_REGION'] = gscript.region_env(region3d=region3d, **kwargs)
     return env
 
 
