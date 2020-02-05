@@ -221,6 +221,24 @@ class ActivitiesPanel(wx.Panel):
         return True
 
     def _loadConfiguration(self, event):
+
+        def _includeTasks():
+            tasks = []
+            if "includeTasks" in self.configuration:
+                folder = os.path.join(self._getTaskDir(), self.configuration['includeTasks'])
+                if os.path.isdir(folder):
+                    for file_ in [f for f in os.listdir(folder) if f.endswith('.json')]:
+                        if file_ != os.path.basename(self.configFile):
+                            with open(os.path.join(folder, file_), 'r') as f:
+                                try:
+                                    config = json.load(f)
+                                except ValueError:
+                                    wx.MessageBox(parent=self, message='Parsing error while reading %s.' % file_,
+                                                  caption="Can't read JSON file", style=wx.OK | wx.ICON_ERROR)
+                                    continue
+                                tasks += config['tasks']
+            return tasks
+
         self.configFile = self.configPath.GetValue().strip()
         if self.configFile:
             self.settings['activities']['config'] = self.configFile
@@ -229,6 +247,7 @@ class ActivitiesPanel(wx.Panel):
                 try:
                     self.configuration = json.load(f)
                     self.tasks = self.configuration['tasks']
+                    self.tasks += _includeTasks()
                     self.title.SetLabel(self.tasks[self.current]['title'])
                     self.instructions.SetLabel(self._getInstructions())
                 except ValueError:
