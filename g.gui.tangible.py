@@ -12,6 +12,7 @@ import wx.lib.filebrowsebutton as filebrowse
 from shutil import copyfile
 from subprocess import PIPE
 import signal
+import tempfile
 
 from grass.script.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
@@ -450,6 +451,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.delay = 0.3
         self.process = None
         self.observer = None
+        self.signal_file = None
         self.timer = wx.Timer(self)
         self.changedInput = False
         self.filter = {'filter': False,
@@ -530,6 +532,12 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.pause = None
         self.resume_once = None
 
+    def _getSignalFile(self):
+        if not self.signal_file:
+            fd, self.signal_file = tempfile.mkstemp()
+            os.close(fd)
+        return self.signal_file
+
     def OnHelp(self, event):
         """Show help"""
         self.giface.Help(entry='g.gui.tangible', online=False)
@@ -537,6 +545,8 @@ class TangibleLandscapePlugin(wx.Dialog):
     def OnClose(self, event):
         self.Stop()
         UserSettings.SaveToFile(self.settings)
+        if self.signal_file and os.path.exists(self.signal_file):
+            os.remove(self.signal_file)
         self.Destroy()
 
     def OnUpdate(self, event=None):
@@ -697,7 +707,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         wx.SafeYield()
         params = self.GatherParameters(editMode=False, continuous=continuous)
         self.process = gscript.start_command('r.in.kinect', overwrite=True, quiet=True,
-                                             stdin=PIPE, **params)
+                                             stdin=PIPE, signal_file=self._getSignalFile(), **params)
         return self.process
 
     def ScanOnce(self, event):
@@ -747,14 +757,11 @@ class TangibleLandscapePlugin(wx.Dialog):
             return
         gisenv = gscript.gisenv()
         mapsetPath = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
-        path1 = os.path.join(mapsetPath, 'fcell')
-        if not os.path.exists(path1):
-            os.mkdir(os.path.join(mapsetPath, 'fcell'))
         path2 = os.path.join(mapsetPath, 'vector')
         if not os.path.exists(path2):
             os.mkdir(os.path.join(mapsetPath, 'vector'))
-        paths = [path1, path2]
-        handlers = [RasterChangeHandler(self.runImport, self.settings['tangible']['output']),
+        paths = [os.path.dirname(self._getSignalFile()), path2]
+        handlers = [SignalFileChangeHandler(self.runImport, os.path.basename(self._getSignalFile())),
                     DrawingChangeHandler(self.runImportDrawing, self.settings['tangible']['drawing']['name'])]
 
         self.observer = Observer()
@@ -854,9 +861,9 @@ class TangibleLandscapePlugin(wx.Dialog):
 
 
 def main(giface=None):
-    global Observer, RasterChangeHandler, DrawingChangeHandler
+    global Observer, SignalFileChangeHandler, DrawingChangeHandler
     from watchdog.observers import Observer
-    from change_handler import RasterChangeHandler, DrawingChangeHandler
+    from change_handler import SignalFileChangeHandler, DrawingChangeHandler
     dlg = TangibleLandscapePlugin(giface, parent=None)
     dlg.Show()
 
@@ -864,5 +871,5 @@ def main(giface=None):
 if __name__ == '__main__':
     gscript.parser()
     from watchdog.observers import Observer
-    from change_handler import RasterChangeHandler, DrawingChangeHandler
+    from change_handler import SignalFileChangeHandler, DrawingChangeHandler
     main()
