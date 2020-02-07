@@ -185,7 +185,7 @@ class AnalysesPanel(wx.Panel):
         wx.Yield()
 
         self.scaniface.Scan(continuous=False)
-        self.scaniface.process.wait()
+        self.scaniface.process.communicate()
         self.scaniface.process = None
         self.scaniface.status.SetLabel("Done.")
 
@@ -708,7 +708,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         else:
             self.Scan(continuous=False)
             self.status.SetLabel("Importing scan...")
-            self.process.wait()
+            self.process.communicate()
             self.process = None
             run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
                          giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
@@ -767,7 +767,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def Stop(self):
         if self.process and self.process.poll() is None:  # still running
             self.process.terminate()
-            self.process.wait()
+            self.process.communicate()
             self.process = None
             if self.observer:
                 try:
