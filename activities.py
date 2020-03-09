@@ -252,7 +252,10 @@ class ActivitiesPanel(wx.Panel):
 
     def Calibrate(self, startTask):
         self._loadConfiguration(None)
-        self.settings['scan']['elevation'] = self.tasks[self.current]['base']
+        if 'base' in self.tasks[self.current]:
+            self.settings['scan']['elevation'] = self.tasks[self.current]['base']
+        elif 'base_region' in self.tasks[self.current]:
+            self.settings['scan']['region'] = self.tasks[self.current]['base_region']
         self.settings['output']['scan'] = 'scan_saved'
         self.settings['analyses']['file'] = ''
         self._loadScanningParams(key='scanning_params')
@@ -372,7 +375,10 @@ class ActivitiesPanel(wx.Panel):
         self._processingSubTask = False
         self.scaniface.additionalParams4Analyses = {'subTask': self.currentSubtask}
         self.LoadLayers()
-        self.settings['scan']['elevation'] = self.tasks[self.current]['base']
+        if 'base' in self.tasks[self.current]:
+            self.settings['scan']['elevation'] = self.tasks[self.current]['base']
+        elif 'base_region' in self.tasks[self.current]:
+            self.settings['scan']['region'] = self.tasks[self.current]['base_region']
         self.settings['analyses']['file'] = os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses'])
         self.settings['output']['scan'] = 'scan'
         self._loadScanningParams(key='scanning_params')
@@ -535,8 +541,13 @@ class ActivitiesPanel(wx.Panel):
         self.ZoomToBase()
 
     def ZoomToBase(self):
-        base = self.configuration['tasks'][self.current]['base']
-        self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
+        if 'base' in self.configuration['tasks'][self.current]:
+            base = self.configuration['tasks'][self.current]['base']
+            self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
+        elif 'base_region' in self.configuration['tasks'][self.current]:
+            region = self.configuration['tasks'][self.current]['base_region']
+            self.giface.GetMapWindow().Map.GetRegion(regionName=region, update=True)
+
         self.giface.GetMapWindow().UpdateMap()
 
     def LoadHandsOff(self):

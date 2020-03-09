@@ -170,10 +170,16 @@ Specifies a raster map used for georeferencing, _required_.
  "base": "cutfill1_dem1",
 ```
 
+Alternatively, you can specify a GRASS named region instead:
+
+```json
+ "base_region": "saved_region",
+```
+
 ### Processing
 
 File with Python workflow for the activity (and postprocessing if desired).
-The directory is specified in 'taskDir' above. This is _required_.
+The directory is specified in 'taskDir' above (if not, must be in the same folder as the config file). This is _required_.
 
 ```json
  "analyses": "experiment_freeplay.py", 

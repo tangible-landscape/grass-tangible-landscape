@@ -4,105 +4,22 @@ analysis of terrain changes which couples a scanner, projector
 and a physical 3D model with GRASS GIS.
 
 <p>The software consists of a plugin for GRASS GIS and addon
-<a href="https://github.com/ncsu-osgeorel/r.in.kinect">r.in.kinect</a>
+<a href="https://github.com/ncsu-geoforall/r.in.kinect">r.in.kinect</a>
 for Kinect for Windows.
 <center>
 <img src="tangible_landscape_dialog.png" border="1" alt="Tangible Landscape plugin">
 </center>
 
-
-<h3>Scanning and analyses controls</h3>
-Upper row of buttons controls calibration and scanning mode:
-<dl>
-  <dt>Start</dt>
-  <dd>Start continuous scanning and analyses</dd>
-  <dt>Stop</dt>
-  <dd>Stop continuous scanning and analyses</dd>
-  <dt>Calibrate</dt>
-  <dd>Scan and save calibration data, no analyses computed.</dd>
-  <dt>Scan once</dt>
-  <dd>Scan only once and then run analyses</dd>
-</dl>
-
-<h4>Calibration</h4>
-Calibration is a simple process ensuring the resulting scan is
-horizontal (not tiled). This can happen when the scanner
-is not aligned perfectly vertically.
-Calibration is performed by scanning (by pressing <i>Calibrate</i> button)
-an empty table before placing the model on the table.
-The calibration parameters are saved into GUI settings file in GRASS home folder
-and applied during scanning to compensate for the misalignment.
-
-<h4>Scanning options</h4>
-Scanning tab consists of several input fields influencing
-the georeferencing and quality of the resulting scanned raster.
-Most of these options are directly input into
-<a href="https://github.com/ncsu-osgeorel/r.in.kinect">r.in.kinect</a>
-module:
-<dl>
-  <dt>Name of scanned raster</dt>
-  <dd>Name of the raster derived from scanning</dd>
-  <dt>Reference DEM</dt>
-  <dd>Name of the reference DEM from which georeferencing information is taken.
-  The scanned raster will have the same extent.</dd>
-  <dt>Reference region</dt>
-  <dd>Name of the reference region file from which georeferencing information is taken.
-  The scanned raster will have the same extent.</dd>
-  <dt>Z-exaggeration</dt>
-  <dd>Specify the vertical exaggeration of the physical model
-  to scale the digital model correctly to real world dimensions</dd>
-  <dt>Number of scans</dt>
-  <dd>Number of scans to integrate.
-  More scans will result in slower scanning intervals,
-  but reduced gaps in the resulting scanned raster.</dd>
-  <dt>Rotation angle</dt>
-  <dd>Rotate scan along Z axis in degrees counterclockwise</dd>
-  <dt>Smooth value</dt>
-  <dd>Set smoothing radius (in mm) of
-  <a href="http://pointclouds.org/documentation/tutorials/resampling.php#moving-least-squares">
-  Moving Least Squares (MLS) surface reconstruction method</a></dd>
-  <dt>Resolution</dt>
-  <dd>Resolution of the scanned raster in mm</dd>
-  <dt>Limit scan vertically</dt>
-  <dd>Specify minimum and maximum distance from the scanner in cm,
-  points outside of that limit are filtered</dd>
-  <dt>Trim scan</dt>
-  <dd>Specify horizontal distance in cm from the center of the scanner
-  in N, S, E and W directions to limit scanned area</dd>
-  <dt>Trim tolerance</dt>
-  <dd>If specified, use automatic horizontal trimming to avoid hands and other
-  objects lying around the model. Higher values close to 1 result in more aggressive
-  trimming. Recommended only for rectangular models.</dd>
-  <dt>Use interpolation instead of binning</dt>
-  <dd>Interpolation can fill gaps in the raster, however it takes more time.
-  Binning is fast but can leave some gaps in case of insufficient point cloud coverage.</dd>
-</dl>
-
-<h4>Analyses</h4>
-<dl>
-<dt>Analyses file</dt>
-<dd>Path to a Python file with analyses
-to be run whenever a new scanned raster is processed.
-This files contains defined functions performing different geospatial tasks.
-All functions starting with <tt>run_</tt> are launched, other ones are ignored.
-GRASS GIS modules are called and chained in these functions using
-<a href="http://grass.osgeo.org/grass71/manuals/libpython/index.html">
-GRASS Python Scripting API</a>.
-This file is re-imported in every loop, so saved changes are applied
-for new loop. In case of error (for example syntax error), the file
-is ignored until the error is fixed.</dd>
-<dt>Create new file</dt>
-<dd>Creates a new analyses file in user defined location
-with pre-defined analyses which need to be uncommented if they are to be used.
-This file can then be edited and
-more analyses can be added.</dd>
-</dl>
-
-All settings are saved when the dialog is closed to GRASS home folder and are used
-when re-opening the dialog.
+For all documentation and tutorials please refer to Tangible Landscape
+<a href="https://github.com/tangible-landscape/grass-tangible-landscape/wiki">wiki</a>.
 
 <h2>REFERENCES</h2>
 <ul>
+<li>Petrasova, A., Harmon, B., Petras, V., Tabrizian, P., Mitasova, H., 2018,
+ <a href="https://link.springer.com/book/10.1007%2F978-3-319-89303-7">
+Tangible Modeling with Open Source GIS</a>, second edition,
+ Springer International Publishing, 202 p. eBook ISBN: 978-3-319-89303-7, Hardcover ISBN: 978-3-319-89302-0, DOI: 10.1007/978-3-319-89303-7
+
 <li>Petrasova, A., Harmon, B., Petras, V., Mitasova, H., 2015,
 <a href="http://www.springer.com/us/book/9783319257730">
 Tangible Modeling with Open Source GIS</a>, Springer International Publishing,
@@ -117,12 +34,12 @@ June 15-19, San Diego, California, USA. ISBN: 978-88-9035-744-2</li>
 </ul>
 
 <h2>SEE ALSO</h2>
-<a href="https://geospatial.ncsu.edu/osgeorel/tangible-landscape.html">Project site</a> and
-addon <a href="https://github.com/ncsu-osgeorel/r.in.kinect">r.in.kinect</a>
+<a href="https://tangible-landscape.github.io/">Project site</a> and
+addon <a href="https://github.com/ncsu-geoforall/r.in.kinect">r.in.kinect</a>
 
 
 <h2>AUTHOR</h2>
-Anna Petrasova, <a href="http://geospatial.ncsu.edu/osgeorel/">NCSU OSGeoREL</a>,<br>
-Vaclav Petras, <a href="http://geospatial.ncsu.edu/osgeorel/">NCSU OSGeoREL</a>
+Anna Petrasova, <a href="http://geospatial.ncsu.edu/geoforall/">NCSU GeoForAll</a>,<br>
+Vaclav Petras, <a href="http://geospatial.ncsu.edu/geoforall/">NCSU GeoForAll</a>
 <p>
 <i>Last changed: Date: 2016-02-21</i>

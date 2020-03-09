@@ -22,9 +22,9 @@ We support installation on Ubuntu 18.04, for other versions and Linux distributi
 
        mkdir tangiblelandscape && cd tangiblelandscape
 
-2. Download [install.sh](install.sh) to that folder and run it:
+2. Download [install script](https://raw.githubusercontent.com/tangible-landscape/tangible-landscape-install/master/install_Ubuntu-18.04.sh) to that folder (check [this repo for other Ubuntu versions](https://github.com/tangible-landscape/tangible-landscape-install)) and run it:
 
-       sh install.sh
+       sh install_Ubuntu-18.04.sh
 
     It will ask you for administrator password. You need to be online to download all dependencies. After finishing the process, log out and log in.
 
@@ -45,6 +45,7 @@ Resources
  - Check out [Community](https://github.com/tangible-landscape/grass-tangible-landscape/wiki/Community)
  page to see who is using Tangible Landscape
  - Read our book [Tangible Modeling with Open Source GIS](https://link.springer.com/book/10.1007%2F978-3-319-89303-7) showing various modeling applications and methods
+ - See [published research](https://tangible-landscape.github.io/publications.html)
 
 
 
@@ -53,3 +54,9 @@ Authors
 Anna Petrasova (lead developer), Vaclav Petras, Payam Tabrizian, Brendan Harmon, Helena Mitasova
 
 [NCSU GeoForAll Laboratory](https://geospatial.ncsu.edu/geoforall/) at the [Center for Geospatial Analytics](https://cnr.ncsu.edu/geospatial/), NCSU
+
+How to cite
+-----------
+If you are using Tangible Landscape in an academic context, please cite our work:
+
+> Petrasova, A., Harmon, B., Petras, V., Tabrizian, P., & Mitasova, H. (2018). Tangible Modeling with Open Source GIS. Second edition. Springer International Publishing. eBook ISBN: 978-3-319-89303-7, Hardcover ISBN: 978-3-319-89302-0, https://doi.org/10.1007/978-3-319-89303-7.
