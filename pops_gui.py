@@ -26,7 +26,7 @@ from tangible_utils import get_environment, changeLayer, checkLayers
 from activities_dashboard import MultipleHTMLDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
-from pops_dashboard import PoPSDashboard, ModelParameters
+from pops_dashboard import PoPSDashboard, ModelParameters, PoPSWSClient
 from time_display import SteeringDisplayFrame, CurrentViewDisplayFrame
 
 
@@ -67,6 +67,7 @@ class PopsPanel(wx.Panel):
         self.treatmentHistory = [0] * 50
 
         self.webDashboard = None
+        self.wsWebDashboard = None
         self.params = ModelParameters()
 
         # steering
@@ -190,10 +191,16 @@ class PopsPanel(wx.Panel):
         self._bindButtons()
 
     def _connectDashboard(self):
+        dashboard = self.configuration['POPS']['dashboard']
         self.webDashboard = PoPSDashboard()
-        self.webDashboard.set_root_URL(self.configuration['POPS']['dashboard']['url'])
-        self.webDashboard.set_session_id(self.configuration['POPS']['dashboard']['session'])
+        self.webDashboard.set_root_URL(dashboard['url'])
+        self.webDashboard.set_session_id(dashboard['session'])
         self.params.set_web_dashboard(self.webDashboard)
+
+        if 'wsurl' in dashboard and dashboard['wsurl']:
+            self.wsWebDashboard = PoPSWSClient(guihandler=self,
+                                               url=dashboard['wsurl'],
+                                               callback=self._processWSInfo)
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -325,6 +332,9 @@ class PopsPanel(wx.Panel):
                     rotation = self.params.pops['rotation']
                 self.webDashboard.upload_results(year, event.name, single_infected, average_infected,
                                                  spread_file, rotation, use_single=use_single)
+
+    def _processWSInfo(self, data):
+        self.infoBar.ShowMessage("PoPS Web is saying: " + str(data))
 
     def _computeDifference(self, names):
         difference = self.configuration['POPS']['difference']
@@ -698,6 +708,9 @@ class PopsPanel(wx.Panel):
         if self.webDashboard:
             self.webDashboard.create_run()
         #self.showDisplayChange = False
+
+        if self.wsWebDashboard:
+            self.wsWebDashboard.send("Running...")
 
         self.infoBar.ShowMessage("Running...")
         playerName = self._createPlayerName()

@@ -12,6 +12,9 @@ import threading
 import wx
 import re
 import json
+import websockets
+import asyncio
+import wxasync
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
@@ -541,6 +544,48 @@ def process_for_dashboard(id_, year, raster, spread_rate_file, rotation=0):
                             'west_rate': int(wr) if wr != 'nan' else 0}
 
     return result
+
+
+
+class PoPSWSClient:
+    def __init__(self, guihandler, url, callback):
+        self._guihandler = guihandler
+        self._url = url
+        self._callback = callback
+        self._ws = None
+
+        wxasync.StartCoroutine(self._connect, self._guihandler)
+        wxasync.StartCoroutine(self._receive, self._guihandler)
+
+    async def _connect(self):
+        self._ws = await websockets.client.connect(self._url)
+
+    async def _receive(self):
+        while True:
+            await asyncio.sleep(0.5)
+            if self._ws and self._ws.open:
+                try:
+                    message = await self._ws.recv()
+                    self._process(json.loads(message))
+                except websockets.exceptions.ConnectionClosed:
+                    break
+
+    async def _send(self, message):
+        if self._ws and self._ws.open:
+            try:
+                await self._ws.send('{{"message": "{m}" }}'.format(m=message))
+            except websockets.exceptions.ConnectionClosed:
+                return False
+            else:
+                return True
+        return False
+
+    def send(self, message):
+        wxasync.StartCoroutine(self._send(message), self._guihandler)
+
+    def _process(self, message):
+        msg = message['message']
+        self._callback(msg)
 
 
 def main():
