@@ -9,6 +9,7 @@ import wx
 import re
 import os
 import json
+import copy
 import wx.lib.newevent
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT
@@ -120,20 +121,23 @@ class SteeringFrame(wx.Frame):
         studyArea = self.configuration['tasks'][0]['base']
         host = self.configuration['POPS']['model']['host']
         probability = self.configuration['POPS']['model']['probability_series']
+        average = self.configuration['POPS']['model']['average_series']
 
         postfix = self._getEventName() + '__' + self._getPlayerName() + '_'
         probability = probability + '__' + postfix
+        average = average + '__' + postfix
 
         extent = gscript.raster_info(studyArea)
         region = {'n': extent['north'], 's': extent['south'], 'w': extent['west'], 'e': extent['east'], 'align': host}
         region = '{n},{s},{w},{e},{align}'.format(**region)
-        model_params = self.configuration['POPS']['model'].copy()
+        model_params = copy.deepcopy(self.configuration['POPS']['model'])
         model_name = model_params.pop('model_name')
-        flags = model_params.pop('flags')
-        model_params.update({'output_series': postfix,
+        flags = model_params.pop('flags', None)
+        model_params.update({'single_series': postfix,
                              'probability_series': probability,
-                             'moisture_coefficient_file': os.path.join(os.path.dirname(CONFIG), self.configuration['POPS']['model']['moisture_coefficient_file']),
-                             'temperature_coefficient_file': os.path.join(os.path.dirname(CONFIG), self.configuration['POPS']['model']['temperature_coefficient_file'])})
+                             'average_series': average,
+                             'weather_coefficient_file': os.path.join(os.path.dirname(CONFIG),
+                                                                      self.configuration['POPS']['model']['weather_coefficient_file'])})
 
         # run simulation
         self.steeringClient.simulation_set_params(model_name, model_params, flags, region)
