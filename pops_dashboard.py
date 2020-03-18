@@ -12,6 +12,7 @@ import threading
 import wx
 import re
 import json
+import datetime
 import websockets
 import asyncio
 import wxasync
@@ -49,7 +50,7 @@ class ModelParameters:
         self.pops.pop('model')
         self.model = self._pops_config['model'].copy()
         self.model_name = self.model.pop('model_name')
-        self.model_flags = self.model.pop('flags')
+        self.model_flags = self.model.pop('flags', None)
         # weather
         if 'temperature_coefficient_file' in self._pops_config['model']:
             self.model['temperature_coefficient_file'] = os.path.join(self._workdir, self._pops_config['model']['temperature_coefficient_file'])
@@ -67,7 +68,8 @@ class ModelParameters:
         # assume dashboard is initialized
         if self._web:
             session = self._web.get_session()
-            self.model['treatment_month'] = int(session['management_month'])
+            month = int(session['management_month'])
+            self.pops['treatment_date'] = dateToString(dateFromString(self.pops['treatment_date']).replace(month=month))
             self.model['reproductive_rate'] = float(session['reproductive_rate'])
             # disable this for now
             #self.model['natural_distance'] = float(session['distance_scale'])
@@ -545,6 +547,13 @@ def process_for_dashboard(id_, year, raster, spread_rate_file, rotation=0):
 
     return result
 
+
+def dateFromString(date):
+    return datetime.datetime.strptime(date, '%Y-%m-%d')
+
+
+def dateToString(date):
+    return date.strftime("%Y-%m-%d")
 
 
 class PoPSWSClient:

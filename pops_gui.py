@@ -26,7 +26,8 @@ from tangible_utils import get_environment, changeLayer, checkLayers
 from activities_dashboard import MultipleHTMLDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
-from pops_dashboard import PoPSDashboard, ModelParameters, PoPSWSClient
+from pops_dashboard import PoPSDashboard, ModelParameters, PoPSWSClient, \
+    dateFromString, dateToString
 from time_display import SteeringDisplayFrame, CurrentViewDisplayFrame
 
 
@@ -322,7 +323,7 @@ class PopsPanel(wx.Panel):
             average_infected = '__'.join([self.params.model['average_series'], single_infected])
             spread_file = self.params.model['spread_rate_output']
             if self.webDashboard:
-                checkpoint = int(year) - self.params.model['start_time'] + 1
+                checkpoint = int(year) - dateFromString(self.params.model['start_date']).year + 1
                 if checkpoint > self.currentRealityCheckpoint:
                     use_single = False
                 else:
@@ -606,7 +607,7 @@ class PopsPanel(wx.Panel):
             style.update(self.configuration['POPS']['treatments_vstyle'])
         style = [key + '=' + str(style[key]) for key in style]
 
-        start = int(self.params.model['start_time'])
+        start = dateFromString(self.params.model['start_date']).year
         cats = [str(year) for year in range(start, start + checkpoint)]
         selection = ['cats=' + ','.join(cats)]
         cmd = ['d.vect', 'map={}'.format(name), 'display=shape,cat', 'xref=center', 'yref=bottom'] + style + selection
@@ -768,11 +769,11 @@ class PopsPanel(wx.Panel):
 
         if self.steeringClient.is_steering():
             if self.params.pops['steering']['move_current_year']:
-                tr_year = self.params.model['start_time'] + self.currentCheckpoint
+                tr_year = dateFromString(self.params.model['start_date']).year + self.currentCheckpoint
             else:
-                tr_year = self.params.model['start_time'] + self.currentRealityCheckpoint
+                tr_year = dateFromString(self.params.model['start_date']).year + self.currentRealityCheckpoint
         else:
-            tr_year = self.params.model['start_time']
+            tr_year = dateFromString(self.params.model['start_date']).year
 
         if self.webDashboard:
             self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent,
@@ -782,7 +783,10 @@ class PopsPanel(wx.Panel):
         # export treatments file to server
         self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
-        self.steeringClient.simulation_load_data(tr_year, tr_name)
+        tr_date = dateToString(dateFromString(self.params.pops['treatment_date']).replace(year=tr_year))
+        self.steeringClient.simulation_load_data(tr_name, tr_date,
+                                                 self.params.model['treatment_length'],
+                                                 self.params.model['treatment_application'])
         if self.params.pops['steering']['move_current_year']:
             self.steeringClient.simulation_goto(self.currentCheckpoint)
         else:
@@ -810,7 +814,7 @@ class PopsPanel(wx.Panel):
         tr, evt, plr, attempt, year = treatment_layer.split('__')
         postfix = 'cat_year'
         gscript.mapcalc("{n} = if({t} == 1, {y}, null())".format(n=treatment_layer + '__' + postfix,
-                        t=treatment_layer, y=int(year) + self.params.model['start_time']), env=env)
+                        t=treatment_layer, y=int(year) + dateFromString(self.params.model['start_date']).year), env=env)
         pattern = '__'.join([tr, evt, plr, attempt, '*', postfix])
         layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
         to_patch = []
@@ -894,7 +898,7 @@ class PopsPanel(wx.Panel):
                     # if last checkpoint is the same date as current raster, we don't want it
                     if self.checkpoints[self.currentCheckpoint] == (int(year), int(month), int(day)):
                         return
-                    currentCheckpoint = int(year) - self.params.model['start_time'] + 1
+                    currentCheckpoint = int(year) - dateFromString(self.params.model['start_date']).year + 1
                     self.checkpoints[currentCheckpoint] = (int(year), int(month), int(day))
                     # hide infection in case it's visible
                     self.ShowInitalInfection(useEvent=True, show=False)
@@ -965,8 +969,8 @@ class PopsPanel(wx.Panel):
         self._initVisualizationModes()
 
         self.currentCheckpoint = 0
-        start = self.params.model['start_time']
-        end = self.params.model['end_time']
+        start = dateFromString(self.params.model['start_date']).year
+        end = dateFromString(self.params.model['end_date']).year
         self.checkpoints.append((start, 1, 1))
         year = start
         while year <= end:
@@ -1071,7 +1075,7 @@ class PopsPanel(wx.Panel):
         self.steeringClient.results_clear()
 
         start = 0
-        end = self.params.model['end_time'] - self.params.model['start_time'] + 1
+        end = dateFromString(self.params.model['end_date']).year - dateFromString(self.params.model['start_date']).year + 1
         if forward and self.currentCheckpoint >= end:
             return
         if not forward and self.currentCheckpoint <= start:
@@ -1296,8 +1300,8 @@ class PopsPanel(wx.Panel):
         return (size[0] * mdSize[0], size[1] * mdSize[1])
 
     def StartTimeDisplay(self):
-        self.timeDisplay = SteeringDisplayFrame(self, start=self.params.model['start_time'],
-                                       end=self.params.model['end_time'] + 1,
+        self.timeDisplay = SteeringDisplayFrame(self, start=dateFromString(self.params.model['start_date']).year,
+                                       end=dateFromString(self.params.model['end_date']).year + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_display']['fontsize'],
                                        vtype=self.visualizationModes[self.visualizationMode],
                                        color_scheme=['red', 'green'])
@@ -1313,8 +1317,8 @@ class PopsPanel(wx.Panel):
         self.scaniface.postEvent(self, evt)
 
     def StartTimeStatusDisplay(self):
-        self.timeStatusDisplay = CurrentViewDisplayFrame(self, start=self.params.model['start_time'],
-                                       end=self.params.model['end_time'] + 1,
+        self.timeStatusDisplay = CurrentViewDisplayFrame(self, start=dateFromString(self.params.model['start_date']).year,
+                                       end=dateFromString(self.params.model['end_date']).year + 1,
                                        fontsize=self.configuration['tasks'][self.current]['time_status_display']['fontsize'],
                                        beginning_of_year=self.configuration['tasks'][self.current]['time_status_display']['beginning_of_year'],
                                        fgcolor=self.configuration['tasks'][self.current]['time_status_display'].get('fgcolor', None),

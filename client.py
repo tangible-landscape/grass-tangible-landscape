@@ -276,14 +276,14 @@ class SteeringClient:
         self._sendall('clientfile:{}:{}'.format(os.path.getsize(path), path))
         self._wait_for_confirmation()
 
-    def simulation_load_data(self, step, name):
+    def simulation_load_data(self, name, date, length, application):
         self._debug('simulation_load_data')
         if self._steering:
-            self._sendall('load:' + str(step) + ':' + name)
+            self._sendall('load:{n}:{d}:{l}:{a}'.format(n=name, d=date, l=length, a=application))
             self._wait_for_confirmation()
         else:
             self._model_params += '|' + '{k}={v}'.format(k='treatments', v=name)
-            self._model_params += '|' + '{k}={v}'.format(k='treatment_year', v=str(step))
+            self._model_params += '|' + '{k}={v}'.format(k='treatment_date', v=date)
 
     def simulation_sync_runs(self):
         self._sendall('cmd:sync')

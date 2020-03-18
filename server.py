@@ -118,11 +118,20 @@ def clientInterface(conn, connections, event, steering):
                 params = {}
                 for each in message[2].split(b'|'):
                     key, val = each.split(b'=')
+                    key = key.decode()
                     try:
                         params[key] = float(val)
                     except ValueError:
-                        params[key] = val
-                sod_process = run_model(params, True)
+                        params[key] = val.decode()
+                if 'computation' not in connections:
+                    if steering:
+                        sod_process = run_model(params, True)
+                    else:
+                        sod_process = run_model(params, False)
+                        thread = Thread(target=check_output,
+                                        args=(connections['interface'], params['output_series'], sod_process, event))
+                        thread.setDaemon(True)
+                        thread.start()
             elif message[1] == b'play':
                 if 'computation' in connections:
                     connections['computation'].sendall(b'cmd:play;')
@@ -148,7 +157,7 @@ def clientInterface(conn, connections, event, steering):
                 conn.sendall(b'info:received')
         elif message[0] == b'load':
             if 'computation' in connections:
-                connections['computation'].sendall(b'load:' + message[1] + b':' + message[2] + b';')
+                connections['computation'].sendall(b':'.join(message) + b';')
                 conn.sendall(b'info:received')
         elif message[0] == b'info':
             if message[1] == b'model_running':
