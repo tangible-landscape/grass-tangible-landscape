@@ -245,6 +245,9 @@ class ScanningPanel(wx.Panel):
             self.settings['scan']['interpolate'] = False
             self.settings['scan']['trim_tolerance'] = ''
             self.settings['scan']['resolution'] = 2
+            if self.scaniface.sensor == 'k4a':
+                self.settings['scan']['color_resolution'] = ''
+                self.settings['scan']['camera_resolution'] = '720P'
 
         self.scan = self.settings['scan']
 
@@ -252,12 +255,17 @@ class ScanningPanel(wx.Panel):
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         # define static boxes before all widgets are defined
-        georefBox = wx.StaticBox(self, label='  Georeferencing  ')
-        georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
         geomBox = wx.StaticBox(self, label='  Scan geometry  ')
         geomSizer = wx.StaticBoxSizer(geomBox, wx.VERTICAL)
         demBox = wx.StaticBox(self, label=' DEM quality ')
         demSizer = wx.StaticBoxSizer(demBox, wx.VERTICAL)
+        georefBox = wx.StaticBox(self, label='  Georeferencing  ')
+        if self.scaniface.sensor == 'k4a':
+            colorBox = wx.StaticBox(self, label=' Color quality ')
+            colorSizer = wx.StaticBoxSizer(colorBox, wx.VERTICAL)
+            georefSizer = wx.StaticBoxSizer(georefBox, wx.HORIZONTAL)
+        else:
+            georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
 
         # create widgets
         self.btnCalibrateTilt = Button(self, label="Calibration 1")
@@ -271,6 +279,7 @@ class ScanningPanel(wx.Panel):
         self.regionInput = Select(self, size=(-1, -1), type='region')
         self.regionInput.SetToolTipString('Saved region from which we take the georeferencing information')
         self.zexag = TextCtrl(self)
+        self.zexag.SetMinSize((50, -1))
         self.zexag.SetToolTip('Set vertical exaggeration of the physical model')
         self.numscans = SpinCtrl(self, min=1, max=5, initial=1)
         self.numscans.SetToolTip('Set number of scans to integrate')
@@ -303,6 +312,15 @@ class ScanningPanel(wx.Panel):
         self.smooth.SetValue(str(self.scan['smooth']))
         self.resolution.SetValue(str(self.scan['resolution']))
         self.trim_tolerance.SetValue(str(self.scan['trim_tolerance']))
+        if self.scaniface.sensor == 'k4a':
+            self.cameraResolution = wx.Choice(self, choices=['depth', '720P', '1080P', '1440P', '2160P'])
+            self.cameraResolution.SetToolTip("Applicable only when outputting color raster.\n"
+                                             "Higher resolution results in longer processing.\n"
+                                             "Set color resolution to lower value to take advantage of higher resolution.")
+            self.cameraResolution.SetStringSelection(self.settings['output'].get('camera_resolution', '720P'))
+            self.colorResolution = TextCtrl(self)
+            self.colorResolution.SetToolTip("Raster resolution of color output in mm of the ungeoreferenced scan")
+            self.colorResolution.SetValue(self.settings['output'].get('color_resolution', ''))
 
         # layout
         #
@@ -336,25 +354,25 @@ class ScanningPanel(wx.Panel):
         mainSizer.Add(geomSizer, flag=wx.EXPAND|wx.ALL, border=10)
 
         hSizer2 = wx.BoxSizer(wx.HORIZONTAL)
-        #
-        # Georeferencing box
-        #
-        # model parameters
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Reference DEM:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        hSizer.Add(self.elevInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        georefSizer.Add(hSizer, flag=wx.EXPAND)
-        # region
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Reference region:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        hSizer.Add(self.regionInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        georefSizer.Add(hSizer, flag=wx.EXPAND)
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        hSizer.Add(self.zexag, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        georefSizer.Add(hSizer, flag=wx.EXPAND)
-        hSizer2.Add(georefSizer, proportion=1, flag=wx.EXPAND|wx.RIGHT, border=10)
-
+        if self.scaniface.sensor != 'k4a':
+            #
+            # Georeferencing box
+            #
+            # model parameters
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Reference DEM:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.elevInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, flag=wx.EXPAND)
+            # region
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Reference region:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.regionInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, flag=wx.EXPAND)
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.zexag, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, flag=wx.EXPAND)
+            hSizer2.Add(georefSizer, proportion=1, flag=wx.EXPAND|wx.RIGHT, border=10)
         #
         # DEM properties box
         #
@@ -379,8 +397,40 @@ class ScanningPanel(wx.Panel):
         hSizer.Add(self.interpolate, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         demSizer.Add(hSizer, flag=wx.EXPAND)
 
-        hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND)
+        hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND|wx.RIGHT, border=10)
+
+
+        # Color properties box
+        if self.scaniface.sensor == 'k4a':
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="RGB camera resolution:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.cameraResolution, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            colorSizer.Add(hSizer, flag=wx.EXPAND)
+
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Resolution [mm]:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.colorResolution, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            colorSizer.Add(hSizer, flag=wx.EXPAND)
+
+            hSizer2.Add(colorSizer, proportion=1, flag=wx.EXPAND)
         mainSizer.Add(hSizer2, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
+
+        if self.scaniface.sensor == 'k4a':
+            #
+            # Georeferencing box
+            #
+            # model parameters
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Reference DEM:"), proportion=0, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.elevInput, proportion=1, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            # region
+            hSizer.Add(wx.StaticText(self, label="or region:"), proportion=0, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.regionInput, proportion=1, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+            hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=0, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.zexag, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+            mainSizer.Add(georefSizer, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -405,6 +455,9 @@ class ScanningPanel(wx.Panel):
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
         for each in 'nsewtb':
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
+        if self.scaniface.sensor == 'k4a':
+            self.cameraResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
+            self.colorResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
 
     def OnModelProperties(self, event):
         self.scan['elevation'] = self.elevInput.GetValue()
@@ -425,6 +478,10 @@ class ScanningPanel(wx.Panel):
             self.scan['trim_nsewtb'] = ','.join(nsewtb_list)
         except ValueError:
             pass
+        if self.scaniface.sensor == 'k4a':
+            self.scan['color_resolution'] = self.colorResolution.GetValue()
+            self.scan['camera_resolution'] = self.cameraResolution.GetStringSelection()
+
         self.settingsChanged.emit()
 
 
@@ -436,6 +493,8 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         if not gscript.find_program('r.in.kinect'):
             self.giface.WriteError("ERROR: Module r.in.kinect not found.")
+
+        self.sensor = self.getSensorVersion()
 
         self.settings = {}
         UserSettings.ReadSettingsFile(settings=self.settings)
@@ -531,6 +590,16 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         self.pause = None
         self.resume_once = None
+
+    def getSensorVersion(self):
+        nuldev = open(os.devnull, 'w+')
+        try:
+            out = gscript.read_command('r.in.kinect', flags='i', stderr=nuldev)
+            version = out.strip().split('=')[-1]
+        except CalledModuleError:
+            version = 'k4w_v2'
+        nuldev.close()
+        return version
 
     def _getSignalFile(self):
         if not self.signal_file:
@@ -666,6 +735,12 @@ class TangibleLandscapePlugin(wx.Dialog):
         if 'output' in self.settings['tangible'] and self.settings['tangible']['output']['color'] and \
            self.settings['tangible']['output']['color_name']:
             params['color_output'] = self.settings['tangible']['output']['color_name']
+            if self.sensor == 'k4a':
+                params['camera_resolution'] = self.scan['camera_resolution']
+                color_res = self.scan['color_resolution']
+                if color_res:
+                    params['color_resolution'] = float(color_res) / 1000
+
         elif editMode:
             params['color_output'] = ""
 
