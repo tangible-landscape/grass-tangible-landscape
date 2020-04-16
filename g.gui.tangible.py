@@ -317,10 +317,10 @@ class ScanningPanel(wx.Panel):
             self.cameraResolution.SetToolTip("Applicable only when outputting color raster.\n"
                                              "Higher resolution results in longer processing.\n"
                                              "Set color resolution to lower value to take advantage of higher resolution.")
-            self.cameraResolution.SetStringSelection(self.settings['output'].get('camera_resolution', '720P'))
+            self.cameraResolution.SetStringSelection(self.scan.get('camera_resolution', '720P'))
             self.colorResolution = TextCtrl(self)
             self.colorResolution.SetToolTip("Raster resolution of color output in mm of the ungeoreferenced scan")
-            self.colorResolution.SetValue(self.settings['output'].get('color_resolution', ''))
+            self.colorResolution.SetValue(str(self.scan.get('color_resolution', '')))
 
         # layout
         #
@@ -456,7 +456,7 @@ class ScanningPanel(wx.Panel):
         for each in 'nsewtb':
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
         if self.scaniface.sensor == 'k4a':
-            self.cameraResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
+            self.cameraResolution.Bind(wx.EVT_CHOICE, self.OnModelProperties)
             self.colorResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
 
     def OnModelProperties(self, event):
