@@ -9,6 +9,7 @@ Created on Wed Nov 20 14:44:32 2013
 import os
 import wx
 import wx.lib.filebrowsebutton as filebrowse
+from wx.adv import HyperlinkCtrl as UrlCtrl
 from shutil import copyfile
 from subprocess import PIPE
 import signal
@@ -26,12 +27,47 @@ from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
 from wxwrap import TextCtrl, Button, BitmapButton, SpinCtrl, CheckBox
-from tangible_utils import get_environment, run_analyses, updateGUIEvt, EVT_UPDATE_GUI
+from tangible_utils import get_environment, run_analyses, updateGUIEvt, get_TL_logo, EVT_UPDATE_GUI
 from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS, EVT_SELECT_LAYERS, EVT_CHANGE_LAYER
 from drawing import DrawingPanel
 from export import OutputPanel
 from activities import ActivitiesPanel
 from tangible_utils import get_show_layer_icon
+
+class AboutPanel(wx.Panel):
+    def __init__(self, parent, scaniface):
+        wx.Panel.__init__(self, parent)
+        scaniface = scaniface
+        sensor = wx.StaticText(self, label="", style=wx.ALIGN_CENTRE_HORIZONTAL)
+        if scaniface.sensor == 'k4a':
+            sensor.SetLabel("Using Kinect Azure DK version of r.in.kinect")
+        elif scaniface.sensor == 'k4w_v2':
+            sensor.SetLabel("UsingKinect Xbox One version of r.in.kinect")
+        elif sensor is None:
+            sensor.SetLabel("WARNING: r.in.kinect not available")
+
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        hbitmap = wx.StaticBitmap(self, wx.ID_ANY, get_TL_logo())
+        name = wx.StaticText(self, label="Tangible Landscape plugin for GRASS GIS",
+                             style=wx.ALIGN_CENTRE_HORIZONTAL)
+        font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+        name.SetFont(font)
+        url = UrlCtrl(self, label="tangible-landscape.github.io",
+                      url="tangible-landscape.github.io")
+        wiki = UrlCtrl(self, label="See documentation and tutorial on wiki",
+                       url="github.com/tangible-landscape/grass-tangible-landscape/wiki")
+
+        mainSizer.Add(hbitmap, proportion=0, flag=wx.EXPAND)
+        mainSizer.Add(name, flag=wx.EXPAND)
+        mainSizer.Add(url, flag=wx.EXPAND)
+        mainSizer.AddStretchSpacer(1)
+        mainSizer.Add(sensor, flag=wx.EXPAND)
+        mainSizer.AddStretchSpacer(1)
+        mainSizer.Add(wiki, flag=wx.EXPAND)
+        mainSizer.AddStretchSpacer(1)
+
+        self.SetSizer(mainSizer)
+        mainSizer.Fit(self)
 
 
 class AnalysesPanel(wx.Panel):
@@ -493,8 +529,9 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         if not gscript.find_program('r.in.kinect'):
             self.giface.WriteError("ERROR: Module r.in.kinect not found.")
-
-        self.sensor = self.getSensorVersion()
+            self.sensor = None
+        else:
+            self.sensor = self.getSensorVersion()
 
         self.settings = {}
         UserSettings.ReadSettingsFile(settings=self.settings)
@@ -538,6 +575,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.drawing_panel.settingsChanged.connect(lambda: setattr(self, 'changedInput', True))
         self.activities_panel = ActivitiesPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
         self.notebook.AddPage(self.activities_panel, "Activities")
+        self.about_panel = AboutPanel(self.notebook, scaniface=self)
+        self.notebook.AddPage(self.about_panel, "About")
 
         btnStart = wx.Button(self, label="Start")
         btnStop = wx.Button(self, label="Stop")
@@ -590,6 +629,15 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         self.pause = None
         self.resume_once = None
+
+        wx.CallAfter(self._refreshPanelSizes)
+
+    def _refreshPanelSizes(self):
+        """Workaround weird not updating page layout"""
+        count = self.notebook.GetPageCount()
+        for c in range(count):
+            size = self.notebook.GetPage(c).GetSize()
+            self.notebook.GetPage(c).SetSize(size)
 
     def getSensorVersion(self):
         nuldev = open(os.devnull, 'w+')
