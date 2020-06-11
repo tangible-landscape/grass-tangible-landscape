@@ -12,6 +12,7 @@ This program is free software under the GNU General Public License
 import wx
 import wx.html2 as webview
 
+
 class Slides(wx.Frame):
     def __init__(self, parent):
         wx.Frame.__init__(self, parent=parent)

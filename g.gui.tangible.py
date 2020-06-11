@@ -34,6 +34,7 @@ from export import OutputPanel
 from activities import ActivitiesPanel
 from tangible_utils import get_show_layer_icon
 
+
 class AboutPanel(wx.Panel):
     def __init__(self, parent, scaniface):
         wx.Panel.__init__(self, parent)
@@ -126,15 +127,15 @@ class AnalysesPanel(wx.Panel):
         calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
 
         bmp = get_show_layer_icon()
-        addLayerBtn = BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth()+12, bmp.GetHeight()+8))
+        addLayerBtn = BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8))
         addLayerBtn.SetToolTip("Add layer to display")
         addLayerBtn.Bind(wx.EVT_BUTTON, self._addCalibLayer)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Contour map name:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(wx.StaticText(self, label="Contour map name:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(self.contoursSelect, proportion=4, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.addContours, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
-        sizer.Add(wx.StaticText(self, label="Interval:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(self.addContours, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(wx.StaticText(self, label="Interval:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(self.contoursStepTextCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         topoSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(topoSizer, flag=wx.EXPAND | wx.ALL, border=5)
@@ -151,7 +152,7 @@ class AnalysesPanel(wx.Panel):
 
         # color training
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Raster with training areas:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(wx.StaticText(self, label="Raster with training areas:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=1)
         sizer.Add(addLayerBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
@@ -311,9 +312,9 @@ class ScanningPanel(wx.Panel):
 
         # widgets for model
         self.elevInput = Select(self, size=(-1, -1), type='raster')
-        self.elevInput.SetToolTipString('Raster from which we take the georeferencing information')
+        self.elevInput.SetToolTip('Raster from which we take the georeferencing information')
         self.regionInput = Select(self, size=(-1, -1), type='region')
-        self.regionInput.SetToolTipString('Saved region from which we take the georeferencing information')
+        self.regionInput.SetToolTip('Saved region from which we take the georeferencing information')
         self.zexag = TextCtrl(self)
         self.zexag.SetMinSize((50, -1))
         self.zexag.SetToolTip('Set vertical exaggeration of the physical model')
@@ -387,7 +388,7 @@ class ScanningPanel(wx.Panel):
         hSizer.Add(wx.StaticText(self, label="Trim tolerance [0-1]:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         hSizer.Add(self.trim_tolerance, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         geomSizer.Add(hSizer, flag=wx.EXPAND)
-        mainSizer.Add(geomSizer, flag=wx.EXPAND|wx.ALL, border=10)
+        mainSizer.Add(geomSizer, flag=wx.EXPAND | wx.ALL, border=10)
 
         hSizer2 = wx.BoxSizer(wx.HORIZONTAL)
         if self.scaniface.sensor != 'k4a':
@@ -408,7 +409,7 @@ class ScanningPanel(wx.Panel):
             hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
             hSizer.Add(self.zexag, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
             georefSizer.Add(hSizer, flag=wx.EXPAND)
-            hSizer2.Add(georefSizer, proportion=1, flag=wx.EXPAND|wx.RIGHT, border=10)
+            hSizer2.Add(georefSizer, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10)
         #
         # DEM properties box
         #
@@ -433,8 +434,7 @@ class ScanningPanel(wx.Panel):
         hSizer.Add(self.interpolate, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         demSizer.Add(hSizer, flag=wx.EXPAND)
 
-        hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND|wx.RIGHT, border=10)
-
+        hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10)
 
         # Color properties box
         if self.scaniface.sensor == 'k4a':
@@ -449,7 +449,7 @@ class ScanningPanel(wx.Panel):
             colorSizer.Add(hSizer, flag=wx.EXPAND)
 
             hSizer2.Add(colorSizer, proportion=1, flag=wx.EXPAND)
-        mainSizer.Add(hSizer2, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
+        mainSizer.Add(hSizer2, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
 
         if self.scaniface.sensor == 'k4a':
             #
@@ -466,7 +466,7 @@ class ScanningPanel(wx.Panel):
             hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=0, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
             hSizer.Add(self.zexag, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
             georefSizer.Add(hSizer, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
-            mainSizer.Add(georefSizer, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
+            mainSizer.Add(georefSizer, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -536,7 +536,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.settings = {}
         UserSettings.ReadSettingsFile(settings=self.settings)
         # for the first time
-        if not 'tangible' in self.settings:
+        if 'tangible' not in self.settings:
             self.settings['tangible'] = {'calibration': {'matrix': None},
                                          'analyses': {'file': None,
                                                       'contours': None,
@@ -703,8 +703,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             dlg.Destroy()
             return
         dlg = wx.MessageDialog(self, 'In order to calibrate, please remove objects from the table.',
-                                   'Calibration',
-                                   wx.OK | wx.CANCEL | wx.ICON_INFORMATION)
+                               'Calibration',
+                               wx.OK | wx.CANCEL | wx.ICON_INFORMATION)
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return
@@ -804,7 +804,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
         params['zrange'] = zrange
         params['rotate'] = self.scan['rotation_angle']
-        params['resolution'] = float(self.scan['resolution'])/1000
+        params['resolution'] = float(self.scan['resolution']) / 1000
         params['zexag'] = self.scan['zexag']
         params['numscan'] = self.scan['numscans']
         if self.process and self.process.poll() is None:  # still running

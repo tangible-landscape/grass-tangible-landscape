@@ -11,7 +11,6 @@ import os
 import imp
 import datetime
 import json
-import time
 import traceback
 import wx
 import wx.lib.newevent
@@ -67,8 +66,8 @@ class ActivitiesPanel(wx.Panel):
         else:
             self.configFile = self.settings['activities']['config']
 
-        self.configPath = filebrowse.FileBrowseButton(self, labelText='Configuration:', fileMask = "JSON file (*.json)|*.json",
-                                                     changeCallback=self._loadConfiguration)
+        self.configPath = filebrowse.FileBrowseButton(self, labelText='Configuration:', fileMask="JSON file (*.json)|*.json",
+                                                      changeCallback=self._loadConfiguration)
         self.configPath.SetValue(self.configFile, 0)
 
         self.title = wx.StaticText(self, label='')
@@ -98,28 +97,28 @@ class ActivitiesPanel(wx.Panel):
 
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.configPath, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.configPath, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.title, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.buttonBack, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.buttonForward, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.title, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.buttonBack, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.buttonForward, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.buttonCalibrate, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.buttonCalibrate, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.buttonStart, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.buttonStart, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
 #        sizer.Add(self.buttonPause, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.buttonStop, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.slidesStatus, proportion=0, flag=wx.EXPAND |wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, border=10)
-        sizer.Add(self.timeText, proportion=0, flag=wx.EXPAND | wx.ALIGN_CENTER | wx.LEFT, border=5)
+        sizer.Add(self.buttonStop, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.slidesStatus, proportion=0, flag=wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, border=10)
+        sizer.Add(self.timeText, proportion=0, flag=wx.ALIGN_CENTER | wx.LEFT, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.buttonNext, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.buttonNext, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.instructions, proportion=1, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(self.instructions, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         self.SetSizer(self.mainSizer)
         self.mainSizer.Fit(self)
@@ -191,7 +190,7 @@ class ActivitiesPanel(wx.Panel):
                 win.SetAcceleratorTable(accel_tbl)
 
     def CustomAction(self, eventName):
-        env = get_environment(rast=self.settings['output']['scan'])
+        env = get_environment(rast=self.settings['output']['scan'])  # noqa: F841
         myanalyses, functions = self._reloadAnalysisFile(funcPrefix=eventName)
 
         for func in functions:
@@ -511,42 +510,42 @@ class ActivitiesPanel(wx.Panel):
                 else:
                     self.giface.WriteWarning("Number of layers is larger than the number of checked values in config file")
             if cmd[0] == 'd.rast':
-                l = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('raster', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.vect':
-                l = ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('vector', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.labels':
-                l = ll.AddLayer('labels', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('labels', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.shade':
-                l = ll.AddLayer('shaded', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('shaded', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.rgb':
-                l = ll.AddLayer('rgb', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('rgb', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.legend':
-                l = ll.AddLayer('rastleg', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('rastleg', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.northarrow':
-                l = ll.AddLayer('northarrow', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('northarrow', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             elif cmd[0] == 'd.barscale':
-                l = ll.AddLayer('barscale', name=cmd[1].split('=')[1], checked=checked,
-                                opacity=opacity, cmd=cmd)
+                lr = ll.AddLayer('barscale', name=cmd[1].split('=')[1], checked=checked,
+                                 opacity=opacity, cmd=cmd)
             else:
-                l = ll.AddLayer('command', name=' '.join(cmd), checked=checked,
-                                opacity=opacity, cmd=[])
+                lr = ll.AddLayer('command', name=' '.join(cmd), checked=checked,
+                                 opacity=opacity, cmd=[])
             if not checked:
                 # workaround: in not checked the order of layers is wrong
                 try:
                     for each in ll:
                         ll.SelectLayer(each, False)
-                    ll.SelectLayer(l, True)
+                    ll.SelectLayer(lr, True)
                 except AttributeError:
                     # SelectLayer introduced in r73097, for cases before:
                     ll._tree.Unselect()
-                    ll._tree.SelectItem(l._layer, True)
+                    ll._tree.SelectItem(lr._layer, True)
         if 'sublayers' in self.tasks[self.current]:
             cmd = self.tasks[self.current]['sublayers'][0]
             if cmd[0] == 'd.rast':
@@ -578,7 +577,7 @@ class ActivitiesPanel(wx.Panel):
     def PostProcessing(self, onDone=None):
         wx.BeginBusyCursor()
         wx.SafeYield()
-        env = get_environment(rast=self.settings['output']['scan'])
+        env = get_environment(rast=self.settings['output']['scan'])  # noqa: F841
         try:
             postprocess = imp.load_source('postprocess', os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses']))
         except Exception as e:
