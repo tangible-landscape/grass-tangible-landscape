@@ -12,9 +12,9 @@ import shutil
 import imp
 import traceback
 try:
-    from StringIO import StringIO ## for Python 2
+    from StringIO import StringIO  # for Python 2
 except ImportError:
-    from io import BytesIO as StringIO ## for Python 3
+    from io import BytesIO as StringIO  # for Python 3
 import base64
 
 import grass.script as gscript
@@ -92,6 +92,7 @@ def get_show_layer_icon():
     Sqkk8AIfF8U7S8Efz/n9/vV77f9TwN/Vf/+H8z/g3wf8BtScfGRhgC1qAAAAAElFTkSuQmCC"""
     return BitmapFromImage(ImageFromStream(StringIO(base64.b64decode(SHOW_LAYER_ICON))))
 
+
 def get_environment(**kwargs):
     """!Returns environment for running modules.
     All modules for which region is important should
@@ -133,7 +134,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
-    scan_params = settings['tangible']['scan']
+    scan_params = settings['tangible']['scan']  # noqa: F841
     scan_name = settings['tangible']['output']['scan']
     if scanFilter['filter']:
         try:
@@ -168,7 +169,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
             return
     except ZeroDivisionError:
         return
-    env = get_environment(rast=scan_name)
+    env = get_environment(rast=scan_name)  # noqa: F841
     if not analysesFile or not os.path.exists(analysesFile):
         return
     # run analyses
@@ -178,8 +179,8 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         print(e)
         return
 
-    functions = [func for func in dir(myanalyses) \
-        if (func.startswith('run_') and func != 'run_command') or func.startswith('drawing_')]
+    functions = [func for func in dir(myanalyses)
+                 if (func.startswith('run_') and func != 'run_command') or func.startswith('drawing_')]
     for func in functions:
         exec('del myanalyses.' + func)
     try:
@@ -190,11 +191,11 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     # color output
     color = None
     if settings['tangible']['output']['color']:
-        color = settings['tangible']['output']['color_name']
+        color = settings['tangible']['output']['color_name']  # noqa: F841
     # blender path
     blender_path = None
     if settings['tangible']['output']['blender']:
-        blender_path = settings['tangible']['output']['blender_path']
+        blender_path = settings['tangible']['output']['blender_path']  # noqa: F841
     # drawing needs different parameters
     # functions postprocessing drawing results start with 'drawing'
     # functions postprocessing scanning results start with 'run'

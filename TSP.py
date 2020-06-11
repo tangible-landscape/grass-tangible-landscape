@@ -73,7 +73,7 @@ def restore_path(connections):
 
 def pairs_by_dist(N, distances):
     # Sort coordinate pairs by distance
-    indices = [None] * (N * (N - 1)//2)
+    indices = [None] * (N * (N - 1) // 2)
     idx = 0
     for i in xrange(N):
         for j in xrange(i + 1, N):
@@ -144,14 +144,14 @@ def solve_tsp(distances, optim_steps=3, pairs_by_dist=pairs_by_dist):
 
 
 def pairs_by_dist_np(N, distances):
-    pairs = numpy.zeros((N * (N - 1)//2, ), dtype=('f4, i2, i2'))
+    pairs = numpy.zeros((N * (N - 1) // 2, ), dtype=('f4, i2, i2'))
 
     idx = 0
     for i in xrange(N):
-        row_size = N-i-1
+        row_size = N - i - 1
         dist_i = distances[i]
-        pairs[idx:(idx+row_size)] = [(dist_i[j], i, j)
-                                     for j in xrange(i + 1, N)]
+        pairs[idx:(idx + row_size)] = [(dist_i[j], i, j)
+                                       for j in xrange(i + 1, N)]
         idx += row_size
     pairs.sort(order=["f0"])  # sort by the first field
     return pairs[["f1", "f2"]]

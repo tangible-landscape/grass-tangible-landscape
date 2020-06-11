@@ -16,7 +16,7 @@ from grass.exceptions import CalledModuleError
 #def run_difference(real_elev, scanned_elev, env, **kwargs):
 #    analyses.difference(real_elev=real_elev, scanned_elev=scanned_elev,
 #                         env=env, new='diff', color_coeff=1)
-#    
+#
 #
 #def run_contours(scanned_elev, env, **kwargs):
 #    analyses.contours(scanned_elev=scanned_elev, new='contours_scanned', env=env, step=2)
@@ -35,7 +35,7 @@ from grass.exceptions import CalledModuleError
 #
 #
 #def run_erosion(scanned_elev, env, **kwargs):
-#    analyses.erosion(scanned_elev=scanned_elev, rain_value=200, depth='depth', detachment_coeff=0.001, transport_coeff=0.01, shear_stress=0, sediment_flux='flux', erosion_deposition='erdep', niterations=4, env=env)  
+#    analyses.erosion(scanned_elev=scanned_elev, rain_value=200, depth='depth', detachment_coeff=0.001, transport_coeff=0.01, shear_stress=0, sediment_flux='flux', erosion_deposition='erdep', niterations=4, env=env)
 
 #def run_geomorphon(scanned_elev, env, **kwargs):
 #    analyses.geomorphon(scanned_elev, new='geomorphon', search=22, skip=12, flat=1, dist=0, env=env)
@@ -43,7 +43,7 @@ from grass.exceptions import CalledModuleError
 #def run_slope_aspect(scanned_elev, env, **kwargs):
 #    analyses.slope_aspect(scanned_elev=scanned_elev, slope='slope', aspect='aspect', env=env)
 
-#    
+#
 #def run_usped(scanned_elev, env, **kwargs):
 #    analyses.flowacc(scanned_elev, new='flowacc', env=env)
 #    analyses.usped(scanned_elev, k_factor='soils_Kfactor', c_factor='cfactorbare_1m', flowacc='flowacc', slope='slope', aspect='aspect', new='erdep', env=env)
@@ -53,7 +53,7 @@ from grass.exceptions import CalledModuleError
 #    env = get_environment(rast=scanned_elev, n='n-20', s='s+20', e='e-20', w='w+20')
 #    analyses.change_detection(before='scan_saved', after=scanned_elev,
 #                              change='change', height_threshold=[10, 30], cells_threshold=[7, 100], add=True, max_detected=6, debug=False, env=env)
-#                              
+#
 #def run_trail(real_elev, scanned_elev, env, **kwargs):
 #    analyses.trails_combinations(real_elev,friction='friction', walk_coeff=[0.72, 6.0, 1.9998, -1.9998],
 #                                 _lambda=.5, slope_factor=-.8125, walk='walk_result',

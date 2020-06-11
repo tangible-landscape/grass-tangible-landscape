@@ -13,8 +13,6 @@ from gui_core.gselect import Select
 import grass.script as gscript
 from grass.pydispatch.signal import Signal
 
-from tangible_utils import run_analyses, updateGUIEvt, EVT_UPDATE_GUI
-
 
 class DrawingPanel(wx.Panel):
     def __init__(self, parent, giface, settings):
@@ -112,4 +110,3 @@ class DrawingPanel(wx.Panel):
     def _newAppendedVector(self, event=None):
         gscript.run_command('v.edit', tool='create', map=self.settings['drawing']['appendName'],
                             overwrite=True, quiet=True)
-        

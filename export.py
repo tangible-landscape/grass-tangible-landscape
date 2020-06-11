@@ -64,8 +64,8 @@ class OutputPanel(wx.Panel):
         if self.settings['output']['blender_path']:
             initDirBlender = self.settings['output']['blender_path']
         self.blenderPath = filebrowse.DirBrowseButton(self, labelText="Export folder for Blender coupling:",
-                                                     startDirectory=initDirBlender, newDirectory=True,
-                                                     changeCallback=self.OnChange)
+                                                      startDirectory=initDirBlender, newDirectory=True,
+                                                      changeCallback=self.OnChange)
 
         # PLY
         self.ifPLY = wx.CheckBox(self, label="")
