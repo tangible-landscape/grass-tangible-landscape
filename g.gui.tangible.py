@@ -794,7 +794,8 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
         params['trim'] = trim_nsew
-        params['smooth_radius'] = float(self.scan['smooth'])/1000
+        if self.scan['smooth']:
+            params['smooth_radius'] = float(self.scan['smooth']) / 1000
         if self.scan['interpolate']:
             method = 'interpolation'
         else:
