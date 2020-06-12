@@ -112,7 +112,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             values = [None] * len(title)
             html = self._content_grid(values) if self.grid else self._content_table(values)
             self.textCtrl.SetPage(html, '')
-            self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+            self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.EXPAND, 5)
 
         self.SetSizer(self.sizer)
         self.sizer.Fit(self.panel)
