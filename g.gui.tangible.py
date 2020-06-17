@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov 20 14:44:32 2013
@@ -9,9 +9,11 @@ Created on Wed Nov 20 14:44:32 2013
 import os
 import wx
 import wx.lib.filebrowsebutton as filebrowse
+from wx.adv import HyperlinkCtrl as UrlCtrl
 from shutil import copyfile
 from subprocess import PIPE
 import signal
+import tempfile
 
 from grass.script.utils import set_path, get_lib_path
 set_path(modulename='g.gui.tangible')
@@ -25,7 +27,7 @@ from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
 from wxwrap import TextCtrl, Button, BitmapButton, SpinCtrl, CheckBox
-from tangible_utils import get_environment, run_analyses, updateGUIEvt, EVT_UPDATE_GUI
+from tangible_utils import get_environment, run_analyses, updateGUIEvt, get_TL_logo, EVT_UPDATE_GUI
 from tangible_utils import EVT_ADD_LAYERS, EVT_REMOVE_LAYERS, EVT_CHECK_LAYERS, EVT_SELECT_LAYERS, EVT_CHANGE_LAYER
 from drawing import DrawingPanel
 from export import OutputPanel
@@ -33,6 +35,42 @@ from pops_gui import PopsPanel
 
 from activities import ActivitiesPanel
 from tangible_utils import get_show_layer_icon
+
+
+class AboutPanel(wx.Panel):
+    def __init__(self, parent, scaniface):
+        wx.Panel.__init__(self, parent)
+        scaniface = scaniface
+        sensor = wx.StaticText(self, label="", style=wx.ALIGN_CENTRE_HORIZONTAL)
+        if scaniface.sensor == 'k4a':
+            sensor.SetLabel("Using Kinect Azure DK version of r.in.kinect")
+        elif scaniface.sensor == 'k4w_v2':
+            sensor.SetLabel("UsingKinect Xbox One version of r.in.kinect")
+        elif sensor is None:
+            sensor.SetLabel("WARNING: r.in.kinect not available")
+
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        hbitmap = wx.StaticBitmap(self, wx.ID_ANY, get_TL_logo())
+        name = wx.StaticText(self, label="Tangible Landscape plugin for GRASS GIS",
+                             style=wx.ALIGN_CENTRE_HORIZONTAL)
+        font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+        name.SetFont(font)
+        url = UrlCtrl(self, label="tangible-landscape.github.io",
+                      url="tangible-landscape.github.io")
+        wiki = UrlCtrl(self, label="See documentation and tutorial on wiki",
+                       url="github.com/tangible-landscape/grass-tangible-landscape/wiki")
+
+        mainSizer.Add(hbitmap, proportion=0, flag=wx.EXPAND)
+        mainSizer.Add(name, flag=wx.EXPAND)
+        mainSizer.Add(url, flag=wx.EXPAND)
+        mainSizer.AddStretchSpacer(1)
+        mainSizer.Add(sensor, flag=wx.EXPAND)
+        mainSizer.AddStretchSpacer(1)
+        mainSizer.Add(wiki, flag=wx.EXPAND)
+        mainSizer.AddStretchSpacer(1)
+
+        self.SetSizer(mainSizer)
+        mainSizer.Fit(self)
 
 
 class AnalysesPanel(wx.Panel):
@@ -91,15 +129,15 @@ class AnalysesPanel(wx.Panel):
         calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
 
         bmp = get_show_layer_icon()
-        addLayerBtn = BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth()+12, bmp.GetHeight()+8))
+        addLayerBtn = BitmapButton(self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8))
         addLayerBtn.SetToolTip("Add layer to display")
         addLayerBtn.Bind(wx.EVT_BUTTON, self._addCalibLayer)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Contour map name:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(wx.StaticText(self, label="Contour map name:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(self.contoursSelect, proportion=4, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.addContours, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
-        sizer.Add(wx.StaticText(self, label="Interval:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(self.addContours, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
+        sizer.Add(wx.StaticText(self, label="Interval:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(self.contoursStepTextCtrl, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         topoSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(topoSizer, flag=wx.EXPAND | wx.ALL, border=5)
@@ -116,7 +154,7 @@ class AnalysesPanel(wx.Panel):
 
         # color training
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(wx.StaticText(self, label="Raster with training areas:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=5)
+        sizer.Add(wx.StaticText(self, label="Raster with training areas:"), proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=1)
         sizer.Add(addLayerBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, border=5)
         sizer.Add(calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
@@ -187,7 +225,7 @@ class AnalysesPanel(wx.Panel):
         wx.Yield()
 
         self.scaniface.Scan(continuous=False)
-        self.scaniface.process.wait()
+        self.scaniface.process.communicate()
         self.scaniface.process = None
         self.scaniface.status.SetLabel("Done.")
 
@@ -246,6 +284,9 @@ class ScanningPanel(wx.Panel):
             self.settings['scan']['interpolate'] = False
             self.settings['scan']['trim_tolerance'] = ''
             self.settings['scan']['resolution'] = 2
+            if self.scaniface.sensor == 'k4a':
+                self.settings['scan']['color_resolution'] = ''
+                self.settings['scan']['camera_resolution'] = '720P'
 
         self.scan = self.settings['scan']
 
@@ -253,12 +294,17 @@ class ScanningPanel(wx.Panel):
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         # define static boxes before all widgets are defined
-        georefBox = wx.StaticBox(self, label='  Georeferencing  ')
-        georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
         geomBox = wx.StaticBox(self, label='  Scan geometry  ')
         geomSizer = wx.StaticBoxSizer(geomBox, wx.VERTICAL)
         demBox = wx.StaticBox(self, label=' DEM quality ')
         demSizer = wx.StaticBoxSizer(demBox, wx.VERTICAL)
+        georefBox = wx.StaticBox(self, label='  Georeferencing  ')
+        if self.scaniface.sensor == 'k4a':
+            colorBox = wx.StaticBox(self, label=' Color quality ')
+            colorSizer = wx.StaticBoxSizer(colorBox, wx.VERTICAL)
+            georefSizer = wx.StaticBoxSizer(georefBox, wx.HORIZONTAL)
+        else:
+            georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
 
         # create widgets
         self.btnCalibrateTilt = Button(self, label="Calibration 1")
@@ -268,10 +314,11 @@ class ScanningPanel(wx.Panel):
 
         # widgets for model
         self.elevInput = Select(self, size=(-1, -1), type='raster')
-        self.elevInput.SetToolTipString('Raster from which we take the georeferencing information')
+        self.elevInput.SetToolTip('Raster from which we take the georeferencing information')
         self.regionInput = Select(self, size=(-1, -1), type='region')
-        self.regionInput.SetToolTipString('Saved region from which we take the georeferencing information')
+        self.regionInput.SetToolTip('Saved region from which we take the georeferencing information')
         self.zexag = TextCtrl(self)
+        self.zexag.SetMinSize((50, -1))
         self.zexag.SetToolTip('Set vertical exaggeration of the physical model')
         self.numscans = SpinCtrl(self, min=1, max=5, initial=1)
         self.numscans.SetToolTip('Set number of scans to integrate')
@@ -304,6 +351,15 @@ class ScanningPanel(wx.Panel):
         self.smooth.SetValue(str(self.scan['smooth']))
         self.resolution.SetValue(str(self.scan['resolution']))
         self.trim_tolerance.SetValue(str(self.scan['trim_tolerance']))
+        if self.scaniface.sensor == 'k4a':
+            self.cameraResolution = wx.Choice(self, choices=['depth', '720P', '1080P', '1440P', '2160P'])
+            self.cameraResolution.SetToolTip("Applicable only when outputting color raster.\n"
+                                             "Higher resolution results in longer processing.\n"
+                                             "Set color resolution to lower value to take advantage of higher resolution.")
+            self.cameraResolution.SetStringSelection(self.scan.get('camera_resolution', '720P'))
+            self.colorResolution = TextCtrl(self)
+            self.colorResolution.SetToolTip("Raster resolution of color output in mm of the ungeoreferenced scan")
+            self.colorResolution.SetValue(str(self.scan.get('color_resolution', '')))
 
         # layout
         #
@@ -334,28 +390,28 @@ class ScanningPanel(wx.Panel):
         hSizer.Add(wx.StaticText(self, label="Trim tolerance [0-1]:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         hSizer.Add(self.trim_tolerance, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         geomSizer.Add(hSizer, flag=wx.EXPAND)
-        mainSizer.Add(geomSizer, flag=wx.EXPAND|wx.ALL, border=10)
+        mainSizer.Add(geomSizer, flag=wx.EXPAND | wx.ALL, border=10)
 
         hSizer2 = wx.BoxSizer(wx.HORIZONTAL)
-        #
-        # Georeferencing box
-        #
-        # model parameters
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Reference DEM:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        hSizer.Add(self.elevInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        georefSizer.Add(hSizer, flag=wx.EXPAND)
-        # region
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Reference region:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        hSizer.Add(self.regionInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        georefSizer.Add(hSizer, flag=wx.EXPAND)
-        hSizer = wx.BoxSizer(wx.HORIZONTAL)
-        hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        hSizer.Add(self.zexag, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-        georefSizer.Add(hSizer, flag=wx.EXPAND)
-        hSizer2.Add(georefSizer, proportion=1, flag=wx.EXPAND|wx.RIGHT, border=10)
-
+        if self.scaniface.sensor != 'k4a':
+            #
+            # Georeferencing box
+            #
+            # model parameters
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Reference DEM:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.elevInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, flag=wx.EXPAND)
+            # region
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Reference region:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.regionInput, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, flag=wx.EXPAND)
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.zexag, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, flag=wx.EXPAND)
+            hSizer2.Add(georefSizer, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10)
         #
         # DEM properties box
         #
@@ -380,8 +436,39 @@ class ScanningPanel(wx.Panel):
         hSizer.Add(self.interpolate, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         demSizer.Add(hSizer, flag=wx.EXPAND)
 
-        hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND)
-        mainSizer.Add(hSizer2, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, border=10)
+        hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10)
+
+        # Color properties box
+        if self.scaniface.sensor == 'k4a':
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="RGB camera resolution:"), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.cameraResolution, proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            colorSizer.Add(hSizer, flag=wx.EXPAND)
+
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Resolution [mm]:"), proportion=1, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.colorResolution, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+            colorSizer.Add(hSizer, flag=wx.EXPAND)
+
+            hSizer2.Add(colorSizer, proportion=1, flag=wx.EXPAND)
+        mainSizer.Add(hSizer2, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
+
+        if self.scaniface.sensor == 'k4a':
+            #
+            # Georeferencing box
+            #
+            # model parameters
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(wx.StaticText(self, label="Reference DEM:"), proportion=0, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.elevInput, proportion=1, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            # region
+            hSizer.Add(wx.StaticText(self, label="or region:"), proportion=0, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.regionInput, proportion=1, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+            hSizer.Add(wx.StaticText(self, label="Z-exaggeration:"), proportion=0, flag=wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, border=5)
+            hSizer.Add(self.zexag, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+            georefSizer.Add(hSizer, proportion=1, flag=wx.EXPAND | wx.ALL, border=5)
+            mainSizer.Add(georefSizer, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10)
 
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
@@ -406,6 +493,9 @@ class ScanningPanel(wx.Panel):
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
         for each in 'nsewtb':
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
+        if self.scaniface.sensor == 'k4a':
+            self.cameraResolution.Bind(wx.EVT_CHOICE, self.OnModelProperties)
+            self.colorResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
 
     def OnModelProperties(self, event):
         self.scan['elevation'] = self.elevInput.GetValue()
@@ -426,6 +516,10 @@ class ScanningPanel(wx.Panel):
             self.scan['trim_nsewtb'] = ','.join(nsewtb_list)
         except ValueError:
             pass
+        if self.scaniface.sensor == 'k4a':
+            self.scan['color_resolution'] = self.colorResolution.GetValue()
+            self.scan['camera_resolution'] = self.cameraResolution.GetStringSelection()
+
         self.settingsChanged.emit()
 
 
@@ -437,11 +531,14 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         if not gscript.find_program('r.in.kinect'):
             self.giface.WriteError("ERROR: Module r.in.kinect not found.")
+            self.sensor = None
+        else:
+            self.sensor = self.getSensorVersion()
 
         self.settings = {}
         UserSettings.ReadSettingsFile(settings=self.settings)
         # for the first time
-        if not 'tangible' in self.settings:
+        if 'tangible' not in self.settings:
             self.settings['tangible'] = {'calibration': {'matrix': None},
                                          'analyses': {'file': None,
                                                       'contours': None,
@@ -452,6 +549,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.delay = 0.3
         self.process = None
         self.observer = None
+        self.signal_file = None
         self.timer = wx.Timer(self)
         self.changedInput = False
         self.filter = {'filter': False,
@@ -482,6 +580,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.pops_panel.Bind(wx.EVT_CLOSE, self.pops_panel.OnClose)
         self.activities_panel = ActivitiesPanel(self.notebook, self.giface, self.settings['tangible'], scaniface=self)
         self.notebook.AddPage(self.activities_panel, "Activities")
+        self.about_panel = AboutPanel(self.notebook, scaniface=self)
+        self.notebook.AddPage(self.about_panel, "About")
 
         btnStart = wx.Button(self, label="Start")
         btnStop = wx.Button(self, label="Stop")
@@ -498,7 +598,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         btnPause.Bind(wx.EVT_BUTTON, lambda evt: self.Pause())
         btnScanOnce.Bind(wx.EVT_BUTTON, self.ScanOnce)
         btnHelp.Bind(wx.EVT_BUTTON, self.OnHelp)
-        btnClose.Bind(wx.EVT_BUTTON, lambda evt: self.Close())
+        btnClose.Bind(wx.EVT_BUTTON, self.OnClose)
         self.Layout()
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -537,6 +637,31 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.pause = None
         self.resume_once = None
 
+        wx.CallAfter(self._refreshPanelSizes)
+
+    def _refreshPanelSizes(self):
+        """Workaround weird not updating page layout"""
+        count = self.notebook.GetPageCount()
+        for c in range(count):
+            size = self.notebook.GetPage(c).GetSize()
+            self.notebook.GetPage(c).SetSize(size)
+
+    def getSensorVersion(self):
+        nuldev = open(os.devnull, 'w+')
+        try:
+            out = gscript.read_command('r.in.kinect', flags='i', stderr=nuldev)
+            version = out.strip().split('=')[-1]
+        except CalledModuleError:
+            version = 'k4w_v2'
+        nuldev.close()
+        return version
+
+    def _getSignalFile(self):
+        if not self.signal_file:
+            fd, self.signal_file = tempfile.mkstemp()
+            os.close(fd)
+        return self.signal_file
+
     def OnHelp(self, event):
         """Show help"""
         self.giface.Help(entry='g.gui.tangible', online=False)
@@ -544,6 +669,8 @@ class TangibleLandscapePlugin(wx.Dialog):
     def OnClose(self, event):
         self.Stop()
         UserSettings.SaveToFile(self.settings)
+        if self.signal_file and os.path.exists(self.signal_file):
+            os.remove(self.signal_file)
         self.Destroy()
 
     def OnUpdate(self, event=None):
@@ -583,8 +710,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             dlg.Destroy()
             return
         dlg = wx.MessageDialog(self, 'In order to calibrate, please remove objects from the table.',
-                                   'Calibration',
-                                   wx.OK | wx.CANCEL | wx.ICON_INFORMATION)
+                               'Calibration',
+                               wx.OK | wx.CANCEL | wx.ICON_INFORMATION)
         if dlg.ShowModal() != wx.ID_OK:
             dlg.Destroy()
             return
@@ -663,12 +790,19 @@ class TangibleLandscapePlugin(wx.Dialog):
         if 'output' in self.settings['tangible'] and self.settings['tangible']['output']['color'] and \
            self.settings['tangible']['output']['color_name']:
             params['color_output'] = self.settings['tangible']['output']['color_name']
+            if self.sensor == 'k4a':
+                params['camera_resolution'] = self.scan['camera_resolution']
+                color_res = self.scan['color_resolution']
+                if color_res:
+                    params['color_resolution'] = float(color_res) / 1000
+
         elif editMode:
             params['color_output'] = ""
 
         trim_nsew = ','.join(self.scan['trim_nsewtb'].split(',')[:4])
         params['trim'] = trim_nsew
-        params['smooth_radius'] = float(self.scan['smooth'])/1000
+        if self.scan['smooth']:
+            params['smooth_radius'] = float(self.scan['smooth']) / 1000
         if self.scan['interpolate']:
             method = 'interpolation'
         else:
@@ -677,7 +811,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ','.join(self.scan['trim_nsewtb'].split(',')[4:])
         params['zrange'] = zrange
         params['rotate'] = self.scan['rotation_angle']
-        params['resolution'] = float(self.scan['resolution'])/1000
+        params['resolution'] = float(self.scan['resolution']) / 1000
         params['zexag'] = self.scan['zexag']
         params['numscan'] = self.scan['numscans']
         if self.process and self.process.poll() is None:  # still running
@@ -704,7 +838,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         wx.SafeYield()
         params = self.GatherParameters(editMode=False, continuous=continuous)
         self.process = gscript.start_command('r.in.kinect', overwrite=True, quiet=True,
-                                             stdin=PIPE, **params)
+                                             stdin=PIPE, signal_file=self._getSignalFile(), **params)
         return self.process
 
     def ScanOnce(self, event):
@@ -715,7 +849,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         else:
             self.Scan(continuous=False)
             self.status.SetLabel("Importing scan...")
-            self.process.wait()
+            self.process.communicate()
             self.process = None
             run_analyses(settings=self.settings, analysesFile=self.settings['tangible']['analyses']['file'],
                          giface=self.giface, update=self.OnUpdate, eventHandler=self, scanFilter=self.filter)
@@ -754,14 +888,11 @@ class TangibleLandscapePlugin(wx.Dialog):
             return
         gisenv = gscript.gisenv()
         mapsetPath = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'])
-        path1 = os.path.join(mapsetPath, 'fcell')
-        if not os.path.exists(path1):
-            os.mkdir(os.path.join(mapsetPath, 'fcell'))
         path2 = os.path.join(mapsetPath, 'vector')
         if not os.path.exists(path2):
             os.mkdir(os.path.join(mapsetPath, 'vector'))
-        paths = [path1, path2]
-        handlers = [RasterChangeHandler(self.runImport, self.settings['tangible']['output']),
+        paths = [os.path.dirname(self._getSignalFile()), path2]
+        handlers = [SignalFileChangeHandler(self.runImport, os.path.basename(self._getSignalFile())),
                     DrawingChangeHandler(self.runImportDrawing, self.settings['tangible']['drawing']['name'])]
 
         self.observer = Observer()
@@ -774,7 +905,7 @@ class TangibleLandscapePlugin(wx.Dialog):
     def Stop(self):
         if self.process and self.process.poll() is None:  # still running
             self.process.terminate()
-            self.process.wait()
+            self.process.communicate()
             self.process = None
             if self.observer:
                 try:
@@ -861,9 +992,9 @@ class TangibleLandscapePlugin(wx.Dialog):
 
 
 def main(giface=None):
-    global Observer, RasterChangeHandler, DrawingChangeHandler
+    global Observer, SignalFileChangeHandler, DrawingChangeHandler
     from watchdog.observers import Observer
-    from change_handler import RasterChangeHandler, DrawingChangeHandler
+    from change_handler import SignalFileChangeHandler, DrawingChangeHandler
     dlg = TangibleLandscapePlugin(giface, parent=None)
     dlg.Show()
 
@@ -871,5 +1002,5 @@ def main(giface=None):
 if __name__ == '__main__':
     gscript.parser()
     from watchdog.observers import Observer
-    from change_handler import RasterChangeHandler, DrawingChangeHandler
+    from change_handler import SignalFileChangeHandler, DrawingChangeHandler
     main()

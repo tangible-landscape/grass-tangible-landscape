@@ -12,9 +12,9 @@ import shutil
 import imp
 import traceback
 try:
-    from StringIO import StringIO ## for Python 2
+    from StringIO import StringIO  # for Python 2
 except ImportError:
-    from io import BytesIO as StringIO ## for Python 3
+    from io import BytesIO as StringIO  # for Python 3
 import base64
 
 import grass.script as gscript
@@ -29,6 +29,42 @@ removeLayers, EVT_REMOVE_LAYERS = wx.lib.newevent.NewEvent()
 checkLayers, EVT_CHECK_LAYERS = wx.lib.newevent.NewEvent()
 selectLayers, EVT_SELECT_LAYERS = wx.lib.newevent.NewEvent()
 changeLayer, EVT_CHANGE_LAYER = wx.lib.newevent.NewEvent()
+
+
+def get_TL_logo():
+    logo = """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"""
+    return BitmapFromImage(ImageFromStream(StringIO(base64.b64decode(logo))))
 
 
 def get_show_layer_icon():
@@ -55,6 +91,7 @@ def get_show_layer_icon():
     r1TbrM5vfWHSizmR8CybMbfiEYxcGVocToQuL0cibz/dX//SLY5+wLSKne7dZbc3Aa93uA26PUm
     Sqkk8AIfF8U7S8Efz/n9/vV77f9TwN/Vf/+H8z/g3wf8BtScfGRhgC1qAAAAAElFTkSuQmCC"""
     return BitmapFromImage(ImageFromStream(StringIO(base64.b64decode(SHOW_LAYER_ICON))))
+
 
 def get_environment(**kwargs):
     """!Returns environment for running modules.
@@ -97,7 +134,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
-    scan_params = settings['tangible']['scan']
+    scan_params = settings['tangible']['scan']  # noqa: F841
     scan_name = settings['tangible']['output']['scan']
     if scanFilter['filter']:
         try:
@@ -132,7 +169,7 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
             return
     except ZeroDivisionError:
         return
-    env = get_environment(rast=scan_name)
+    env = get_environment(rast=scan_name)  # noqa: F841
     if not analysesFile or not os.path.exists(analysesFile):
         return
     # run analyses
@@ -142,8 +179,8 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         print(e)
         return
 
-    functions = [func for func in dir(myanalyses) \
-        if (func.startswith('run_') and func != 'run_command') or func.startswith('drawing_')]
+    functions = [func for func in dir(myanalyses)
+                 if (func.startswith('run_') and func != 'run_command') or func.startswith('drawing_')]
     for func in functions:
         exec('del myanalyses.' + func)
     try:
@@ -154,11 +191,11 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     # color output
     color = None
     if settings['tangible']['output']['color']:
-        color = settings['tangible']['output']['color_name']
+        color = settings['tangible']['output']['color_name']  # noqa: F841
     # blender path
     blender_path = None
     if settings['tangible']['output']['blender']:
-        blender_path = settings['tangible']['output']['blender_path']
+        blender_path = settings['tangible']['output']['blender_path']  # noqa: F841
     # drawing needs different parameters
     # functions postprocessing drawing results start with 'drawing'
     # functions postprocessing scanning results start with 'run'

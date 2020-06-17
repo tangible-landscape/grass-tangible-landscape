@@ -8,7 +8,6 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import wx
-import wx.html as wxhtml
 import wx.html2 as webview
 from itertools import cycle
 
@@ -38,7 +37,7 @@ class SteeringDisplay(wx.Panel):
         self.textCtrl = webview.WebView.New(self)
         self.textCtrl.SetPage(template.format(body="", fontsize=self.fontsize), '')
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+        self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.EXPAND, 5)
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
@@ -79,7 +78,7 @@ class SteeringDisplay(wx.Panel):
         delim_split = '&#9887;'
         html = ''
         style = {'past': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
-                 'current':  'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
+                 'current': 'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
                  'future': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
         for year in self.years:
             if year < current:
@@ -103,7 +102,7 @@ class SteeringDisplay(wx.Panel):
                     elif year > current:
                         d = delim_prob
                 # for now, keep simple until I figure it out
-                #d = delim_single
+                # d = delim_single
                 html += '<font {style}> {d} </font>'.format(style=style['future'], d=d)
         return html
 
@@ -120,10 +119,10 @@ class SteeringDisplayFrame(wx.Frame):
             self.slider1 = wx.Slider(self, minValue=0, maxValue=(end - start), value=0)
             self.slider2 = wx.Slider(self, minValue=0, maxValue=(end - start), value=0)
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.timedisplay, 1, wx.ALL|wx.ALIGN_CENTER|wx.GROW)
+        self.sizer.Add(self.timedisplay, 1, wx.ALL | wx.GROW)
         if test:
-            self.sizer.Add(self.slider1, 1, wx.ALL|wx.ALIGN_CENTER|wx.GROW, border=15)
-            self.sizer.Add(self.slider2, 1, wx.ALL|wx.ALIGN_CENTER|wx.GROW, border=15)
+            self.sizer.Add(self.slider1, 1, wx.ALL | wx.GROW, border=15)
+            self.sizer.Add(self.slider2, 1, wx.ALL | wx.GROW, border=15)
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
         self.Layout()
@@ -163,8 +162,8 @@ class CurrentViewDisplayFrame(wx.Frame):
             self.yearCtrl.SetForegroundColour(wx.Colour(*fgcolor))
             self.typeCtrl.SetForegroundColour(wx.Colour(*fgcolor))
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.yearCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
-        self.sizer.Add(self.typeCtrl, 0, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+        self.sizer.Add(self.yearCtrl, 1, wx.ALL | wx.EXPAND, 5)
+        self.sizer.Add(self.typeCtrl, 0, wx.ALL | wx.EXPAND, 5)
         panel.SetSizer(self.sizer)
         self.sizer.Fit(panel)
 
@@ -184,12 +183,13 @@ class SimpleTimeDisplayFrame(wx.Frame):
         font = wx.Font(fontsize, wx.DEFAULT, wx.NORMAL, wx.BOLD)
         self.label.SetFont(font)
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer.Add(self.label, 1, wx.ALL|wx.ALIGN_CENTER|wx.GROW, border=10)
+        self.sizer.Add(self.label, 1, wx.ALL | wx.GROW, border=10)
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
     def UpdateText(self, current):
         self.label.SetLabel(str(current + self.years[0]))
+
 
 if __name__ == "__main__":
     app = wx.App()

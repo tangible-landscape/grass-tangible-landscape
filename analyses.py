@@ -8,21 +8,21 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import os
-import shutil
 import uuid
 from math import sqrt
 
 from grass.script import core as gcore
 from grass.script import raster as grast
+from grass.script import vector as gvect
 from grass.exceptions import CalledModuleError
 
-from tangible_utils import get_environment, remove_vector
+from tangible_utils import remove_vector
 
 
 def difference_scaled(real_elev, scanned_elev, new, env):
     """!Computes difference of original and scanned (scan - orig).
     Uses regression for automatic scaling"""
-    regression='regression'
+    regression = 'regression'
     regression_params = gcore.parse_command('r.regression.line', flags='g', mapx=scanned_elev, mapy=real_elev, env=env)
     gcore.run_command('r.mapcalc', expression='{regression} = {a} + {b} * {before}'.format(a=regression_params['a'], b=regression_params['b'], before=scanned_elev, regression=regression), env=env)
     gcore.run_command('r.mapcalc', expression='{difference} = {regression} - {after}'.format(regression=regression, after=real_elev, difference=new), env=env)
@@ -158,7 +158,7 @@ def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
     gcore.run_command('r.slope.aspect', elevation=qsx, dx=qsxdx, overwrite=True, env=env)
     gcore.run_command('r.slope.aspect', elevation=qsy, dy=qsydy, overwrite=True, env=env)
     gcore.run_command('r.mapcalc', expression="{erdep} = {qsxdx} + {qsydy}".format(erdep=new, qsxdx=qsxdx, qsydy=qsydy), overwrite=True, env=env)
-    gcore.write_command('r.colors', map=new,  rules='-', stdin='-15000 100 0 100\n-100 magenta\n-10 red\n-1 orange\n-0.1 yellow\n0 200 255 200\n0.1 cyan\n1 aqua\n10 blue\n100 0 0 100\n18000 black', env=env)
+    gcore.write_command('r.colors', map=new, rules='-', stdin='-15000 100 0 100\n-100 magenta\n-10 red\n-1 orange\n-0.1 yellow\n0 200 255 200\n0.1 cyan\n1 aqua\n10 blue\n100 0 0 100\n18000 black', env=env)
 
     gcore.run_command('g.remove', flags='f', type='raster', name=[sedflow, qsx, qsxdx, qsy, qsydy, slope_sm])
 
@@ -196,6 +196,7 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
         remove_vector(new, deleteTable=False)
         print(e)
 
+
 def change_detection_area(before, after, change, height_threshold, filter_slope_threshold, add, env):
     """Detects change in area. Result are areas with value
     equals the max difference between the scans as a positive value."""
@@ -217,12 +218,11 @@ def change_detection_area(before, after, change, height_threshold, filter_slope_
     gcore.run_command('g.remove', type='raster', name=['slope_tmp_get_change', 'before_after_regression_tmp'], flags='f', env=env)
 
 
-
 def change_detection(before, after, change, height_threshold, cells_threshold, add, max_detected, debug, env):
     diff_thr = 'diff_thr_' + str(uuid.uuid4()).replace('-', '')
     diff_thr_clump = 'diff_thr_clump_' + str(uuid.uuid4()).replace('-', '')
     coeff = gcore.parse_command('r.regression.line', mapx=after, mapy=before, flags='g', env=env)
-    grast.mapcalc('diff = {a} + {b} * {after} - {before}'.format(a=coeff['a'], b=coeff['b'],before=before,after=after), env=env)
+    grast.mapcalc('diff = {a} + {b} * {after} - {before}'.format(a=coeff['a'], b=coeff['b'], before=before, after=after), env=env)
     try:
         if add:
             grast.mapcalc("{diff_thr} = if(({a} + {b} * {after} - {before}) > {thr1} &&"
@@ -246,7 +246,7 @@ def change_detection(before, after, change, height_threshold, cells_threshold, a
             for stat in stats:
                 if found >= max_detected:
                     break
-                if float(stat.split()[1]) < cells_threshold[1] and float(stat.split()[1]) > cells_threshold[0]: # larger than specified number of cells
+                if float(stat.split()[1]) < cells_threshold[1] and float(stat.split()[1]) > cells_threshold[0]:  # larger than specified number of cells
                     found += 1
                     cat, value = stat.split()
                     cats.append(cat)
@@ -324,12 +324,13 @@ def trails_combinations(scanned_elev, friction, walk_coeff, _lambda, slope_facto
 # procedure for finding a trail in real-time
 def trail(scanned_elev, friction, walk_coeff, _lambda, slope_factor,
           walk, walk_dir, point_from, points_to, raster_route, vector_routes, env):
-    gcore.run_command('r.walk',overwrite=True, flags='k', elevation=scanned_elev,
+    gcore.run_command('r.walk', overwrite=True, flags='k', elevation=scanned_elev,
                       friction=friction, output=walk, start_coordinates=point_from, outdir=walk_dir,
                       stop_coordinates=points_to, walk_coeff=walk_coeff, _lambda=_lambda, slope_factor=slope_factor, env=env)
     for i in range(len(points_to)):
         gcore.run_command('r.drain', overwrite=True, input=walk, direction=walk_dir, flags='d', drain=vector_routes[i],
                           output=raster_route, start_coordinates=points_to[i], env=env)
+
 
 def trail_salesman(trails, points, output, env):
     net_tmp = 'net_tmp'
@@ -353,7 +354,7 @@ def viewshed(scanned_elev, output, vector, visible_color, invisible_color, obs_e
     if coordinate:
         gcore.run_command('r.viewshed', flags='b', input=scanned_elev, output=output, coordinates=coordinate, observer_elevation=obs_elev, env=env)
         gcore.run_command('r.null', map=output, null=0, env=env)
-        gcore.write_command('r.colors', map=output,  rules='-', stdin='0 {invis}\n1 {vis}'.format(vis=visible_color, invis=invisible_color), env=env)
+        gcore.write_command('r.colors', map=output, rules='-', stdin='0 {invis}\n1 {vis}'.format(vis=visible_color, invis=invisible_color), env=env)
 
 
 def polygons(points_map, output, env):
@@ -361,7 +362,7 @@ def polygons(points_map, output, env):
     Requires GRASS 7.1."""
     tmp_cluster = 'tmp_cluster'
     tmp_hull = 'tmp_hull'
-    gcore.run_command('v.cluster', flags='t', input=points_map, min=3,  layer='3', output=tmp_cluster, method='optics', env=env)
+    gcore.run_command('v.cluster', flags='t', input=points_map, min=3, layer='3', output=tmp_cluster, method='optics', env=env)
     cats = gcore.read_command('v.category', input=tmp_cluster, layer='3', option='print', env=env).strip().split()
     cats_list = list(set(cats))
     cats_dict = dict([(x, cats.count(x)) for x in cats_list])
@@ -381,7 +382,7 @@ def polygons(points_map, output, env):
 def polylines(points_map, output, env):
     """Cluster points and connect points by line in each cluster"""
     tmp_cluster = 'tmp_cluster'
-    gcore.run_command('v.cluster', flags='t', input=points_map, min=3,  layer='3', output=tmp_cluster, method='optics', env=env)
+    gcore.run_command('v.cluster', flags='t', input=points_map, min=3, layer='3', output=tmp_cluster, method='optics', env=env)
     cats = gcore.read_command('v.category', input=tmp_cluster, layer=3, option='print', env=env).strip()
     cats = list(set(cats.split()))
     line = ''

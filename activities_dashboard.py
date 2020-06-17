@@ -49,18 +49,18 @@ class MultipleDashboardFrame(wx.Frame):
                 self.titles[i].SetFont(font)
             if vertical:
                 if title:
-                    self.sizer.Add(self.titles[i], pos=(i, 0), flag=wx.ALL|wx.ALIGN_BOTTOM)
-                self.sizer.Add(self.gauges[i], pos=(i, 1), flag=wx.ALL|wx.EXPAND)
-                self.sizer.Add(self.labels[i], pos=(i, 2), flag=wx.ALL|wx.ALIGN_BOTTOM)
+                    self.sizer.Add(self.titles[i], pos=(i, 0), flag=wx.ALL | wx.ALIGN_BOTTOM)
+                self.sizer.Add(self.gauges[i], pos=(i, 1), flag=wx.ALL | wx.EXPAND)
+                self.sizer.Add(self.labels[i], pos=(i, 2), flag=wx.ALL | wx.ALIGN_BOTTOM)
             else:
                 if title:
-                    self.sizer.Add(self.titles[i], pos=(0, i), flag=wx.ALL|wx.ALIGN_CENTER)
+                    self.sizer.Add(self.titles[i], pos=(0, i), flag=wx.ALL | wx.ALIGN_CENTER)
                 extra = wx.BoxSizer(wx.HORIZONTAL)
                 extra.AddStretchSpacer()
                 extra.Add(self.gauges[i], flag=wx.EXPAND)
                 extra.AddStretchSpacer()
-                self.sizer.Add(extra, pos=(1, i), flag=wx.ALL|wx.EXPAND)
-                self.sizer.Add(self.labels[i], pos=(2, i), flag=wx.ALL|wx.ALIGN_CENTER)
+                self.sizer.Add(extra, pos=(1, i), flag=wx.ALL | wx.EXPAND)
+                self.sizer.Add(self.labels[i], pos=(2, i), flag=wx.ALL | wx.ALIGN_CENTER)
                 self.sizer.AddGrowableCol(i, 0)
         if vertical:
             self.sizer.AddGrowableCol(1, 1)
@@ -89,7 +89,6 @@ class MultipleDashboardFrame(wx.Frame):
         self.Layout()
 
 
-
 class MultipleHTMLDashboardFrame(wx.Frame):
     def __init__(self, parent, fontsize, average, maximum, title,
                  formatting_string, vertical=False, grid=False):
@@ -110,87 +109,89 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         if webview:
             self.textCtrl = webview.WebView.New(self)
-            values=[None] * len(title)
+            values = [None] * len(title)
             html = self._content_grid(values) if self.grid else self._content_table(values)
             self.textCtrl.SetPage(html, '')
-            self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.ALIGN_CENTER | wx.EXPAND, 5)
+            self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.EXPAND, 5)
 
         self.SetSizer(self.sizer)
         self.sizer.Fit(self.panel)
 
     def _progressbar(self):
         return \
-        """
-        progress {{
-            display: inline-block;
-            width: 100%;
-            padding: 0px 0 0 0;
-            margin: 0;
-            background: none;
-            border: 0;
-            border-radius: 15px;
-            text-align: left;
-            position: relative;
-            font-family: sans-serif;
-            font-size: {fontsize}px;
-        }}
-        progress::-webkit-progress-bar {{
-            display: inline-block;
-            width: 100%;
-            margin: 0 auto;
-            background-color: #CCC;
-            border-radius: 15px;
-            box-shadow: 0px 0px 6px #777 inset;
-        }}
-        progress::-webkit-progress-value {{
-            display: inline-block;
-            width: 100%;
-            float: left;
-            margin: 0px 0px 0 0;
-            background: #F70;
-            border-radius: 15px;
-            box-shadow: 0px 0px 6px #666 inset;
-        }}
-        """
+            """
+            progress {{
+                display: inline-block;
+                width: 100%;
+                padding: 0px 0 0 0;
+                margin: 0;
+                background: none;
+                border: 0;
+                border-radius: 15px;
+                text-align: left;
+                position: relative;
+                font-family: sans-serif;
+                font-size: {fontsize}px;
+            }}
+            progress::-webkit-progress-bar {{
+                display: inline-block;
+                width: 100%;
+                margin: 0 auto;
+                background-color: #CCC;
+                border-radius: 15px;
+                box-shadow: 0px 0px 6px #777 inset;
+            }}
+            progress::-webkit-progress-value {{
+                display: inline-block;
+                width: 100%;
+                float: left;
+                margin: 0px 0px 0 0;
+                background: #F70;
+                border-radius: 15px;
+                box-shadow: 0px 0px 6px #666 inset;
+            }}
+            """
+
     def _head_grid(self):
         return \
-        """<!DOCTYPE html><html><head><style>
-        .grid-container {{
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          padding: 0px;
-        }}
-        .grid-item {{
-          background-color: rgba(255, 255, 255, 0.8);
-          padding: 0px;
-          font-size: {fontsize}px;
-          text-align: left;
-          white-space: nowrap;
-        }}
-        """ \
-        + self._progressbar() + \
-        """
-        </style></head><body>
-        <div class="grid-container">
-        """
+            """<!DOCTYPE html><html><head><style>
+            .grid-container {{
+              display: grid;
+              grid-template-columns: auto 1fr auto;
+              padding: 0px;
+            }}
+            .grid-item {{
+              background-color: rgba(255, 255, 255, 0.8);
+              padding: 0px;
+              font-size: {fontsize}px;
+              text-align: left;
+              white-space: nowrap;
+            }}
+            """ \
+            + self._progressbar() + \
+            """
+            </style></head><body>
+            <div class="grid-container">
+            """
+
     def _head_table(self):
         return \
-        """<!DOCTYPE html><html><head><style>
-        td {{
-            white-space: nowrap;
-        }}
-        /* There are simpler solutions than
-           table width, but work only in presumably
-           newer browsers. */
-        table td:nth-child(2) {{
-            width: 100%;
-        }}
-        """ \
-        + self._progressbar() + \
-        """
-        </style></head><body>
-        <table style="width:100%">
-        """
+            """<!DOCTYPE html><html><head><style>
+            td {{
+                white-space: nowrap;
+            }}
+            /* There are simpler solutions than
+               table width, but work only in presumably
+               newer browsers. */
+            table td:nth-child(2) {{
+                width: 100%;
+            }}
+            """ \
+            + self._progressbar() + \
+            """
+            </style></head><body>
+            <table style="width:100%">
+            """
 
     def _end_grid(self):
         return "</div></body></html>"
