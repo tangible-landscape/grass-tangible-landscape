@@ -92,7 +92,7 @@ def clientInterface(conn, connections, event, steering):
                     else:
                         sod_process = run_model(params, False)
                         thread = Thread(target=check_output,
-                                        args=(connections['interface'], params['output_series'], sod_process, event))
+                                        args=(connections['interface'], params['single_series'], sod_process, event))
                         thread.setDaemon(True)
                         thread.start()
             elif message[1] == b'end':
@@ -129,7 +129,7 @@ def clientInterface(conn, connections, event, steering):
                     else:
                         sod_process = run_model(params, False)
                         thread = Thread(target=check_output,
-                                        args=(connections['interface'], params['output_series'], sod_process, event))
+                                        args=(connections['interface'], params['single_series'], sod_process, event))
                         thread.setDaemon(True)
                         thread.start()
             elif message[1] == b'play':
