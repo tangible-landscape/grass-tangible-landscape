@@ -49,6 +49,7 @@ class SteeringClient:
         self._steering = True
         self._model_params = ''
         self._baseline_params = ''
+        self._baseline_computing = False
         if launch_server:
             # should be list
             if port_simulation:
@@ -169,11 +170,12 @@ class SteeringClient:
                 # event_player_year_month_day
                 self._debug('serverfile: ' + name)
                 if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
-                    results_queue.put(name)
                     self._debug('_step_done: ' + name)
-                    if self._eventHandler:
-                        evt = ProcessForDashboardEvent(name=name)
-                        wx.PostEvent(self._eventHandler, evt)
+                    if not self._baseline_computing:
+                        results_queue.put(name)
+                        if self._eventHandler:
+                            evt = ProcessForDashboardEvent(name=name)
+                            wx.PostEvent(self._eventHandler, evt)
 
                 ##########
             elif message[0] == b'info':
@@ -198,6 +200,7 @@ class SteeringClient:
                     if self._eventHandler:
                         evt = BaselineDoneEvent()
                         wx.PostEvent(self._eventHandler, evt)
+                        self._baseline_computing = False
 
     def _wait_for_confirmation(self):
         self._threading_event.clear()
@@ -299,6 +302,7 @@ class SteeringClient:
 
     def compute_baseline(self):
         self._sendall('baseline:' + self._baseline_params)
+        self._baseline_computing = True
 
     def set_on_done(self, func):
         self._simulation_done = func
