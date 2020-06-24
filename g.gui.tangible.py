@@ -854,6 +854,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         to update scanning properties during running r.in.kinect
         if scanning input changed"""
         if self.process and self.process.poll() is not None:
+            self.process.wait()
+            self.process = None
             if self.observer:
                 try:
                     self.observer.stop()
