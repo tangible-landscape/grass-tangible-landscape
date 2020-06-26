@@ -139,8 +139,8 @@ class SteeringClient:
                 self._socket.close()
                 continue
 
-            message = data.split(b':')
             self._debug(data)
+            message = data.split(b':')
             if message[0] == b'clientfile':
                 _, fsize, path = message
                 with open(message[2].decode(), 'rb') as f:
@@ -159,7 +159,8 @@ class SteeringClient:
                 f = open(new_path, 'wb')
                 f.write(data)
                 while(total_received < fsize):
-                    data = self._socket.recv(1024)
+                    sz = 1024 if fsize - total_received > 1024 else fsize - total_received
+                    data = self._socket.recv(sz)
                     total_received += len(data)
                     f.write(data)
                 f.close()
