@@ -51,11 +51,13 @@ class SteeringClient:
         self._baseline_params = ''
         self._baseline_computing = False
         if launch_server:
+            import stat
+            os.chmod(launch_server, stat.S_IXUSR | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
             # should be list
             if port_simulation:
-                self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
+                self._server = subprocess.Popen([launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
             else:
-                self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(int(local_gdbase))])
+                self._server = subprocess.Popen([launch_server, str(port_interface), str(int(local_gdbase))])
             time.sleep(1)
             relaunch = False
             if self._server.poll() == 1:
@@ -66,9 +68,9 @@ class SteeringClient:
             time.sleep(1)
             if relaunch:
                 if port_simulation:
-                    self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
+                    self._server = subprocess.Popen([launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
                 else:
-                    self._server = subprocess.Popen(['python', launch_server, str(port_interface), str(int(local_gdbase))])
+                    self._server = subprocess.Popen([launch_server, str(port_interface), str(int(local_gdbase))])
                 time.sleep(1)
 
     def _debug(self, message):
