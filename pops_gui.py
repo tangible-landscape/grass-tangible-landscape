@@ -185,6 +185,12 @@ class PopsPanel(wx.Panel):
         self.Bind(EVT_UPDATE_TIME_DISPLAY, self.OnTimeDisplayUpdate)
         self.Bind(EVT_UPDATE_INFOBAR, self.OnUpdateInfoBar)
 
+    def IsStandalone(self):
+        """If TL plugin runs standalone without GUI"""
+        if self.giface.GetLayerTree():
+            return False
+        return True
+
     def _connect(self):
         self._connectSteering()
         if 'dashboard' in self.configuration['POPS'] and self.configuration['POPS']['dashboard']:
@@ -1048,9 +1054,11 @@ class PopsPanel(wx.Panel):
         self.currentCheckpoint = self.currentRealityCheckpoint = 0
 
     def _bindButtons(self):
-        windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
-        windows.append(wx.GetTopLevelParent(self))
-        windows.append(self.giface.lmgr)
+        # if standalone, no binding can be done
+        windows = [wx.GetTopLevelParent(self)]
+        if not self.IsStandalone():
+            windows.append(self.giface.lmgr)
+            windows.extend([mapw for mapw in self.giface.GetAllMapDisplays()])
         bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
                     'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation}
         if "keyboard_events" in self.configuration:
@@ -1119,6 +1127,8 @@ class PopsPanel(wx.Panel):
         self.treatmentSelect.SetValue('')
 
     def AddTempLayers(self):
+        if self.IsStandalone():
+            return
         # create empty placeholders
         f = gscript.find_file(name=self.placeholders['results'], element='raster')
         env = get_environment(raster=self.configuration['tasks'][self.current]['base'])
@@ -1136,6 +1146,8 @@ class PopsPanel(wx.Panel):
                     cmd=['d.vect', 'map=' + self.empty_placeholders['treatments']], checked=True)
 
     def LoadLayers(self):
+        if self.IsStandalone():
+            return
         ll = self.giface.GetLayerList()
         for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
             opacity = 1.0
@@ -1194,15 +1206,21 @@ class PopsPanel(wx.Panel):
         self.ZoomToBase()
 
     def ZoomToBase(self):
+        if self.IsStandalone():
+            return
         base = self.configuration['tasks'][self.current]['base']
         self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
         self.giface.GetMapWindow().UpdateMap()
 
     def ZoomToRegion(self, region):
+        if self.IsStandalone():
+            return
         self.giface.GetMapWindow().Map.GetRegion(regionName=region, update=True)
         self.giface.GetMapWindow().UpdateMap()
 
     def _changeResultsLayer(self, cmd, name, resultType, useEvent, opacity=1):
+        if self.IsStandalone():
+            return
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'ChangeLayer'):
             print("Changing layer in Layer Manager requires GRASS GIS version > 7.8")
@@ -1224,6 +1242,8 @@ class PopsPanel(wx.Panel):
                                  name=self.empty_placeholders['treatments'], resultType='treatments', useEvent=useEvent)
 
     def ShowInitalInfection(self, useEvent, show=True):
+        if self.IsStandalone():
+            return
         # assumes initial infection is named the same way as infected raster
         infected = self.params.model['infected']
         ll = self.giface.GetLayerList()
@@ -1239,6 +1259,8 @@ class PopsPanel(wx.Panel):
                     break
 
     def RemoveLayers(self, etype='raster', pattern=None, layers=None):
+        if self.IsStandalone():
+            return
         # works only for raster/vector at this point
         all_layers = []
         if pattern:
@@ -1289,13 +1311,19 @@ class PopsPanel(wx.Panel):
         return size
 
     def _getPosFromRelative(self, pos):
-        md = self.giface.GetMapDisplay()
+        if self.IsStandalone():
+            md = wx.GetTopLevelParent(self)
+        else:
+            md = self.giface.GetMapDisplay()
         mdSize = md.GetSize()
         mdPos = md.GetPosition()
         return (mdPos[0] + pos[0] * mdSize[0], mdPos[1] + pos[1] * mdSize[1])
 
     def _getSizeFromRelative(self, size):
-        md = self.giface.GetMapDisplay()
+        if self.IsStandalone():
+            md = wx.GetTopLevelParent(self)
+        else:
+            md = self.giface.GetMapDisplay()
         mdSize = md.GetSize()
         return (size[0] * mdSize[0], size[1] * mdSize[1])
 
