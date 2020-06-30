@@ -247,6 +247,8 @@ class AnalysesPanel(wx.Panel):
             self.env = get_environment(raster=maps.splitlines()[0])
 
     def _addCalibLayer(self, event):
+        if not self.giface.GetLayerTree():
+            return
         ll = self.giface.GetLayerList()
         raster = self.trainingAreas.GetValue()
         if not raster:
@@ -256,6 +258,8 @@ class AnalysesPanel(wx.Panel):
 
     def _addContourLayer(self, event):
         ll = self.giface.GetLayerList()
+        if not self.giface.GetLayerTree():
+            return
         vector = self.contoursSelect.GetValue()
         if not vector:
             return
@@ -532,6 +536,12 @@ class TangibleLandscapePlugin(wx.Dialog):
             self.sensor = None
         else:
             self.sensor = self.getSensorVersion()
+
+        if not self.giface.GetLayerTree():
+            self.giface.WriteWarning(("Running in standalone mode with "
+                                      "limited functionality.\n"
+                                      "You may want to launch g.gui.tangible from "
+                                      "GRASS GUI console instead."))
 
         self.settings = {}
         UserSettings.ReadSettingsFile(settings=self.settings)
@@ -943,11 +953,15 @@ class TangibleLandscapePlugin(wx.Dialog):
         wx.PostEvent(receiver, event)
 
     def OnAddLayers(self, event):
+        if not self.giface.GetLayerTree():
+            return
         ll = self.giface.GetLayerList()
         for each in event.layerSpecs:
             ll.AddLayer(**each)
 
     def OnRemoveLayers(self, event):
+        if not self.giface.GetLayerTree():
+            return
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'DeleteLayer'):
             print("Removing layers from layer Manager requires GRASS GIS version > 7.2")
@@ -956,6 +970,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             ll.DeleteLayer(each)
 
     def OnCheckLayers(self, event):
+        if not self.giface.GetLayerTree():
+            return
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'CheckLayer'):
             print("Checking and unchecking layers in layer Manager requires GRASS GIS version > 7.2")
@@ -964,6 +980,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             ll.CheckLayer(each, checked=event.checked)
 
     def OnSelectLayers(self, event):
+        if not self.giface.GetLayerTree():
+            return
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'SelectLayer'):
             print("Selecting layers in Layer Manager requires GRASS GIS version >= 7.6")
@@ -972,6 +990,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             ll.SelectLayer(each, select=event.select)
 
     def OnChangeLayer(self, event):
+        if not self.giface.GetLayerTree():
+            return
         ll = self.giface.GetLayerList()
         if not hasattr(ll, 'ChangeLayer'):
             print("Changing layer in Layer Manager requires GRASS GIS version > 7.8")
@@ -990,8 +1010,15 @@ def main(giface=None):
     global Observer, SignalFileChangeHandler, DrawingChangeHandler
     from watchdog.observers import Observer
     from change_handler import SignalFileChangeHandler, DrawingChangeHandler
-    dlg = TangibleLandscapePlugin(giface, parent=None)
-    dlg.Show()
+    if wx.GetApp():
+        dlg = TangibleLandscapePlugin(giface, parent=None)
+        dlg.Show()
+    else:
+        from core.giface import StandaloneGrassInterface
+        app = wx.App()
+        dlg = TangibleLandscapePlugin(giface=StandaloneGrassInterface(), parent=None)
+        dlg.Show()
+        app.MainLoop()
 
 
 if __name__ == '__main__':
