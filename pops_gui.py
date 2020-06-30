@@ -77,6 +77,7 @@ class PopsPanel(wx.Panel):
         self.visualizationMode = 0
         self.empty_placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
         self.placeholders = {'results': 'results_tmp', 'treatments': 'treatments_tmp'}
+        self._zoomName = "zoomed"
         self.currentCheckpoint = None
         self.checkpoints = []
         self.currentRealityCheckpoint = 0
@@ -142,6 +143,7 @@ class PopsPanel(wx.Panel):
         defaultRegion.Bind(wx.EVT_BUTTON, self._onDefaultRegion)
 
         self.Bind(wx.EVT_TIMER, self._simulationResultReady, self.timer)
+        self.Bind(wx.EVT_TIMER, self._checkDynamicZoom, self.timer)
 
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         self.mainSizer.Add(self.infoBar, flag=wx.EXPAND)
@@ -921,6 +923,7 @@ class PopsPanel(wx.Panel):
                         self._changeResultsLayer(cmd=cmd, name=name, opacity=opacity, resultType='results', useEvent=True)
                         if self._one_step:
                             self._one_step = False
+        event.Skip()
 
     def _reloadAnalysisFile(self, funcPrefix):
         analysesFile = os.path.join(self.workdir, self.configuration['tasks'][self.current]['analyses'])
@@ -985,7 +988,8 @@ class PopsPanel(wx.Panel):
 
         self.showDisplayChange = True
         self.switchCurrentResult = 0
-        self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS']}
+        self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS'],
+                                                    "zoom_name": self._zoomName}
         self.LoadLayers()
         self.AddTempLayers()
         if self.treatmentSelect.GetValue():
@@ -1060,7 +1064,8 @@ class PopsPanel(wx.Panel):
             windows.append(self.giface.lmgr)
             windows.extend([mapw for mapw in self.giface.GetAllMapDisplays()])
         bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
-                    'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation}
+                    'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation,
+                    'defaultzoom': self._onDefaultRegion}
         if "keyboard_events" in self.configuration:
             items = []
             for key in self.configuration['keyboard_events']:
@@ -1101,6 +1106,17 @@ class PopsPanel(wx.Panel):
         else:
             self.ShowResults()
 
+    def _checkDynamicZoom(self, event):
+        if not self.treatmentSelect.GetValue():
+            res = gscript.find_file(name=self._zoomName, element='windows')
+            if res and res['name']:
+                self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS'],
+                                                            "zoom_name": None}
+                self.treatmentSelect.SetValue(self._zoomName)
+                self.ChangeRegion()
+
+        event.Skip()
+
     def ChangeRegion(self):
         region = self.treatmentSelect.GetValue()
         # if empty, go back to default
@@ -1125,6 +1141,10 @@ class PopsPanel(wx.Panel):
 
     def _onDefaultRegion(self, event):
         self.treatmentSelect.SetValue('')
+        gscript.run_command('g.remove', type='region', name=self._zoomName, flags='f')
+        self.scaniface.additionalParams4Analyses = {"pops": self.configuration['POPS'],
+                                                    "zoom_name": self._zoomName}
+        self.ChangeRegion()
 
     def AddTempLayers(self):
         if self.IsStandalone():
