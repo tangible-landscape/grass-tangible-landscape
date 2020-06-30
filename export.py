@@ -110,6 +110,8 @@ class OutputPanel(wx.Panel):
         self.settingsChanged.emit()
 
     def _addLayer(self, ltype):
+        if not self.giface.GetLayerTree():
+            return
         ll = self.giface.GetLayerList()
         if ltype == 'scan':
             raster = self.scan_name.GetValue()

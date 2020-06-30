@@ -130,6 +130,12 @@ class ActivitiesPanel(wx.Panel):
 
         self._init()
 
+    def IsStandalone(self):
+        """If TL plugin runs standalone without GUI"""
+        if self.giface.GetLayerTree():
+            return False
+        return True
+
     def _init(self):
         if self.configFile:
             try:
@@ -173,9 +179,11 @@ class ActivitiesPanel(wx.Panel):
         self.instructions.Show(enable)
 
     def _bindUserStop(self):
-        windows = [mapw for mapw in self.giface.GetAllMapDisplays()]
-        windows.append(wx.GetTopLevelParent(self))
-        windows.append(self.giface.lmgr)
+        # if standalone, no binding can be done
+        windows = [wx.GetTopLevelParent(self)]
+        if not self.IsStandalone():
+            windows.append(self.giface.lmgr)
+            windows.extend([mapw for mapw in self.giface.GetAllMapDisplays()])
         bindings = {"stopTask": self.OnUserStop, 'scanOnce': self.OnScanOnce, 'taskNext': self.OnNextTask,
                     'taskPrevious': self.OnPreviousTask, 'startTask': self.StartAutomated}
         if "keyboard_events" in self.configuration:
@@ -380,6 +388,8 @@ class ActivitiesPanel(wx.Panel):
 
     def _hideToolbarStatusbar(self):
         """Hide toolbar and statusbar of active Map Display"""
+        if self.IsStandalone():
+            return
         self.giface.ShowAllToolbars(False)
         self.giface.ShowStatusbar(False)
         wx.CallLater(1000, self.giface.GetMapDisplay().PostSizeEvent)
@@ -493,6 +503,8 @@ class ActivitiesPanel(wx.Panel):
             self.OnStop(event=None)
 
     def LoadLayers(self):
+        if self.IsStandalone():
+            return
         ll = self.giface.GetLayerList()
         for i, cmd in enumerate(self.configuration['tasks'][self.current]['layers']):
             opacity = 1.0
@@ -559,6 +571,8 @@ class ActivitiesPanel(wx.Panel):
         self.ZoomToBase()
 
     def ZoomToBase(self):
+        if self.IsStandalone():
+            return
         if 'base' in self.configuration['tasks'][self.current]:
             base = self.configuration['tasks'][self.current]['base']
             self.giface.GetMapWindow().Map.GetRegion(rast=[base], update=True)
@@ -569,6 +583,8 @@ class ActivitiesPanel(wx.Panel):
         self.giface.GetMapWindow().UpdateMap()
 
     def LoadHandsOff(self):
+        if self.IsStandalone():
+            return
         ll = self.giface.GetLayerList()
         cmd = self.configuration['handsoff']
         self.handsoff = ll.AddLayer('command', name=' '.join(cmd), checked=True,
@@ -605,7 +621,7 @@ class ActivitiesPanel(wx.Panel):
             except (CalledModuleError, Exception, ScriptError) as e:
                 traceback.print_exc()
         wx.EndBusyCursor()
-        if self.handsoff:
+        if self.handsoff and not self.IsStandalone():
             ll = self.giface.GetLayerList()
             ll.DeleteLayer(self.handsoff)
             self.handsoff = None
@@ -670,13 +686,19 @@ class ActivitiesPanel(wx.Panel):
         return size
 
     def _getPosFromRelative(self, pos):
-        md = self.giface.GetMapDisplay()
+        if self.IsStandalone():
+            md = wx.GetTopLevelParent(self)
+        else:
+            md = self.giface.GetMapDisplay()
         mdSize = md.GetSize()
         mdPos = md.GetPosition()
         return (mdPos[0] + pos[0] * mdSize[0], mdPos[1] + pos[1] * mdSize[1])
 
     def _getSizeFromRelative(self, size):
-        md = self.giface.GetMapDisplay()
+        if self.IsStandalone():
+            md = wx.GetTopLevelParent(self)
+        else:
+            md = self.giface.GetMapDisplay()
         mdSize = md.GetSize()
         return (size[0] * mdSize[0], size[1] * mdSize[1])
 
@@ -708,6 +730,8 @@ class ActivitiesPanel(wx.Panel):
             wx.CallLater(t, self.PostProcessing, onDone=self._subtaskDone)
 
     def _showSolutions(self):
+        if self.IsStandalone():
+            return
         ll = self.giface.GetLayerList()
         if self.handsoff:
             ll.DeleteLayer(self.handsoff)
