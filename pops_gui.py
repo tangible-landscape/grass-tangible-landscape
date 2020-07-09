@@ -66,6 +66,7 @@ class PopsPanel(wx.Panel):
         self.switchCurrentResult = 0
         self.showDisplayChange = True
         self.treatmentHistory = [0] * 50
+        self.registeredTreatment = 'tmp_registered_treatment'
 
         self.webDashboard = None
         self.wsWebDashboard = None
@@ -748,12 +749,12 @@ class PopsPanel(wx.Panel):
             checkpoint = self.currentRealityCheckpoint
         tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
                              str(max(0, checkpoint))])
-        gscript.run_command('g.copy', raster=[treatments, tr_name], env=env)
+        gscript.run_command('g.copy', raster=[self.registeredTreatment, tr_name], env=env)
         # create treatment vector of all used treatments in that scenario
         tr_vector = self.createTreatmentVector(tr_name, env=env)
 
         # measuring area
-        gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=treatments, n=treatments + '_exclude_host'), env=env)
+        gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=tr_name, n=treatments + '_exclude_host'), env=env)
         self.treated_area = self.computeTreatmentArea(treatments + '_exclude_host')
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
@@ -818,6 +819,9 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
         self.ShowTreatment()
 
+        # reset registered treatment
+        gscript.run_command('g.remove', type='raster', name=self.registeredTreatment,  flags='f', env=env)
+
     def createTreatmentVector(self, treatment_layer, env):
         tr, evt, plr, attempt, year = treatment_layer.split('__')
         postfix = 'cat_year'
@@ -858,6 +862,28 @@ class PopsPanel(wx.Panel):
         else:
             res = gscript.region(env=env)
             return float(univar['n']) * res['nsres'] * res['ewres']
+
+    def registerTreatment(self):
+        treatments = self.params.pops['treatments']
+        if not gscript.find_file(element='raster', name=self.registeredTreatment)['fullname']:
+            gscript.run_command('g.copy', raster=[treatments, self.registeredTreatment])
+            return
+
+        info = gscript.raster_info(self.registeredTreatment)
+        new_info = gscript.raster_info(treatments)
+        if info['nsres'] > new_info['nsres']:
+            align = treatments
+        else:
+            align = self.registeredTreatment
+
+        if 'region' in self.params.pops:
+            env = get_environment(region=self.params.pops['region'], align=align)
+        else:
+            studyArea = self.configuration['tasks'][self.current]['base']
+            env = get_environment(raster=studyArea, align=align)
+
+        gscript.run_command('r.patch', input=[self.registeredTreatment, treatments],
+                            output=self.registeredTreatment, env=env)
 
     def applyTreatments(self, host, host_treated, efficacy, treatment_prefix, env):
         if self.treated_area:
@@ -1027,6 +1053,8 @@ class PopsPanel(wx.Panel):
             self.StartTimeStatusDisplay()
         # start display timer
         self.timer.Start(self.speed)
+        # reset registered treatment
+        gscript.run_command('g.remove', type='raster', name=self.registeredTreatment, flags='f', quiet=True)
 
     def StopTreatment(self):
         def _closeAdditionalWindows():
@@ -1065,7 +1093,7 @@ class PopsPanel(wx.Panel):
             windows.extend([mapw for mapw in self.giface.GetAllMapDisplays()])
         bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
                     'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation,
-                    'defaultzoom': self._onDefaultRegion}
+                    'defaultzoom': self._onDefaultRegion, 'registertreatment': lambda evt: self.registerTreatment()}
         if "keyboard_events" in self.configuration:
             items = []
             for key in self.configuration['keyboard_events']:
