@@ -43,7 +43,7 @@ class AboutPanel(wx.Panel):
         if scaniface.sensor == 'k4a':
             sensor.SetLabel("Using Kinect Azure DK version of r.in.kinect")
         elif scaniface.sensor == 'k4w_v2':
-            sensor.SetLabel("UsingKinect Xbox One version of r.in.kinect")
+            sensor.SetLabel("Using Kinect Xbox One version of r.in.kinect")
         elif sensor is None:
             sensor.SetLabel("WARNING: r.in.kinect not available")
 
