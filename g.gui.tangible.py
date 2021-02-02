@@ -829,6 +829,22 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         return params
 
+    def EnableDataCatalogWatchdog(self, enable=True):
+        """Disable/enable watchdog monitoring current mapset"""
+        # TODO: improve when better API is available in GRASS
+        try:
+            tree = self.giface.lmgr.datacatalog.tree
+            if enable:
+                tree.ScheduleWatchCurrentMapset()
+            else:
+                observer = tree.observer
+                if observer and observer.is_alive():
+                    observer.stop()
+                    observer.join()
+                    observer.unschedule_all()
+        except AttributeError:
+            pass
+
     def IsScanning(self):
         if self.process and self.process.poll() is None:
             return True
@@ -886,6 +902,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                 self.process.send_signal(signal.SIGUSR1)
 
     def Start(self):
+        self.EnableDataCatalogWatchdog(False)
         self.Scan(continuous=True)
         self.status.SetLabel("Real-time scanning is running now.")
 
@@ -923,6 +940,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Real-time scanning stopped.")
         self.pause = False
         self.btnPause.SetLabel("Pause")
+        self.EnableDataCatalogWatchdog(True)
 
     def Pause(self):
         if self.process and self.process.poll() is None:  # still running
