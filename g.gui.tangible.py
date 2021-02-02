@@ -842,7 +842,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                     observer.stop()
                     observer.join()
                     observer.unschedule_all()
-        AttributeError:
+        except AttributeError:
             pass
 
     def IsScanning(self):
