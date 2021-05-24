@@ -11,7 +11,7 @@ import wx
 import wx.lib.filebrowsebutton as filebrowse
 from wx.adv import HyperlinkCtrl as UrlCtrl
 from shutil import copyfile
-from subprocess import PIPE
+from subprocess import PIPE, run
 import signal
 import tempfile
 
@@ -542,7 +542,8 @@ class TangibleLandscapePlugin(wx.Dialog):
                                       "limited functionality.\n"
                                       "You may want to launch g.gui.tangible from "
                                       "GRASS GUI console instead."))
-
+        # Try killing r.in.kinect for recovery
+        self.killKinect()
         self.settings = {}
         UserSettings.ReadSettingsFile(settings=self.settings)
         # for the first time
@@ -664,6 +665,10 @@ class TangibleLandscapePlugin(wx.Dialog):
             fd, self.signal_file = tempfile.mkstemp()
             os.close(fd)
         return self.signal_file
+
+    def killKinect(self):
+        if run(['pkill', 'r.in.kinect']).returncode == 0:
+            gscript.warning("Abandoned r.in.kinect process has been cleaned up.")
 
     def OnHelp(self, event):
         """Show help"""
