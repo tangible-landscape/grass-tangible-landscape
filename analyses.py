@@ -29,25 +29,28 @@ def difference_scaled(real_elev, scanned_elev, new, env):
     gcore.run_command('r.colors', map=new, color='differences', env=env)
 
 
-def difference(real_elev, scanned_elev, new, color_coeff=1, env=None):
-    """!Computes difference of original and scanned (scan - orig).
-    color_coeff modifies the intensity of the color, values > 1 mean the difference
-    shows only bigger changes, values < 1 highlight smaller changes (and noise)"""
+def difference(real_elev, scanned_elev, new, zexag=1, env=None):
+    """Compute difference and set color table using standard deviations"""
     tmp = 'tmp_resampled'
     gcore.run_command('r.resamp.interp', input=real_elev, output=tmp,
                       method='bilinear', env=env)
-    gcore.run_command('r.mapcalc',
-                      expression='{diff} = {scan} - {real}'.format(diff=new, real=tmp,
-                                                                   scan=scanned_elev), env=env)
-    info = grast.raster_info(real_elev)
-    range = info['max'] - info['min']
-    percentages = [-1000, -100, -50, -5, 5, 50, 100, 1000]
-    colors = ['black', 'black', 'blue', 'white', 'white', 'red', 'black', 'black']
-    rules = []
-    for p, c in zip(percentages, colors):
-        p = range / 100. * p * color_coeff
-        rules.append('{p} {c}'.format(p=p, c=c))
-    gcore.write_command('r.colors', map=new, rules='-', stdin='\n'.join(rules), env=env)
+    grast.mapcalc(f"{new} = {tmp} - {scanned_elev}", env=env)
+    univar = gcore.parse_command("r.univar", flags="g", map=real_elev, env=env)
+    std1 = zexag * float(univar["stddev"])
+    std2 = zexag * 2 * std1
+    std3 = zexag * 3 * std1
+    rules = [
+        f"-1000000 black",
+        f"-{std3} black",
+        f"-{std2} 202:000:032",
+        f"-{std1} 244:165:130",
+        "0 247:247:247",
+        f"{std1} 146:197:222",
+        f"{std2} 5:113:176",
+        f"{std3} black",
+        f"1000000 black",
+    ]
+    gcore.write_command("r.colors", map=new, rules="-", stdin="\n".join(rules), env=env)
 
 
 def match_scan(base, scan, matched, env):
