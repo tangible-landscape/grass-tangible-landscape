@@ -58,7 +58,8 @@ def clientInterface(conn, connections, event, steering):
             total_received = len(data)
             f.write(data)
             while(total_received < fsize):
-                data = conn.recv(1024)
+                sz = 1024 if fsize - total_received > 1024 else fsize - total_received
+                data = conn.recv(sz)
                 total_received += len(data)
                 f.write(data)
             f.close()
