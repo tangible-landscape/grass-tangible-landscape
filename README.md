@@ -12,19 +12,19 @@ a real-time feedback cycle of interaction, 3D scanning, point cloud processing, 
 
 Installation:
 ----------------------------------
-We support installation on Ubuntu 18.04, for other versions and Linux distributions please modify the script accordingly. Tangible Landscape requires Microsoft Kinect for Xbox (v2). Software dependencies include:
+We support installation on Ubuntu 18.04. Tangible Landscape requires Microsoft Kinect for Xbox (v2) or Kinect for Azure. Software dependencies include:
 
--   GRASS GIS >= 7.2
--   GRASS GIS addon [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect)
+-   GRASS GIS >= 7.8
+-   GRASS GIS addon [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect): choose version depending on your sensor.
 -   Python package [watchdog](https://pypi.python.org/pypi/watchdog), optionally [matplotlib](https://matplotlib.org/)
 
 1. Make a folder where all the dependencies will be compiled:
 
        mkdir tangiblelandscape && cd tangiblelandscape
 
-2. Download [install script](https://raw.githubusercontent.com/tangible-landscape/tangible-landscape-install/master/install_Ubuntu-18.04.sh) to that folder (check [this repo for other Ubuntu versions](https://github.com/tangible-landscape/tangible-landscape-install)) and run it:
+2. Download [one of the install scripts](https://github.com/tangible-landscape/tangible-landscape-install) based on your sensor to that folder and run it:
 
-       sh install_Ubuntu-18.04.sh
+       sh install_Ubuntu-18.04_k4a.sh
 
     It will ask you for administrator password. You need to be online to download all dependencies. After finishing the process, log out and log in.
 

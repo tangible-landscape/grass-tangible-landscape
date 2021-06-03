@@ -11,7 +11,7 @@ import wx
 import wx.lib.filebrowsebutton as filebrowse
 from wx.adv import HyperlinkCtrl as UrlCtrl
 from shutil import copyfile
-from subprocess import PIPE
+from subprocess import PIPE, run
 import signal
 import tempfile
 
@@ -45,7 +45,7 @@ class AboutPanel(wx.Panel):
         if scaniface.sensor == 'k4a':
             sensor.SetLabel("Using Kinect Azure DK version of r.in.kinect")
         elif scaniface.sensor == 'k4w_v2':
-            sensor.SetLabel("UsingKinect Xbox One version of r.in.kinect")
+            sensor.SetLabel("Using Kinect Xbox One version of r.in.kinect")
         elif sensor is None:
             sensor.SetLabel("WARNING: r.in.kinect not available")
 
@@ -544,7 +544,8 @@ class TangibleLandscapePlugin(wx.Dialog):
                                       "limited functionality.\n"
                                       "You may want to launch g.gui.tangible from "
                                       "GRASS GUI console instead."))
-
+        # Try killing r.in.kinect for recovery
+        self.killKinect()
         self.settings = {}
         UserSettings.ReadSettingsFile(settings=self.settings)
         # for the first time
@@ -671,6 +672,10 @@ class TangibleLandscapePlugin(wx.Dialog):
             fd, self.signal_file = tempfile.mkstemp()
             os.close(fd)
         return self.signal_file
+
+    def killKinect(self):
+        if run(['pkill', 'r.in.kinect']).returncode == 0:
+            gscript.warning("Abandoned r.in.kinect process has been cleaned up.")
 
     def OnHelp(self, event):
         """Show help"""
@@ -836,6 +841,22 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         return params
 
+    def EnableDataCatalogWatchdog(self, enable=True):
+        """Disable/enable watchdog monitoring current mapset"""
+        # TODO: improve when better API is available in GRASS
+        try:
+            tree = self.giface.lmgr.datacatalog.tree
+            if enable:
+                tree.ScheduleWatchCurrentMapset()
+            else:
+                observer = tree.observer
+                if observer and observer.is_alive():
+                    observer.stop()
+                    observer.join()
+                    observer.unschedule_all()
+        except AttributeError:
+            pass
+
     def IsScanning(self):
         if self.process and self.process.poll() is None:
             return True
@@ -894,6 +915,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                 self.process.send_signal(signal.SIGUSR1)
 
     def Start(self):
+        self.EnableDataCatalogWatchdog(False)
         self.Scan(continuous=True)
         self.status.SetLabel("Real-time scanning is running now.")
 
@@ -931,6 +953,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.status.SetLabel("Real-time scanning stopped.")
         self.pause = False
         self.btnPause.SetLabel("Pause")
+        self.EnableDataCatalogWatchdog(True)
 
     def Pause(self):
         if self.process and self.process.poll() is None:  # still running
