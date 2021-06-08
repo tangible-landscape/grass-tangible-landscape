@@ -16,6 +16,9 @@ import datetime
 import websockets
 import asyncio
 import wxasync
+import aiohttp
+from urllib.parse import urlparse
+from jsonrpc_websocket import Server as jsonrpc
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
@@ -68,8 +71,6 @@ class ModelParameters:
         # assume dashboard is initialized
         if self._web:
             session = self._web.get_session()
-            month = int(session['management_month'])
-            self.pops['treatment_date'] = dateToString(dateFromString(self.pops['treatment_date']).replace(month=month))
             self.model['reproductive_rate'] = float(session['reproductive_rate'])
             # disable this for now
             #self.model['natural_distance'] = float(session['distance_scale'])
@@ -85,9 +86,10 @@ class ModelParameters:
     def update(self):
         if self._web:
             run_collection = self._web.get_runcollection_params()
-            self.pops['efficacy'] = float(run_collection['efficacy'])
-            self.pops['cost_per_meter_squared'] = float(run_collection['cost_per_meter_squared'])
+            print('update')
+            print(run_collection)
             self.pops['budget'] = float(run_collection['budget'])
+            self.pops['random_seed'] = float(run_collection['random_seed'])
 
     def UnInit(self):
         if 'spread_rate_output' in self.model:
@@ -98,6 +100,8 @@ class PoPSDashboard(wx.EvtHandler):
     def __init__(self):
         wx.EvtHandler.__init__(self)
         self._root = None
+        self._wsroot = None
+        self._ws_auth_url = None
         self._runcollection = {}
         self._runcollection_id = None
         self._run = None
@@ -122,13 +126,79 @@ class PoPSDashboard(wx.EvtHandler):
         self._tmp_infavg_file = 'tmp_infavg_' + suffix
         self._tmp_prob_file = 'tmp_prob_' + suffix
         self._last_name_suffix = None
+        self._websocket_auth_headers = []
+        self._ws_session = None
+        self._ws_client = None
+        self._username = None
+        self._password = None
         self.Bind(EVT_THREAD_DONE, self._on_thread_done)
 
-    def set_root_URL(self, url):
-        self._root = url
+    def initialize(self, settings):
+        url = settings["url"]
+        sid = str(settings["session"])
+        self._session_id = sid
+        self._root = os.path.join('https://', url, 'api', '')
+        self._wsroot = os.path.join('wss://', url, 'ws', 'dashboard', sid, '')
+        self._ws_auth_url = os.path.join('https://', url, 'accounts', 'login', '')
+        self._username = settings["username"]
+        self._password = settings["password"]
 
-    def set_session_id(self, sid):
-        self._session_id = str(sid)
+    async def connect(self):
+        """Connecting to webSocket server
+            websockets.client.connect returns a WebSocketClientProtocol, which is used to send and receive messages
+        """
+        if not self._websocket_auth_headers:
+            await self.authenticate()
+        self._ws_session = aiohttp.ClientSession(headers=self._websocket_auth_headers)
+        self._ws_client = jsonrpc(self._wsroot, session=self._ws_session)
+        # If 'update_management' message received, send to update_message() function.
+        self._ws_client.update_management = self._ws_incoming_management
+        await self._ws_client.ws_connect()
+        # if self.run_collection:
+        #     await self.get_management(self.run_collection)
+
+    async def authenticate(self):
+        """
+        Authenticate against the AUTH_URL using the provided USERNAME and PASSWORD
+
+        :return: websocket auth headers
+        """
+
+        async with aiohttp.ClientSession(raise_for_status=True) as session:
+            cookie_jar = aiohttp.CookieJar(unsafe=True)
+            # First GET the auth url to get a valid CSRF token
+            resp = await session.get(self._ws_auth_url)
+            csrf_token = resp.cookies.get('csrftoken').value
+
+            # Then POST to it to get a new CSRF token and a session id
+            session.cookie_jar.update_cookies(resp.cookies)
+            resp = await session.post(self._ws_auth_url, allow_redirects=False, data={
+                'username': self._username,
+                'password': self._password,
+                'csrfmiddlewaretoken': csrf_token
+            })
+            csrf_token = resp.cookies.get('csrftoken').value
+            session_id = resp.cookies.get('sessionid').value
+
+            # Return the auth headers the websocket will need to connect
+            parsed_auth_url = urlparse(self._ws_auth_url)
+            websocket_auth_headers = [
+                ('Origin', f'{parsed_auth_url.scheme}://{parsed_auth_url.netloc}'),
+                ('Cookie', f'csrftoken={csrf_token}; sessionid={session_id}')
+            ]
+            self._websocket_auth_headers = websocket_auth_headers
+
+    def _ws_incoming_management(self, management_polygons=None,
+                                run_collection=None):
+        """Handle incoming (from the server) 'update_management'
+        websocket method"""
+        print(str(run_collection))
+        print(str(management_polygons))
+
+    async def get_management(self, run_collection):
+        resp = await self._ws_client.send_management_request(run_collection=run_collection,
+                                                            _notification=True)
+        print('Websocket response:', resp)
 
     def set_management(self, polygons, cost, area, year):
         if gscript.vector_info_topo(polygons)['areas']:
@@ -172,7 +242,7 @@ class PoPSDashboard(wx.EvtHandler):
 
     def _get_runcollection(self, runcollection_id):
         try:
-            res = requests.get(self._root + 'run_collection/' + runcollection_id + '/')
+            res = requests.get(self._root + 'run_collection_detail/' + runcollection_id + '/')
             res.raise_for_status()
             return res.json()
         except requests.exceptions.HTTPError as e:
@@ -181,7 +251,7 @@ class PoPSDashboard(wx.EvtHandler):
 
     def _get_runcollection_id(self):
         try:
-            res = requests.get(self._root + 'session/' + self._session_id + '/')
+            res = requests.get(self._root + 'session_detail/' + self._session_id + '/')
             res.raise_for_status()
             runcollection_id = str(res.json()['most_recent_runcollection'])
             if runcollection_id == 'null':
@@ -197,15 +267,17 @@ class PoPSDashboard(wx.EvtHandler):
         if not self._runcollection_id:
             self._runcollection_id = self._create_runcollection(reuse=False)
             return
+        print(self._runcollection_id)
         self._runcollection = self._get_runcollection(self._runcollection_id)
+        print(self._runcollection)
         # this should never happen
         if not self._runcollection:
             self._runcollection_id = self._create_runcollection()
             return
 
-        if self._runcollection['second_most_recent_run'] != 'null':
-            # needs to be created by TL
-            self._runcollection_id = self._create_runcollection(reuse=True)
+        # if self._runcollection['second_most_recent_run'] != 'null':
+        #     # needs to be created by TL
+        #     self._runcollection_id = self._create_runcollection(reuse=True)
 
     def get_runcollection_params(self):
         return self._runcollection
@@ -217,7 +289,7 @@ class PoPSDashboard(wx.EvtHandler):
 
     def get_session_name(self):
         try:
-            res = requests.get(self._root + 'session/' + self._session_id + '/')
+            res = requests.get(self._root + 'session_detail/' + self._session_id + '/')
             res.raise_for_status()
             self._session = res.json()
             return self._session['name']
@@ -227,7 +299,7 @@ class PoPSDashboard(wx.EvtHandler):
 
     def get_session(self):
         try:
-            res = requests.get(self._root + 'session/' + self._session_id + '/')
+            res = requests.get(self._root + 'session_detail/' + self._session_id + '/')
             res.raise_for_status()
             self._session = res.json()
             return res.json()
@@ -244,7 +316,7 @@ class PoPSDashboard(wx.EvtHandler):
         if not self._runcollection_id:
             self.get_new_runcollection()
         try:
-            res = requests.get(self._root + 'run_collection/' + self._runcollection_id + '/')
+            res = requests.get(self._root + 'run_collection_detail/' + self._runcollection_id + '/')
             res.raise_for_status()
             name = res.json()['name']
             return name
@@ -256,7 +328,7 @@ class PoPSDashboard(wx.EvtHandler):
         if not self._runcollection_id:
             self.get_new_runcollection()
         try:
-            res = requests.get(self._root + 'run_collection/' + self._runcollection_id + '/')
+            res = requests.get(self._root + 'run_collection_detail/' + self._runcollection_id + '/')
             res.raise_for_status()
             name = res.json()['name']
             return name
@@ -281,7 +353,7 @@ class PoPSDashboard(wx.EvtHandler):
         runcollection['status'] = 'PENDING'
 
         try:
-            res = requests.post(self._root + 'run_collection/', data=runcollection)
+            res = requests.post(self._root + 'run_collection_detail/', data=runcollection)
             res.raise_for_status()
             self._runcollection = res.json()
             self._runcollection_id = str(res.json()['id'])
@@ -295,7 +367,7 @@ class PoPSDashboard(wx.EvtHandler):
         self._run['status'] = 'PENDING'
         self._run['run_collection'] = self._runcollection_id
         try:
-            res = requests.post(self._root + 'run/', data=self._run)
+            res = requests.post(self._root + 'run_write/', data=self._run)
             res.raise_for_status()
             self._run = res.json()
             self._run_id = str(res.json()['id'])
@@ -307,7 +379,8 @@ class PoPSDashboard(wx.EvtHandler):
 
     def update_run(self):
         try:
-            res = requests.put(self._root + 'run/' + self._run_id + '/', json=self._run)
+            print(self._run)
+            res = requests.put(self._root + 'run_write/' + self._run_id + '/', json=self._run)
             res.raise_for_status()
             self._run = res.json()
             run_id = str(self._run['id'])
@@ -556,53 +629,12 @@ def dateToString(date):
     return date.strftime("%Y-%m-%d")
 
 
-class PoPSWSClient:
-    def __init__(self, guihandler, url, callback):
-        self._guihandler = guihandler
-        self._url = url
-        self._callback = callback
-        self._ws = None
-
-        wxasync.StartCoroutine(self._connect, self._guihandler)
-        wxasync.StartCoroutine(self._receive, self._guihandler)
-
-    async def _connect(self):
-        self._ws = await websockets.client.connect(self._url)
-
-    async def _receive(self):
-        while True:
-            await asyncio.sleep(0.5)
-            if self._ws and self._ws.open:
-                try:
-                    message = await self._ws.recv()
-                    self._process(json.loads(message))
-                except websockets.exceptions.ConnectionClosed:
-                    break
-
-    async def _send(self, message):
-        if self._ws and self._ws.open:
-            try:
-                await self._ws.send('{{"message": "{m}" }}'.format(m=message))
-            except websockets.exceptions.ConnectionClosed:
-                return False
-            else:
-                return True
-        return False
-
-    def send(self, message):
-        wxasync.StartCoroutine(self._send(message), self._guihandler)
-
-    def _process(self, message):
-        msg = message['message']
-        self._callback(msg)
-
-
 def main():
     dashboard = PoPSDashboard()
-    dashboard.set_root_URL('https://pops-model.org/api/')
-    dashboard.set_session_id(15)
+    info = dict(session=2, password='xxx',
+                username='tl', url="pops-model.org")
+    dashboard.initialize(info)
     run = dashboard.get_run_params()
-    print (run['id'])
 #    dashboard.set_run_params(params={"name": "testTLconn3", "reproductive_rate": 4,
 #                                     "distance_scale": 20, "cost_per_hectare": 1,
 #                                     "efficacy": 1, "session": 1})

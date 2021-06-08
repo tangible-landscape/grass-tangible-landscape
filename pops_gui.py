@@ -15,6 +15,7 @@ import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
 from wx.lib.fancytext import StaticFancyText, RenderToBitmap
+from wxasync import StartCoroutine
 
 from gui_core.gselect import Select
 import grass.script as gscript
@@ -26,7 +27,7 @@ from tangible_utils import get_environment, changeLayer, checkLayers
 from activities_dashboard import MultipleHTMLDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
-from pops_dashboard import PoPSDashboard, ModelParameters, PoPSWSClient, \
+from pops_dashboard import PoPSDashboard, ModelParameters, \
     dateFromString, dateToString
 from time_display import SteeringDisplayFrame, CurrentViewDisplayFrame
 
@@ -203,14 +204,9 @@ class PopsPanel(wx.Panel):
     def _connectDashboard(self):
         dashboard = self.configuration['POPS']['dashboard']
         self.webDashboard = PoPSDashboard()
-        self.webDashboard.set_root_URL(dashboard['url'])
-        self.webDashboard.set_session_id(dashboard['session'])
         self.params.set_web_dashboard(self.webDashboard)
-
-        if 'wsurl' in dashboard and dashboard['wsurl']:
-            self.wsWebDashboard = PoPSWSClient(guihandler=self,
-                                               url=dashboard['wsurl'],
-                                               callback=self._processWSInfo)
+        self.webDashboard.initialize(dashboard)
+        StartCoroutine(self.webDashboard.connect, self)
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -719,9 +715,6 @@ class PopsPanel(wx.Panel):
             self.webDashboard.create_run()
         #self.showDisplayChange = False
 
-        if self.wsWebDashboard:
-            self.wsWebDashboard.send("Running...")
-
         self.infoBar.ShowMessage("Running...")
         playerName = self._createPlayerName()
         new_attempt = self.attempt.getCurrent()
@@ -884,6 +877,8 @@ class PopsPanel(wx.Panel):
 
         gscript.run_command('r.patch', input=[self.registeredTreatment, treatments],
                             output=self.registeredTreatment, env=env)
+
+        # TODO: send to dashboard
 
     def applyTreatments(self, host, host_treated, efficacy, treatment_prefix, env):
         if self.treated_area:
