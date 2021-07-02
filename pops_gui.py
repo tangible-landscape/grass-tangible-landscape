@@ -14,7 +14,6 @@ import re
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
-from wx.lib.fancytext import StaticFancyText, RenderToBitmap
 from wxasync import StartCoroutine
 
 from gui_core.gselect import Select
@@ -29,18 +28,13 @@ from activities_dashboard import MultipleHTMLDashboardFrame
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
 from pops_dashboard import PoPSDashboard, ModelParameters, \
     dateFromString, dateToString
+from pops_treatments import Treatments
 from time_display import SteeringDisplayFrame, CurrentViewDisplayFrame
 
 
 updateDisplay, EVT_UPDATE_DISPLAY = wx.lib.newevent.NewEvent()
 updateTimeDisplay, EVT_UPDATE_TIME_DISPLAY = wx.lib.newevent.NewEvent()
 updateInfoBar, EVT_UPDATE_INFOBAR = wx.lib.newevent.NewEvent()
-
-TMP_DIR = '/tmp/test_SOD/'
-try:
-    os.mkdir(TMP_DIR)
-except OSError:
-    pass
 
 
 ### naming scheme for outputs: ###
@@ -67,7 +61,6 @@ class PopsPanel(wx.Panel):
         self.switchCurrentResult = 0
         self.showDisplayChange = True
         self.treatmentHistory = [0] * 50
-        self.registeredTreatment = 'tmp_registered_treatment'
 
         self.webDashboard = None
         self.wsWebDashboard = None
@@ -114,6 +107,9 @@ class PopsPanel(wx.Panel):
                     self.speed = int(self.configuration['POPS']['animation_speed'])
             except IOError:
                 self.configFile = ''
+
+        self.treatments = Treatments(study_area=self.configuration['tasks'][self.current]['base'],
+                                     workdir=self.workdir)
 
         modelingBox = wx.StaticBox(self, wx.ID_ANY, "Modeling")
 
@@ -721,10 +717,7 @@ class PopsPanel(wx.Panel):
 
         # grab a new raster of conditions
         # process new input layer
-        treatments = self.params.pops['treatments']
-        treatments_resampled = treatments + '_resampled'
         host = self.params.model['host']
-        treatment_efficacy = self.params.pops['efficacy']
         cost_per_meter_squared = self.params.pops['cost_per_meter_squared']
 
         if 'region' in self.params.pops:
@@ -740,34 +733,17 @@ class PopsPanel(wx.Panel):
             checkpoint = self.currentCheckpoint
         else:
             checkpoint = self.currentRealityCheckpoint
-        tr_name = '__'.join([treatments, event, playerName, "{a1}".format(a1=new_attempt[0]),
-                             str(max(0, checkpoint))])
-        gscript.run_command('g.copy', raster=[self.registeredTreatment, tr_name], env=env)
+        tr_name = self.treatments.name_treatment(event, playerName, new_attempt, checkpoint)
         # create treatment vector of all used treatments in that scenario
-        tr_vector = self.createTreatmentVector(tr_name, env=env)
+        tr_vector = self.treatments.create_treatment_vector(tr_name, env=env)
 
         # measuring area
-        gscript.mapcalc("{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(host=host, t=tr_name, n=treatments + '_exclude_host'), env=env)
-        self.treated_area = self.computeTreatmentArea(treatments + '_exclude_host')
+        self.treated_area = self.treatments.compute_treatment_area(tr_name)
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
 
         # compute proportion
-        resampling_treatments = True
-        if resampling_treatments:
-            if gscript.raster_info(tr_name)['ewres'] < gscript.raster_info(host)['ewres']:
-                gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='count', env=env)
-                maxvalue = gscript.raster_info(treatments_resampled)['max']
-                gscript.mapcalc("{p} = if((isnull({t}) || {m} == 0), 0, ({t} / {m}) * ({eff} / 100))".format(p=treatments_resampled + '_proportion',
-                                t=treatments_resampled, m=maxvalue, eff=treatment_efficacy), env=env)
-            else:
-                gscript.run_command('r.resamp.stats', input=tr_name, output=treatments_resampled, flags='w', method='average', env=env)
-                gscript.mapcalc("{p} = if(isnull({t}), 0, {t} * ({eff} / 100))".format(p=treatments_resampled + '_proportion',
-                                t=treatments_resampled, eff=treatment_efficacy), env=env)
-            gscript.run_command('g.rename', raster=[treatments_resampled + '_proportion', tr_name], env=env)
-        else:
-            gscript.mapcalc("{tr_new} = if(isnull({tr}), 0, float({tr}) * {eff} / 100)".format(tr_new=tr_name + '_efficacy', tr=tr_name, eff=treatment_efficacy))
-            gscript.run_command('g.rename', raster=[tr_name + '_efficacy', tr_name], env=env)
+        self.treatments.resample(tr_name)
 
         if self.steeringClient.is_steering():
             if self.params.pops['steering']['move_current_year']:
@@ -812,88 +788,7 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
         self.ShowTreatment()
 
-        # reset registered treatment
-        gscript.run_command('g.remove', type='raster', name=self.registeredTreatment,  flags='f', env=env)
-
-    def createTreatmentVector(self, treatment_layer, env):
-        tr, evt, plr, attempt, year = treatment_layer.split('__')
-        postfix = 'cat_year'
-        gscript.mapcalc("{n} = if({t} == 1, {y}, null())".format(n=treatment_layer + '__' + postfix,
-                        t=treatment_layer, y=int(year) + dateFromString(self.params.model['start_date']).year), env=env)
-        pattern = '__'.join([tr, evt, plr, attempt, '*', postfix])
-        layers = gscript.list_grouped(type='raster', pattern=pattern)[gscript.gisenv()['MAPSET']]
-        to_patch = []
-
-        for layer in layers:
-            y = int(layer.split('__')[-2])
-            if y <= int(year):
-                to_patch.append(layer)
-        name = '__'.join([tr, evt, plr, attempt])
-        if len(to_patch) >= 2:
-            to_patch = gscript.natural_sort(to_patch)[::-1]
-            gscript.run_command('r.patch', input=to_patch, output=name, flags='z', env=env)
-        else:
-            gscript.run_command('g.copy', raster=[treatment_layer + '__' + postfix, name], env=env)
-        gscript.run_command('r.to.vect', input=name, output=name, flags='vt', type='area', env=env)
-
-        if 'color_treatments' in self.params.pops and self.params.pops['color_treatments']:
-            color = self.params.pops['color_treatments'].split('.')
-            if len(color) == 1:  # grass color table
-                param = {'color': color[0]}
-            else:  # user-defined color rules in file
-                param = {'rules': os.path.join(self.workdir, self.configuration['POPS']['color_treatments'])}
-            gscript.run_command('v.colors', map=name, use='cat', env=env, **param)
-        return name
-        # for nicer look
-        #gscript.run_command('v.generalize', input=name + '_tmp', output=name, method='snakes', threshold=10, env=env)
-
-    def computeTreatmentArea(self, treatments):
-        env = get_environment(raster=treatments)
-        univar = gscript.parse_command('r.univar', flags='g', map=treatments, env=env)
-        if not univar or float(univar['sum']) == 0:
-            return 0
-        else:
-            res = gscript.region(env=env)
-            return float(univar['n']) * res['nsres'] * res['ewres']
-
-    def registerTreatment(self):
-        treatments = self.params.pops['treatments']
-        if not gscript.find_file(element='raster', name=self.registeredTreatment)['fullname']:
-            gscript.run_command('g.copy', raster=[treatments, self.registeredTreatment])
-            return
-
-        info = gscript.raster_info(self.registeredTreatment)
-        new_info = gscript.raster_info(treatments)
-        if info['nsres'] > new_info['nsres']:
-            align = treatments
-        else:
-            align = self.registeredTreatment
-
-        if 'region' in self.params.pops:
-            env = get_environment(region=self.params.pops['region'], align=align)
-        else:
-            studyArea = self.configuration['tasks'][self.current]['base']
-            env = get_environment(raster=studyArea, align=align)
-
-        gscript.run_command('r.patch', input=[self.registeredTreatment, treatments],
-                            output=self.registeredTreatment, env=env)
-
-        # TODO: send to dashboard
-
-    def applyTreatments(self, host, host_treated, efficacy, treatment_prefix, env):
-        if self.treated_area:
-            treatments = gscript.list_grouped(type='raster', pattern=treatment_prefix + '_*')[gscript.gisenv()['MAPSET']]
-            treatments = [tr for tr in treatments if int(tr.split('__')[-1]) <= self.currentCheckpoint]
-            if len(treatments) >= 2:
-                gscript.run_command('r.patch', input=treatments, output='treatments_patched', env=env)
-                t = 'treatments_patched'
-            elif len(treatments) == 1:
-                t = treatments[0]
-            gscript.run_command('r.null', map=t, null=0, env=env)
-            gscript.mapcalc("{s} = int({l} - {l} * {t} * {e})".format(s=host_treated, t=t,
-                                                                      l=host, e=efficacy), env=env)
-        else:  # when there is no treatment
-            gscript.run_command('g.copy', raster=[host, host_treated], env=env)
+        self.treatments.reset_registered_treatment()
 
     def _run(self):
         self.steeringClient.simulation_play()
@@ -996,6 +891,7 @@ class PopsPanel(wx.Panel):
         self._connect()
         self._loadConfiguration(None)
         self.params.read_initial_params()
+        self.treatments.set_model_settings(self.params)
         self._initVisualizationModes()
 
         self.currentCheckpoint = 0
@@ -1049,7 +945,7 @@ class PopsPanel(wx.Panel):
         # start display timer
         self.timer.Start(self.speed)
         # reset registered treatment
-        gscript.run_command('g.remove', type='raster', name=self.registeredTreatment, flags='f', quiet=True)
+        self.treatments.reset_registered_treatment()
 
     def StopTreatment(self):
         def _closeAdditionalWindows():
@@ -1088,7 +984,7 @@ class PopsPanel(wx.Panel):
             windows.extend([mapw for mapw in self.giface.GetAllMapDisplays()])
         bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
                     'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation,
-                    'defaultzoom': self._onDefaultRegion, 'registertreatment': lambda evt: self.registerTreatment()}
+                    'defaultzoom': self._onDefaultRegion, 'registertreatment': lambda evt: self.treatments.register_treatment()}
         if "keyboard_events" in self.configuration:
             items = []
             for key in self.configuration['keyboard_events']:
