@@ -13,9 +13,6 @@ import wx
 import re
 import json
 import datetime
-import websockets
-import asyncio
-import wxasync
 import aiohttp
 from urllib.parse import urlparse
 from jsonrpc_websocket import Server as jsonrpc
@@ -387,6 +384,7 @@ class PoPSDashboard(wx.EvtHandler):
             print("Updated run id " + self._run_id)
             return run_id
         except requests.exceptions.HTTPError as e:
+            print (res.json())
             print(e)
             return None
 

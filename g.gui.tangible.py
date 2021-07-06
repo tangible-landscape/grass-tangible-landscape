@@ -1046,10 +1046,19 @@ def main(giface=None):
         dlg.Show()
     else:
         from core.giface import StandaloneGrassInterface
-        app = wx.App()
-        dlg = TangibleLandscapePlugin(giface=StandaloneGrassInterface(), parent=None)
-        dlg.Show()
-        app.MainLoop()
+        try:
+            from wxasync import WxAsyncApp
+            from asyncio.events import get_event_loop
+            app = WxAsyncApp()
+            dlg = TangibleLandscapePlugin(giface=StandaloneGrassInterface(), parent=None)
+            dlg.Show()
+            loop = get_event_loop()
+            loop.run_until_complete(app.MainLoop())
+        except ImportError:
+            app = wx.App()
+            dlg = TangibleLandscapePlugin(giface=StandaloneGrassInterface(), parent=None)
+            dlg.Show()
+            app.MainLoop()
 
 
 if __name__ == '__main__':

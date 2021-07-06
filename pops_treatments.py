@@ -5,20 +5,21 @@ from pops_dashboard import dateFromString
 
 
 class Treatments:
-    def __init__(self, study_area, workdir):
+    def __init__(self):
         self.model_settings = None
         self.tr_tl_name = None
-        self.study_area = study_area
-        self.workdir = workdir
         self.tr_registered_name = "tmp_registered_treatment"
         self._tr_registered = False
         self.do_resampling = True
-        # default env
-        self._env = get_environment(raster=self.study_area)
+        self._env = None
 
-    def set_model_settings(self, model_settings):
+    def initialize(self, model_settings, study_area, workdir):
         self.model_settings = model_settings
         self.tr_tl_name = model_settings.pops["treatments"]
+        self.workdir = workdir
+        self.study_area = study_area
+        # default env
+        self._env = get_environment(raster=self.study_area)
 
     def register_treatment(self):
         """Register treatment from TL"""
@@ -28,6 +29,7 @@ class Treatments:
                 raster=[self.tr_tl_name, self.tr_registered_name],
                 env=self._env,
             )
+            self._tr_registered = True
             return
 
         registered_info = gs.raster_info(self.tr_registered_name)
@@ -50,10 +52,14 @@ class Treatments:
             output=self.tr_registered_name,
             env=env,
         )
+        self._tr_registered = True
         # TODO: send to dashboard
 
     def reset_registered_treatment(self):
         self._tr_registered = False
+
+    def is_treatment_registered(self):
+        return self._tr_registered
 
     def name_treatment(self, event, player, attempt, checkpoint):
         tr_name = "__".join(
@@ -72,7 +78,7 @@ class Treatments:
 
     def resample(self, treatments, env):
         efficacy = self.model_settings.pops["efficacy"]
-        host = self.model_settings.pops["host"]
+        host = self.model_settings.model["host"]
         tmp1 = treatments + "_resampled"
         tmp2 = treatments + "_proportion"
         if not self.do_resampling:
@@ -122,7 +128,7 @@ class Treatments:
         gs.run_command("g.rename", raster=[tmp2, treatments], env=env)
 
     def compute_treatment_area(self, treatments, env):
-        host = self.model_settings.pops["host"]
+        host = self.model_settings.model["host"]
         tmp = treatments + "_exclude_host"
         gs.mapcalc(
             "{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(
@@ -131,7 +137,7 @@ class Treatments:
             env=env,
         )
         univar = gs.parse_command("r.univar", flags="g", map=treatments, env=env)
-        gs.run_command("g.rename", raster=tmp, env=env)
+        gs.run_command("g.remove", type='raster', name=tmp, flags='f', env=env)
         if not univar or float(univar["sum"]) == 0:
             return 0
         else:

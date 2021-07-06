@@ -78,9 +78,8 @@ class PopsPanel(wx.Panel):
         self.currentRealityCheckpoint = 0
         self.attempt = Attempt()
         self._one_step = None
-
         self.profileFrame = self.dashboardFrame = self.timeDisplay = self.timeStatusDisplay = None
-
+        self.treatments = Treatments()
         self.treated_area = 0
         self.money_spent = 0
 
@@ -96,7 +95,6 @@ class PopsPanel(wx.Panel):
             self.configFile = self.settings['POPS']['config']
             self.workdir = os.path.dirname(self.configFile)
 
-
         if self.configFile:
             try:
                 with open(self.configFile, 'r') as f:
@@ -107,9 +105,6 @@ class PopsPanel(wx.Panel):
                     self.speed = int(self.configuration['POPS']['animation_speed'])
             except IOError:
                 self.configFile = ''
-
-        self.treatments = Treatments(study_area=self.configuration['tasks'][self.current]['base'],
-                                     workdir=self.workdir)
 
         modelingBox = wx.StaticBox(self, wx.ID_ANY, "Modeling")
 
@@ -698,6 +693,8 @@ class PopsPanel(wx.Panel):
         self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
+        if not self.treatments.is_treatment_registered():
+            return
         if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentCheckpoint == 0:
@@ -738,12 +735,12 @@ class PopsPanel(wx.Panel):
         tr_vector = self.treatments.create_treatment_vector(tr_name, env=env)
 
         # measuring area
-        self.treated_area = self.treatments.compute_treatment_area(tr_name)
+        self.treated_area = self.treatments.compute_treatment_area(tr_name, env=env)
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
 
         # compute proportion
-        self.treatments.resample(tr_name)
+        self.treatments.resample(tr_name, env=env)
 
         if self.steeringClient.is_steering():
             if self.params.pops['steering']['move_current_year']:
@@ -761,7 +758,7 @@ class PopsPanel(wx.Panel):
         # export treatments file to server
         self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
-        tr_date = dateToString(dateFromString(self.params.pops['treatment_date']).replace(year=tr_year))
+        tr_date = dateToString(dateFromString(self.params.model['treatment_date']).replace(year=tr_year))
         self.steeringClient.simulation_load_data(tr_name, tr_date,
                                                  self.params.model['treatment_length'],
                                                  self.params.model['treatment_application'])
@@ -891,7 +888,9 @@ class PopsPanel(wx.Panel):
         self._connect()
         self._loadConfiguration(None)
         self.params.read_initial_params()
-        self.treatments.set_model_settings(self.params)
+        self.treatments.initialize(self.params,
+                                   study_area=self.configuration['tasks'][self.current]['base'],
+                                   workdir=self.workdir)
         self._initVisualizationModes()
 
         self.currentCheckpoint = 0
