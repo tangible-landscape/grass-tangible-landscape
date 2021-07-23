@@ -140,6 +140,9 @@ class PoPSDashboard(wx.EvtHandler):
         self._username = settings["username"]
         self._password = settings["password"]
 
+    def update_incoming_management_callback(self, callback):
+        self._ws_client.update_management = callback
+
     async def connect(self):
         """Connecting to webSocket server
             websockets.client.connect returns a WebSocketClientProtocol, which is used to send and receive messages
@@ -149,7 +152,7 @@ class PoPSDashboard(wx.EvtHandler):
         self._ws_session = aiohttp.ClientSession(headers=self._websocket_auth_headers)
         self._ws_client = jsonrpc(self._wsroot, session=self._ws_session)
         # If 'update_management' message received, send to update_message() function.
-        self._ws_client.update_management = self._ws_incoming_management
+        # self._ws_client.update_management = self.initial_incomin_management_callback
         await self._ws_client.ws_connect()
         # if self.run_collection:
         #     await self.get_management(self.run_collection)
@@ -185,12 +188,18 @@ class PoPSDashboard(wx.EvtHandler):
             ]
             self._websocket_auth_headers = websocket_auth_headers
 
-    def _ws_incoming_management(self, management_polygons=None,
-                                run_collection=None):
-        """Handle incoming (from the server) 'update_management'
-        websocket method"""
-        print(str(run_collection))
-        print(str(management_polygons))
+    async def send_management(self, json):
+        await self._ws_client.update_management(management_polygons=json,
+                                        run_collection=self._runcollection_id,
+                                        _notification=True)
+
+    # def ws_incoming_management(self, management_polygons=None, run_collection=None):
+    #     """Handle incoming (from the server) 'update_management'
+    #     websocket method"""
+    #     print("_ws_incoming_management")
+    #     print(str(run_collection))
+    #     print(str(management_polygons))
+    #     current_geojson_to_treatment
 
     async def get_management(self, run_collection):
         resp = await self._ws_client.send_management_request(run_collection=run_collection,

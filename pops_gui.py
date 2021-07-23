@@ -14,6 +14,7 @@ import re
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
+from functools import partial
 from wxasync import StartCoroutine
 
 from gui_core.gselect import Select
@@ -197,6 +198,8 @@ class PopsPanel(wx.Panel):
         self.webDashboard = PoPSDashboard()
         self.params.set_web_dashboard(self.webDashboard)
         self.webDashboard.initialize(dashboard)
+        self.webDashboard.new_runcollection()
+        self.params.update()
         StartCoroutine(self.webDashboard.connect, self)
 
     def _connectSteering(self):
@@ -304,6 +307,22 @@ class PopsPanel(wx.Panel):
         res = re.search('[0-9]{4}_[0-9]{2}_[0-9]{2}', name)
         if res and self.webDashboard:
             self.webDashboard.run_done(last_name_suffix=res.group())
+
+    def get_current_year(self):
+        if self.steeringClient.is_steering():
+            if self.params.pops['steering']['move_current_year']:
+                return dateFromString(self.params.model['start_date']).year + self.currentCheckpoint
+            return dateFromString(self.params.model['start_date']).year + self.currentRealityCheckpoint
+        return dateFromString(self.params.model['start_date']).year
+
+    def UpdateTreatmentsOnDashboard(self):
+        if not self.webDashboard:
+            return
+        year = self.get_current_year()
+        json = self.treatments.current_treatment_to_geojson(year=year)
+        callback = partial(self.treatments.current_geojson_to_treatment, year=year)
+        self.webDashboard.update_incoming_management_callback(callback)
+        StartCoroutine(self.webDashboard.send_management(json), self)
 
     def _uploadStepToDashboard(self, event):
         if not event.name.startswith(self.params.model['probability_series']):
@@ -658,10 +677,10 @@ class PopsPanel(wx.Panel):
 
     def _initSimulation(self, restart):
         # update params, dashboard
-        if self.webDashboard:
+        # if self.webDashboard:
             # get new run collection
-            self.webDashboard.new_runcollection()
-            self.params.update()
+            # self.webDashboard.new_runcollection()
+            # self.params.update()
 
         playerName = self._createPlayerName()
 
@@ -742,14 +761,7 @@ class PopsPanel(wx.Panel):
         # compute proportion
         self.treatments.resample(tr_name, env=env)
 
-        if self.steeringClient.is_steering():
-            if self.params.pops['steering']['move_current_year']:
-                tr_year = dateFromString(self.params.model['start_date']).year + self.currentCheckpoint
-            else:
-                tr_year = dateFromString(self.params.model['start_date']).year + self.currentRealityCheckpoint
-        else:
-            tr_year = dateFromString(self.params.model['start_date']).year
-
+        tr_year = self.get_current_year()
         if self.webDashboard:
             self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent,
                                              area=self.treated_area, year=tr_year)
@@ -983,7 +995,9 @@ class PopsPanel(wx.Panel):
             windows.extend([mapw for mapw in self.giface.GetAllMapDisplays()])
         bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
                     'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation,
-                    'defaultzoom': self._onDefaultRegion, 'registertreatment': lambda evt: self.treatments.register_treatment()}
+                    'defaultzoom': self._onDefaultRegion,
+                    #'registertreatment': lambda evt: self.treatments.register_treatment(),
+                    'registertreatment': lambda evt: self.UpdateTreatmentsOnDashboard()}
         if "keyboard_events" in self.configuration:
             items = []
             for key in self.configuration['keyboard_events']:
@@ -1023,6 +1037,10 @@ class PopsPanel(wx.Panel):
             self.ShowBaseline()
         else:
             self.ShowResults()
+        if self.webDashboard:
+            year = self.get_current_year()
+            callback = partial(self.treatments.current_geojson_to_treatment, year=year)
+            self.webDashboard.update_incoming_management_callback(callback)
 
     def _checkDynamicZoom(self, event):
         if not self.treatmentSelect.GetValue():
