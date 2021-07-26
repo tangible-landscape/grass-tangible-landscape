@@ -16,6 +16,7 @@ class Treatments:
         self.tr_registered_name = "tmp_registered_treatment"
         self._tr_registered = False
         self.tr_external_name = "external_treatment"
+        self.tr_merged_name = None
         self.tr_external_json = None
         self.do_resampling = True
         self._env = None
@@ -31,48 +32,56 @@ class Treatments:
             "v.edit", map=self.tr_external_name, tool="create", env=self._env
         )
 
+    # def register_treatment(self):
+    #     """Register treatment from TL"""
+    #     if not self._tr_registered:
+    #         gs.run_command(
+    #             "g.copy",
+    #             raster=[self.tr_tl_name, self.tr_registered_name],
+    #             env=self._env,
+    #         )
+    #         self._tr_registered = True
+    #         return
+
+    #     registered_info = gs.raster_info(self.tr_registered_name)
+    #     new_info = gs.raster_info(self.tr_tl_name)
+    #     if registered_info["nsres"] > new_info["nsres"]:
+    #         align = self.tr_tl_name
+    #     else:
+    #         align = self.tr_registered_name
+
+    #     if "region" in self.model_settings.pops:
+    #         env = get_environment(
+    #             region=self.model_settings.pops["region"], align=align
+    #         )
+    #     else:
+    #         env = get_environment(raster=self.study_area, align=align)
+
+    #     gs.run_command(
+    #         "r.patch",
+    #         input=[self.tr_registered_name, self.tr_tl_name],
+    #         output=self.tr_registered_name,
+    #         env=env,
+    #     )
+    #     self._tr_registered = True
+    #     # TODO: send to dashboard
+
     def register_treatment(self):
         """Register treatment from TL"""
-        if not self._tr_registered:
-            gs.run_command(
-                "g.copy",
-                raster=[self.tr_tl_name, self.tr_registered_name],
-                env=self._env,
-            )
-            self._tr_registered = True
-            return
-
-        registered_info = gs.raster_info(self.tr_registered_name)
-        new_info = gs.raster_info(self.tr_tl_name)
-        if registered_info["nsres"] > new_info["nsres"]:
-            align = self.tr_tl_name
-        else:
-            align = self.tr_registered_name
-
-        if "region" in self.model_settings.pops:
-            env = get_environment(
-                region=self.model_settings.pops["region"], align=align
-            )
-        else:
-            env = get_environment(raster=self.study_area, align=align)
-
         gs.run_command(
-            "r.patch",
-            input=[self.tr_registered_name, self.tr_tl_name],
-            output=self.tr_registered_name,
-            env=env,
+            "g.copy",
+            raster=[self.tr_tl_name, self.tr_registered_name],
+            env=self._env,
         )
-        self._tr_registered = True
-        # TODO: send to dashboard
 
-    def reset_registered_treatment(self):
-        self._tr_registered = False
+    # def reset_registered_treatment(self):
+    #     self._tr_registered = False
 
-    def is_treatment_registered(self):
-        return self._tr_registered
+    # def is_treatment_registered(self):
+    #     return self._tr_registered
 
-    def name_treatment(self, event, player, attempt, checkpoint):
-        tr_name = "__".join(
+    def create_treatment_name(self, event, player, attempt, checkpoint):
+        self.tr_merged_name = "__".join(
             [
                 self.tr_tl_name,
                 event,
@@ -81,16 +90,31 @@ class Treatments:
                 str(max(0, checkpoint)),
             ]
         )
-        gs.run_command(
-            "g.copy", raster=[self.tr_registered_name, tr_name], env=self._env
-        )
-        return tr_name
+        return self.tr_merged_name
 
-    def resample(self, treatments, env):
+    def merge_treatment(self):
+        tr_env = get_environment(raster=self.tr_registered_name)
+        gs.run_command(
+            "v.to.rast",
+            input=self.tr_external_name,
+            output=self.tr_external_name,
+            type="area",
+            use="val",
+            env=tr_env,
+        )
+        gs.run_command(
+            "r.patch",
+            input=[self.tr_registered_name, self.tr_external_name],
+            output=self.tr_merged_name,
+            env=tr_env,
+        )
+
+    def resample(self, env):
+        treatments = self.tr_merged_name
         efficacy = self.model_settings.pops["efficacy"]
         host = self.model_settings.model["host"]
-        tmp1 = treatments + "_resampled"
-        tmp2 = treatments + "_proportion"
+        tmp1 = "tmp_resampled"
+        tmp2 = "tmp_proportion"
         if not self.do_resampling:
             gs.mapcalc(
                 "{tr_new} = if(isnull({tr}), 0, float({tr}) * {eff} / 100)".format(
@@ -112,7 +136,7 @@ class Treatments:
             )
             maxvalue = gs.raster_info(tmp1)["max"]
             gs.mapcalc(
-                "{p} = if((isnull({t}) || {m} == 0), 0, ({t} / {m}) * ({eff} / 100))".format(
+                "{p} = if((isnull({t}) || {m} ==0), 0, ({t}/{m}) * ({eff}/100))".format(
                     p=tmp2,
                     t=tmp1,
                     m=maxvalue,
@@ -137,37 +161,50 @@ class Treatments:
             )
         gs.run_command("g.rename", raster=[tmp2, treatments], env=env)
 
-    def compute_treatment_area(self, treatments, env):
+    def compute_treatment_area(self, env):
+        # compute separately area of external polygons and TL polygons
+        data = gs.read_command(
+            "v.to.db",
+            map=self.tr_external_name,
+            option="area",
+            flags="pc",
+            units="meters",
+            separator="comma",
+            env=env,
+        )
+        area_external = float(data.strip().splitlines()[-1].split(",")[-1])
         host = self.model_settings.model["host"]
-        tmp = treatments + "_exclude_host"
+        tmp = "tmp_exclude_host"
         gs.mapcalc(
             "{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(
-                host=host, t=treatments, n=tmp
+                host=host, t=self.tr_registered_name, n=tmp
             ),
             env=env,
         )
-        univar = gs.parse_command("r.univar", flags="g", map=treatments, env=env)
+        univar = gs.parse_command(
+            "r.univar", flags="g", map=self.tr_registered_name, env=env
+        )
         gs.run_command("g.remove", type="raster", name=tmp, flags="f", env=env)
         if not univar or float(univar["sum"]) == 0:
-            return 0
+            return 0 + area_external
         else:
             res = gs.region(env=env)
-            return float(univar["n"]) * res["nsres"] * res["ewres"]
+            return float(univar["n"]) * res["nsres"] * res["ewres"] + area_external
 
     def current_treatment_to_geojson(self, year):
         # convert to vector and compute feature area
-        tr_env = get_environment(raster=self.tr_tl_name)
+        tr_env = get_environment(raster=self.tr_registered_name)
         gs.run_command(
             "r.to.vect",
-            input=self.tr_tl_name,
-            output=self.tr_tl_name,
+            input=self.tr_registered_name,
+            output=self.tr_registered_name,
             type="area",
             # flags="s",
             env=tr_env,
         )
         gs.run_command(
             "v.to.db",
-            map=self.tr_tl_name,
+            map=self.tr_registered_name,
             option="area",
             columns="area",
             units="meters",
@@ -188,7 +225,7 @@ class Treatments:
             location=genv["LOCATION_NAME"],
             quiet=True,
             mapset=genv["MAPSET"],
-            input=self.tr_tl_name,
+            input=self.tr_registered_name,
             output=name,
             env=env,
         )
@@ -303,8 +340,8 @@ class Treatments:
         gs.try_remove(gisrc)
         shutil.rmtree(dbase)
 
-    def create_treatment_vector(self, treatment, env):
-        # assumes full name of treatment
+    def create_treatment_visualization_vector(self, env):
+        treatment = self.tr_merged_name
         tr, evt, plr, attempt, year = treatment.split("__")
         postfix = "cat_year"
         gs.mapcalc(

@@ -154,19 +154,19 @@ class PoPSDashboard(wx.EvtHandler):
     def update_incoming_management_callback(self, callback):
         self._ws_client.update_management = callback
 
-    async def connect(self):
+    async def connect(self, callback):
         """Connecting to webSocket server
-        websockets.client.connect returns a WebSocketClientProtocol, which is used to send and receive messages
+        websockets.client.connect returns a WebSocketClientProtocol,
+        which is used to send and receive messages
         """
         if not self._websocket_auth_headers:
             await self.authenticate()
         self._ws_session = aiohttp.ClientSession(headers=self._websocket_auth_headers)
         self._ws_client = jsonrpc(self._wsroot, session=self._ws_session)
         # If 'update_management' message received, send to update_message() function.
-        # self._ws_client.update_management = self.initial_incomin_management_callback
+        self._ws_client.update_management = callback
         await self._ws_client.ws_connect()
-        # if self.run_collection:
-        #     await self.get_management(self.run_collection)
+        await self.get_external_management()
 
     async def authenticate(self):
         """
@@ -176,7 +176,7 @@ class PoPSDashboard(wx.EvtHandler):
         """
 
         async with aiohttp.ClientSession(raise_for_status=True) as session:
-            cookie_jar = aiohttp.CookieJar(unsafe=True)
+            aiohttp.CookieJar(unsafe=True)
             # First GET the auth url to get a valid CSRF token
             resp = await session.get(self._ws_auth_url)
             csrf_token = resp.cookies.get("csrftoken").value
@@ -210,24 +210,15 @@ class PoPSDashboard(wx.EvtHandler):
             _notification=True,
         )
 
-    # def ws_incoming_management(self, management_polygons=None, run_collection=None):
-    #     """Handle incoming (from the server) 'update_management'
-    #     websocket method"""
-    #     print("_ws_incoming_management")
-    #     print(str(run_collection))
-    #     print(str(management_polygons))
-    #     current_geojson_to_treatment
-
-    async def get_management(self, run_collection):
-        resp = await self._ws_client.send_management_request(
-            run_collection=run_collection, _notification=True
+    async def get_external_management(self):
+        await self._ws_client.send_management_request(
+            run_collection=self._runcollection_id, _notification=True
         )
-        print("Websocket response:", resp)
 
-    def set_management(self, polygons, cost, area, year):
-        if gscript.vector_info_topo(polygons)["areas"]:
-            geojson = self._management_to_proj_geojson(polygons, "treatment", year)
-            self._run["management_polygons"] = geojson
+    def set_management(self, geojson, cost, area, year):
+        j = json.loads(geojson)
+        if j["features"]:
+            self._run["management_polygons"] = j
             self._run["management_cost"] = "{v:.2f}".format(v=cost)
             self._run["management_area"] = "{v:.2f}".format(v=area)
         else:
@@ -642,6 +633,7 @@ def raster_to_proj_geojson_thread(
 
     input_env["GRASS_REGION"] = gscript.region_env(raster=single_raster)
     genv = gscript.gisenv(env=input_env)
+    print(genv)
     export_genv = gscript.gisenv(env=export_env)
     # single
     if single_raster:
@@ -845,7 +837,7 @@ def process_for_dashboard(id_, year, raster, spread_rate_file, rotation=0):
         lines = f.readlines()
         for line in lines:
             if line.startswith(str(year)):
-                y, n, s, e, w = line.split(",")
+                y, n, s, e, w = line.strip().split(",")
     ee, nn, ww, ss = 0, 90, 180, 270
     directions = {-90: s, 0: e, 90: n, 180: w, 270: s, 360: e}
     nr = directions[nn + rotation]
@@ -868,23 +860,3 @@ def dateFromString(date):
 
 def dateToString(date):
     return date.strftime("%Y-%m-%d")
-
-
-def main():
-    dashboard = PoPSDashboard()
-    info = dict(session=2, password="xxx", username="tl", url="pops-model.org")
-    dashboard.initialize(info)
-    run = dashboard.get_run_params()
-    #    dashboard.set_run_params(params={"name": "testTLconn3", "reproductive_rate": 4,
-    #                                     "distance_scale": 20, "cost_per_hectare": 1,
-    #                                     "efficacy": 1, "session": 1})
-
-    dashboard.set_management_polygons("treatments__tmpevent__player__7")
-    if dashboard.update_run():
-        out_id = dashboard.upload_results(2021, "tmpevent__player__7_0__2021_12_31")
-        if out_id:
-            dashboard.run_done()
-
-
-if __name__ == "__main__":
-    main()

@@ -200,7 +200,9 @@ class PopsPanel(wx.Panel):
         self.webDashboard.initialize(dashboard)
         self.webDashboard.new_runcollection()
         self.params.update()
-        StartCoroutine(self.webDashboard.connect, self)
+        year = dateFromString(self.configuration['POPS']['model']['start_date']).year
+        callback = partial(self.treatments.current_geojson_to_treatment, year=year)
+        StartCoroutine(self.webDashboard.connect(callback), self)
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -320,9 +322,10 @@ class PopsPanel(wx.Panel):
             return
         year = self.get_current_year()
         json = self.treatments.current_treatment_to_geojson(year=year)
-        callback = partial(self.treatments.current_geojson_to_treatment, year=year)
-        self.webDashboard.update_incoming_management_callback(callback)
+        # callback = partial(self.treatments.current_geojson_to_treatment, year=year)
+        # self.webDashboard.update_incoming_management_callback(callback)
         StartCoroutine(self.webDashboard.send_management(json), self)
+        return json
 
     def _uploadStepToDashboard(self, event):
         if not event.name.startswith(self.params.model['probability_series']):
@@ -712,8 +715,8 @@ class PopsPanel(wx.Panel):
         self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
-        if not self.treatments.is_treatment_registered():
-            return
+        # if not self.treatments.is_treatment_registered():
+        #     return
         if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentCheckpoint == 0:
@@ -744,30 +747,31 @@ class PopsPanel(wx.Panel):
             env = get_environment(raster=studyArea, align=host)
 
         event = self.getEventName()
-        # todo, save treatments
         if self.params.pops['steering']['move_current_year']:
             checkpoint = self.currentCheckpoint
         else:
             checkpoint = self.currentRealityCheckpoint
-        tr_name = self.treatments.name_treatment(event, playerName, new_attempt, checkpoint)
-        # create treatment vector of all used treatments in that scenario
-        tr_vector = self.treatments.create_treatment_vector(tr_name, env=env)
-
+        # treatments
+        self.treatments.register_treatment()
+        geojson = self.UpdateTreatmentsOnDashboard()
+        # save treatment
+        tr_name = self.treatments.create_treatment_name(event, playerName, new_attempt, checkpoint)
+        self.treatments.merge_treatment()
         # measuring area
-        self.treated_area = self.treatments.compute_treatment_area(tr_name, env=env)
+        self.treated_area = self.treatments.compute_treatment_area(env=env)
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
-
-        # compute proportion
-        self.treatments.resample(tr_name, env=env)
+        # create treatment vector of all used treatments in that scenario
+        self.treatments.create_treatment_visualization_vector(env=env)
 
         tr_year = self.get_current_year()
         if self.webDashboard:
-            self.webDashboard.set_management(polygons=tr_vector, cost=self.money_spent,
+            self.webDashboard.set_management(geojson=geojson, cost=self.money_spent,
                                              area=self.treated_area, year=tr_year)
             self.webDashboard.update_run()
 
         # export treatments file to server
+        self.treatments.resample(env=env)
         self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
         tr_date = dateToString(dateFromString(self.params.model['treatment_date']).replace(year=tr_year))
@@ -797,7 +801,7 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
         self.ShowTreatment()
 
-        self.treatments.reset_registered_treatment()
+        # self.treatments.reset_registered_treatment()
 
     def _run(self):
         self.steeringClient.simulation_play()
@@ -956,7 +960,7 @@ class PopsPanel(wx.Panel):
         # start display timer
         self.timer.Start(self.speed)
         # reset registered treatment
-        self.treatments.reset_registered_treatment()
+        # self.treatments.reset_registered_treatment()
 
     def StopTreatment(self):
         def _closeAdditionalWindows():
@@ -1100,6 +1104,8 @@ class PopsPanel(wx.Panel):
                     cmd=['d.rast', 'map=' + self.empty_placeholders['results']], checked=True)
         ll.AddLayer('vector', name=self.empty_placeholders['treatments'],
                     cmd=['d.vect', 'map=' + self.empty_placeholders['treatments']], checked=True)
+        ll.AddLayer('vector', name=self.treatments.tr_external_name,
+                    cmd=['d.vect', 'map=' + self.treatments.tr_external_name], checked=True)
 
     def LoadLayers(self):
         if self.IsStandalone():
