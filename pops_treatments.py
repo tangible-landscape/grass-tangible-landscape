@@ -18,7 +18,7 @@ class Treatments:
         self.tr_external_name = "external_treatment"
         self.tr_merged_name = None
         self.tr_external_json = None
-        self.do_resampling = True
+        self.do_resampling = False
         self._env = None
 
     def initialize(self, model_settings, study_area, workdir):
@@ -194,12 +194,13 @@ class Treatments:
     def current_treatment_to_geojson(self, year):
         # convert to vector and compute feature area
         tr_env = get_environment(raster=self.tr_registered_name)
+        if gs.raster_info(self.tr_registered_name)["min"] is None:
+            return None
         gs.run_command(
             "r.to.vect",
             input=self.tr_registered_name,
             output=self.tr_registered_name,
             type="area",
-            # flags="s",
             env=tr_env,
         )
         gs.run_command(

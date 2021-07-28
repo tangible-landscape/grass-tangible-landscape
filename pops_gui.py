@@ -993,6 +993,10 @@ class PopsPanel(wx.Panel):
 
     def _bindButtons(self):
         # if standalone, no binding can be done
+        def _register_and_update():
+            self.treatments.register_treatment()
+            self.UpdateTreatmentsOnDashboard()
+
         windows = [wx.GetTopLevelParent(self)]
         if not self.IsStandalone():
             windows.append(self.giface.lmgr)
@@ -1000,8 +1004,7 @@ class PopsPanel(wx.Panel):
         bindings = {'simulate': self._RunSimulation, 'visualization': lambda evt: self.SwitchVizMode(),
                     'stepforward': self.StepForward, 'stepback': self.StepBack, 'reset': self.ResetSimulation,
                     'defaultzoom': self._onDefaultRegion,
-                    #'registertreatment': lambda evt: self.treatments.register_treatment(),
-                    'registertreatment': lambda evt: self.UpdateTreatmentsOnDashboard()}
+                    'registertreatment': lambda evt: _register_and_update()}
         if "keyboard_events" in self.configuration:
             items = []
             for key in self.configuration['keyboard_events']:

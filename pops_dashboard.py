@@ -11,6 +11,7 @@ import tempfile
 import threading
 import wx
 import re
+import math
 import json
 import datetime
 import aiohttp
@@ -486,7 +487,9 @@ class PoPSDashboard(wx.EvtHandler):
         print("report_status_done for run " + self._run_id)
         self._run["status"] = "SUCCESS" if success else "FAILURE"
         try:
-            res = requests.put(self._root + "run/" + self._run_id + "/", json=self._run)
+            res = requests.put(
+                self._root + "run_write/" + self._run_id + "/", json=self._run
+            )
             res.raise_for_status()
         except requests.exceptions.HTTPError as e:
             print(e)
@@ -499,7 +502,7 @@ class PoPSDashboard(wx.EvtHandler):
         self._runcollection["status"] = "SUCCESS" if success else "FAILURE"
         try:
             res = requests.put(
-                self._root + "run_collection/" + self._runcollection_id + "/",
+                self._root + "run_collection_write/" + self._runcollection_id + "/",
                 data=self._runcollection,
             )
             res.raise_for_status()
@@ -591,7 +594,7 @@ class PoPSDashboard(wx.EvtHandler):
         env["GISRC"] = tmp_gisrc_file
         env["GRASS_MESSAGE_FORMAT"] = "silent"
         env["GRASS_VERBOSE"] = "0"
-        gscript.run_command("g.region", flags="d", env=env, quiet=True)
+        gscript.run_command("g.region", flags="do", env=env, quiet=True)
         gscript.run_command("db.connect", flags="c", env=env, quiet=True)
         return tmp_gisrc_file, env
 
@@ -628,149 +631,74 @@ def raster_to_proj_geojson_thread(
     tempdir = tempfile.mkdtemp()
     tmp_layer1 = os.path.basename(tempdir) + "1"
     tmp_layer2 = os.path.basename(tempdir) + "2"
-    tmp_file_single = os.path.join(tempdir, "single.json")
-    tmp_file_prob = os.path.join(tempdir, "prob.json")
+    tmp_file = os.path.join(tempdir, "out.json")
 
     input_env["GRASS_REGION"] = gscript.region_env(raster=single_raster)
     genv = gscript.gisenv(env=input_env)
-    print(genv)
     export_genv = gscript.gisenv(env=export_env)
-    # single
-    if single_raster:
-        gscript.run_command(
-            "r.to.vect",
-            input=single_raster,
-            flags="v",
-            output=tmp_layer1,
-            type="area",
-            column="outputs",
-            env=input_env,
-        )
-        gscript.run_command(
-            "v.proj",
-            location=genv["LOCATION_NAME"],
-            quiet=True,
-            mapset=genv["MAPSET"],
-            input=tmp_layer1,
-            output=tmp_layer2,
-            env=export_env,
-        )
+
+    gscript.mapcalc(
+        f"{tmp_layer1} = if({single_raster} > 0 || {probability_raster} > 0, "
+        "row() + col(), null())",
+        env=input_env,
+    )
+    gscript.run_command(
+        "r.to.vect", input=tmp_layer1, output=tmp_layer1, type="area", env=input_env
+    )
+
+    gscript.run_command(
+        "v.what.rast",
+        map=tmp_layer1,
+        type="centroid",
+        raster=single_raster,
+        column="median",
+        env=input_env,
+    )
+    gscript.run_command(
+        "v.what.rast",
+        map=tmp_layer1,
+        type="centroid",
+        raster=probability_raster,
+        column="probability",
+        env=input_env,
+    )
+    for col in ["mean", "min", "max", "standard_deviation"]:
         gscript.run_command(
             "v.db.addcolumn",
-            map=tmp_layer2,
-            columns="outputs integer",
-            quiet=True,
-            env=export_env,
-        )
-        gscript.run_command(
-            "v.db.update",
-            map=tmp_layer2,
-            column="outputs",
-            query_column="cat",
-            quiet=True,
-            env=export_env,
-        )
-        gscript.run_command(
-            "v.out.ogr",
-            input=tmp_layer2,
-            flags="sm",
-            output=tmp_file_single,
-            format_="GeoJSON",
-            lco="COORDINATE_PRECISION=4",
-            quiet=True,
-            overwrite=True,
-            env=export_env,
-        )
-        gscript.run_command(
-            "g.remove",
-            name=tmp_layer1,
-            quiet=True,
-            flags="f",
-            type_="vector",
+            map=tmp_layer1,
+            columns=f"{col} double precision",
             env=input_env,
         )
         gscript.run_command(
-            "g.remove",
-            name=tmp_layer2,
-            quiet=True,
-            flags="f",
-            type_="vector",
-            env=export_env,
+            "v.db.update", map=tmp_layer1, column=col, value=0, env=input_env
         )
-    # probability
-    if probability_raster:
-        gscript.run_command(
-            "r.to.vect",
-            input=probability_raster,
-            flags="v",
-            output=tmp_layer1,
-            type="area",
-            column="outputs",
-            env=input_env,
-        )
-        gscript.run_command(
-            "v.proj",
-            location=genv["LOCATION_NAME"],
-            quiet=True,
-            mapset=genv["MAPSET"],
-            input=tmp_layer1,
-            output=tmp_layer2,
-            env=export_env,
-        )
-        gscript.run_command(
-            "v.db.addcolumn",
-            map=tmp_layer2,
-            columns="outputs integer",
-            quiet=True,
-            env=export_env,
-        )
-        gscript.run_command(
-            "v.db.update",
-            map=tmp_layer2,
-            column="outputs",
-            query_column="cat",
-            quiet=True,
-            env=export_env,
-        )
-        gscript.run_command(
-            "v.out.ogr",
-            input=tmp_layer2,
-            flags="sm",
-            output=tmp_file_prob,
-            format_="GeoJSON",
-            lco="COORDINATE_PRECISION=4",
-            quiet=True,
-            overwrite=True,
-            env=export_env,
-        )
-        gscript.run_command(
-            "g.remove",
-            name=tmp_layer1,
-            quiet=True,
-            flags="f",
-            type_="vector",
-            env=input_env,
-        )
-        gscript.run_command(
-            "g.remove",
-            name=tmp_layer2,
-            quiet=True,
-            flags="f",
-            type_="vector",
-            env=export_env,
-        )
-
-    if single_raster:
-        with open(tmp_file_single) as f:
-            j = json.load(f)
-            results["single_spread_map"] = j
-
-    if probability_raster:
-        with open(tmp_file_prob) as f:
-            j = json.load(f)
-            results["probability_map"] = j
-    results["susceptible_map"] = "null"
-
+    gscript.run_command(
+        "v.db.dropcolumn", map=tmp_layer1, column=["value", "label"], env=input_env
+    )
+    gscript.run_command(
+        "v.proj",
+        location=genv["LOCATION_NAME"],
+        quiet=True,
+        mapset=genv["MAPSET"],
+        input=tmp_layer1,
+        output=tmp_layer2,
+        env=export_env,
+    )
+    gscript.run_command(
+        "v.out.ogr",
+        input=tmp_layer2,
+        flags="sm",
+        output=tmp_file,
+        format_="GeoJSON",
+        lco="COORDINATE_PRECISION=7",
+        quiet=True,
+        overwrite=True,
+        env=export_env,
+    )
+    with open(tmp_file) as f:
+        j = json.load(f)
+        results["median_spread_map"] = j
+    print(j)
     shutil.rmtree(tempdir)
 
     shutil.rmtree(
@@ -807,7 +735,7 @@ def process_for_dashboard(id_, year, raster, spread_rate_file, rotation=0):
     result = {"run": id_, "year": year}
     env = get_environment(raster=raster)
     data = gscript.parse_command("r.univar", map=raster, flags="gr", env=env)
-    if not data:
+    if not data or math.isnan(float(data["sum"])):
         data["n"] = data["sum"] = 0
     info = gscript.parse_command("r.info", flags="ge", map=raster, env=env)
 
