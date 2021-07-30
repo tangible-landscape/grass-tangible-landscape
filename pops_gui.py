@@ -322,8 +322,6 @@ class PopsPanel(wx.Panel):
             return
         year = self.get_current_year()
         json = self.treatments.current_treatment_to_geojson(year=year)
-        # callback = partial(self.treatments.current_geojson_to_treatment, year=year)
-        # self.webDashboard.update_incoming_management_callback(callback)
         StartCoroutine(self.webDashboard.send_management(json), self)
         return json
 
@@ -766,6 +764,7 @@ class PopsPanel(wx.Panel):
             checkpoint = self.currentRealityCheckpoint
         # treatments
         self.treatments.register_treatment()
+        self.treatments.ignore_incoming = True
         geojson = self.UpdateTreatmentsOnDashboard()
         # save treatment
         tr_name = self.treatments.create_treatment_name(event, playerName, new_attempt, checkpoint)
@@ -782,6 +781,8 @@ class PopsPanel(wx.Panel):
             self.webDashboard.set_management(geojson=geojson, cost=self.money_spent,
                                              area=self.treated_area, year=tr_year)
             self.webDashboard.update_run()
+            self.treatments.reset_external_treatment()
+            print("reset")
 
         # export treatments file to server
         self.treatments.resample(env=env)
@@ -814,6 +815,9 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
         self.ShowTreatment()
 
+        if self.webDashboard:
+            callback = partial(self.treatments.current_geojson_to_treatment, year=self.get_current_year())
+            self.webDashboard.update_incoming_management_callback(callback)
         # self.treatments.reset_registered_treatment()
 
     def _run(self):

@@ -19,6 +19,7 @@ class Treatments:
         self.tr_merged_name = None
         self.tr_external_json = None
         self.do_resampling = False
+        self.ignore_incoming = False
         self._env = None
 
     def initialize(self, model_settings, study_area, workdir):
@@ -28,6 +29,12 @@ class Treatments:
         self.study_area = study_area
         # default env
         self._env = get_environment(raster=self.study_area)
+        gs.run_command(
+            "v.edit", map=self.tr_external_name, tool="create", env=self._env
+        )
+
+    def reset_external_treatment(self):
+        self.tr_external_json = None
         gs.run_command(
             "v.edit", map=self.tr_external_name, tool="create", env=self._env
         )
@@ -194,8 +201,13 @@ class Treatments:
     def current_treatment_to_geojson(self, year):
         # convert to vector and compute feature area
         tr_env = get_environment(raster=self.tr_registered_name)
+        print("current treatm to geojson")
+        print(self.tr_external_json)
         if gs.raster_info(self.tr_registered_name)["min"] is None:
-            return None
+            if self.tr_external_json:
+                return json.dumps(self.tr_external_json)
+            else:
+                return None
         gs.run_command(
             "r.to.vect",
             input=self.tr_registered_name,
@@ -283,17 +295,26 @@ class Treatments:
         self, management_polygons, year, run_collection=None
     ):
         """Convert json coming from dashboard for visualization on TL"""
-        if not management_polygons:
+        print(f"convert geojson {year}")
+        print(self.ignore_incoming)
+        if self.ignore_incoming:
+            self.ignore_incoming = False
+            return
+        if not management_polygons or management_polygons == '0':
             gs.run_command(
                 "v.edit", map=self.tr_external_name, tool="create", env=self._env
             )
+            self.tr_external_json = None
             return
         j = json.loads(management_polygons)
+        print(management_polygons)
         # filter to discard tangible polygons from this year
         features = []
         for feat in j["features"]:
             y = dateFromString(feat["properties"]["date"]).year
-            if "tangible" in feat["properties"] and y == year:
+            if "tangible" in feat["properties"]:
+                continue
+            if y != year:
                 continue
             features.append(feat)
         j["features"] = features
@@ -308,6 +329,8 @@ class Treatments:
                 if dateFromString(d).year == year:
                     features.append(feat)
         j["features"] = features
+        print("incoming json after filtering")
+        print(j)
         if not features:
             gs.run_command(
                 "v.edit", map=self.tr_external_name, tool="create", env=self._env
