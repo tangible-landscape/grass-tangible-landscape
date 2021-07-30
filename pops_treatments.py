@@ -283,6 +283,11 @@ class Treatments:
         self, management_polygons, year, run_collection=None
     ):
         """Convert json coming from dashboard for visualization on TL"""
+        if not management_polygons:
+            gs.run_command(
+                "v.edit", map=self.tr_external_name, tool="create", env=self._env
+            )
+            return
         j = json.loads(management_polygons)
         # filter to discard tangible polygons from this year
         features = []

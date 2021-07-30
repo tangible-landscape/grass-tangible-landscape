@@ -133,7 +133,6 @@ class PoPSDashboard(wx.EvtHandler):
         self._tmp_vect_file = "tmp_vect_" + suffix
         self._tmp_inf_file = "tmp_inf_" + suffix
         self._tmp_infavg_file = "tmp_infavg_" + suffix
-        self._tmp_prob_file = "tmp_prob_" + suffix
         self._last_name_suffix = None
         self._websocket_auth_headers = []
         self._ws_session = None
@@ -205,6 +204,8 @@ class PoPSDashboard(wx.EvtHandler):
             self._websocket_auth_headers = websocket_auth_headers
 
     async def send_management(self, json):
+        if not json:
+            return
         await self._ws_client.update_management(
             management_polygons=json,
             run_collection=self._runcollection_id,
@@ -217,11 +218,16 @@ class PoPSDashboard(wx.EvtHandler):
         )
 
     def set_management(self, geojson, cost, area, year):
-        j = json.loads(geojson)
-        if j["features"]:
-            self._run["management_polygons"] = j
-            self._run["management_cost"] = "{v:.2f}".format(v=cost)
-            self._run["management_area"] = "{v:.2f}".format(v=area)
+        if geojson:
+            j = json.loads(geojson)
+            if j["features"]:
+                self._run["management_polygons"] = j
+                self._run["management_cost"] = "{v:.2f}".format(v=cost)
+                self._run["management_area"] = "{v:.2f}".format(v=area)
+            else:
+                self._run["management_polygons"] = 0
+                self._run["management_cost"] = 0
+                self._run["management_area"] = 0
         else:
             self._run["management_polygons"] = 0
             self._run["management_cost"] = 0
@@ -425,6 +431,9 @@ class PoPSDashboard(wx.EvtHandler):
         probability,
         single_infected,
         average_infected,
+        stddev_infected,
+        min_infected,
+        max_infected,
         spread_rate_file,
         rotation,
         use_single,
@@ -453,12 +462,6 @@ class PoPSDashboard(wx.EvtHandler):
             rotation,
         )
 
-        gscript.mapcalc(
-            "{n} = int(if({r} == 0, null(), {r}))".format(
-                n=self._tmp_prob_file, r=probability
-            ),
-            env=env,
-        )
         export_gisrc, export_env = self._create_tmp_gisrc_environment(
             self._temp_location
         )
@@ -467,8 +470,12 @@ class PoPSDashboard(wx.EvtHandler):
             target=raster_to_proj_geojson_thread,
             args=(
                 self,
-                self._tmp_inf_file + "@" + mapset,
-                self._tmp_prob_file + "@" + mapset,
+                single_infected + "@" + mapset,
+                probability + "@" + mapset,
+                average_infected + "@" + mapset,
+                stddev_infected + "@" + mapset,
+                min_infected + "@" + mapset,
+                max_infected + "@" + mapset,
                 input_gisrc,
                 input_env,
                 export_gisrc,
@@ -610,7 +617,7 @@ class PoPSDashboard(wx.EvtHandler):
         gscript.run_command(
             "g.remove",
             type="raster",
-            name=[self._tmp_inf_file, self._tmp_infavg_file, self._tmp_prob_file],
+            name=[self._tmp_inf_file, self._tmp_infavg_file],
             flags="f",
             quiet=True,
         )
@@ -620,6 +627,10 @@ def raster_to_proj_geojson_thread(
     evtHandler,
     single_raster,
     probability_raster,
+    avg_raster,
+    stddev_raster,
+    min_raster,
+    max_raster,
     input_gisrc,
     input_env,
     export_gisrc,
@@ -638,39 +649,35 @@ def raster_to_proj_geojson_thread(
     export_genv = gscript.gisenv(env=export_env)
 
     gscript.mapcalc(
-        f"{tmp_layer1} = if({single_raster} > 0 || {probability_raster} > 0, "
+        f"{tmp_layer1} = if({single_raster} > 0 ||| "
+        f"{probability_raster} > 0 ||| "
+        f"{avg_raster} > 0 ||| "
+        f"{min_raster} > 0 ||| "
+        f"{max_raster} > 0 ||| "
+        f"{stddev_raster} > 0, "
         "row() + col(), null())",
         env=input_env,
     )
     gscript.run_command(
         "r.to.vect", input=tmp_layer1, output=tmp_layer1, type="area", env=input_env
     )
-
-    gscript.run_command(
-        "v.what.rast",
-        map=tmp_layer1,
-        type="centroid",
-        raster=single_raster,
-        column="median",
-        env=input_env,
-    )
-    gscript.run_command(
-        "v.what.rast",
-        map=tmp_layer1,
-        type="centroid",
-        raster=probability_raster,
-        column="probability",
-        env=input_env,
-    )
-    for col in ["mean", "min", "max", "standard_deviation"]:
+    columns = ["median", "probability", "mean", "min", "max", "standard_deviation"]
+    rasters = [
+        single_raster,
+        probability_raster,
+        avg_raster,
+        min_raster,
+        max_raster,
+        stddev_raster,
+    ]
+    for col, r in zip(columns, rasters):
         gscript.run_command(
-            "v.db.addcolumn",
+            "v.what.rast",
             map=tmp_layer1,
-            columns=f"{col} double precision",
+            type="centroid",
+            raster=r,
+            column=col,
             env=input_env,
-        )
-        gscript.run_command(
-            "v.db.update", map=tmp_layer1, column=col, value=0, env=input_env
         )
     gscript.run_command(
         "v.db.dropcolumn", map=tmp_layer1, column=["value", "label"], env=input_env

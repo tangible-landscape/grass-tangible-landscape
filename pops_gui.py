@@ -339,6 +339,9 @@ class PopsPanel(wx.Panel):
             remove = self.params.model['probability_series'] + '__'
             single_infected = event.name[len(remove):]
             average_infected = '__'.join([self.params.model['average_series'], single_infected])
+            stddev_infected = '__'.join([self.params.model['stddev_series'], single_infected])
+            min_infected = '__'.join([self.params.model['min_series'], single_infected])
+            max_infected = '__'.join([self.params.model['max_series'], single_infected])
             spread_file = self.params.model['spread_rate_output']
             if self.webDashboard:
                 checkpoint = int(year) - dateFromString(self.params.model['start_date']).year + 1
@@ -350,6 +353,7 @@ class PopsPanel(wx.Panel):
                 if 'rotation' in self.params.pops:
                     rotation = self.params.pops['rotation']
                 self.webDashboard.upload_results(year, event.name, single_infected, average_infected,
+                                                 stddev_infected, min_infected, max_infected,
                                                  spread_file, rotation, use_single=use_single)
 
     def _processWSInfo(self, data):
@@ -699,15 +703,24 @@ class PopsPanel(wx.Panel):
 
         probability = self.params.model['probability_series']
         average = self.params.model['average_series']
+        stddev = self.params.model['stddev_series']
+        mins = self.params.model['min_series']
+        maxs = self.params.model['max_series']
         postfix = self.getEventName() + '__' + playerName + '_'
         probability = probability + '__' + postfix
         average = average + '__' + postfix
+        stddev = stddev + '__' + postfix
+        mins = mins + '__' + postfix
+        maxs = maxs + '__' + postfix
 
         region = '{n},{s},{w},{e},{align}'.format(**region)
         model_params = self.params.model.copy()
         model_params.update({'single_series': postfix,
                              'probability_series': probability,
-                             'average_series': average})
+                             'average_series': average,
+                             'stddev_series': stddev,
+                             'min_series': mins,
+                             'max_series': maxs})
 
         # run simulation
         self.steeringClient.simulation_set_params(self.params.model_name,
@@ -816,6 +829,12 @@ class PopsPanel(wx.Panel):
                 name = self.steeringClient.results_get()
                 isProb = self._ifShowProbability(evalFuture=True)
                 if self.params.model['average_series'] in name:
+                    continue
+                if self.params.model['stddev_series'] in name:
+                    continue
+                if self.params.model['min_series'] in name:
+                    continue
+                if self.params.model['max_series'] in name:
                     continue
                 if self.params.model['probability_series'] in name and isProb:
                     found = True
