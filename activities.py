@@ -283,7 +283,7 @@ class ActivitiesPanel(wx.Panel):
         elif 'base_region' in self.tasks[self.current]:
             self.settings['scan']['region'] = self.tasks[self.current]['base_region']
         self.settings['output']['calibrate'] = True
-        self.settings['analyses']['file'] = ''
+        self.settings['analyses']['file'] = os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses'])
         self._loadScanningParams(key='scanning_params')
         # just update whatever was not set with 'scanning_params'
         self._loadScanningParams(key='calibration_scanning_params')
