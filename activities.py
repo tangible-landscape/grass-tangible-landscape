@@ -282,8 +282,8 @@ class ActivitiesPanel(wx.Panel):
             self.settings['scan']['elevation'] = self.tasks[self.current]['base']
         elif 'base_region' in self.tasks[self.current]:
             self.settings['scan']['region'] = self.tasks[self.current]['base_region']
-        self.settings['output']['scan'] = 'scan_saved'
-        self.settings['analyses']['file'] = ''
+        self.settings['output']['calibrate'] = True
+        self.settings['analyses']['file'] = os.path.join(self._getTaskDir(), self.tasks[self.current]['analyses'])
         self._loadScanningParams(key='scanning_params')
         # just update whatever was not set with 'scanning_params'
         self._loadScanningParams(key='calibration_scanning_params')
@@ -296,8 +296,11 @@ class ActivitiesPanel(wx.Panel):
         wx.CallLater(2000, lambda: self.CalibrationDone(startTask))
 
     def CalibrationDone(self, startTask):
+        def process():
+            self.buttonCalibrate.SetLabel("Calibrate")
+            self.settings['output']['calibrate'] = False
         self._stopScanning()
-        wx.CallLater(4000, lambda: self.buttonCalibrate.SetLabel("Calibrate"))
+        wx.CallLater(4000, lambda: process())
         if startTask:
             wx.CallLater(4000, lambda: self.OnStart(None))
 
