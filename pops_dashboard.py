@@ -206,6 +206,9 @@ class PoPSDashboard(wx.EvtHandler):
     async def send_management(self, json):
         if not json:
             return
+        # we don't know when new rcoll is created
+        # so we need to always ask for its id
+        self.new_runcollection()
         await self._ws_client.update_management(
             management_polygons=json,
             run_collection=self._runcollection_id,
@@ -658,54 +661,74 @@ def raster_to_proj_geojson_thread(
         "row() + col(), null())",
         env=input_env,
     )
-    gscript.run_command(
-        "r.to.vect", input=tmp_layer1, output=tmp_layer1, type="area", env=input_env
-    )
-    columns = ["median", "probability", "mean", "min", "max", "standard_deviation"]
-    rasters = [
-        single_raster,
-        probability_raster,
-        avg_raster,
-        min_raster,
-        max_raster,
-        stddev_raster,
-    ]
-    for col, r in zip(columns, rasters):
+    # check for no outputs (eradication)
+    if gscript.raster_info(tmp_layer1, env=input_env)["min"] is None:
+        results["median_spread_map"] = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Polygon", "coordinates": []},
+                    "properties": {
+                        "max": 0,
+                        "min": 0,
+                        "mean": 0,
+                        "median": 0,
+                        "probability": 0,
+                        "standard_deviation": 0,
+                    },
+                }
+            ],
+        }
+    else:
         gscript.run_command(
-            "v.what.rast",
-            map=tmp_layer1,
-            type="centroid",
-            raster=r,
-            column=col,
-            env=input_env,
+            "r.to.vect", input=tmp_layer1, output=tmp_layer1, type="area", env=input_env
         )
-    gscript.run_command(
-        "v.db.dropcolumn", map=tmp_layer1, column=["value", "label"], env=input_env
-    )
-    gscript.run_command(
-        "v.proj",
-        location=genv["LOCATION_NAME"],
-        quiet=True,
-        mapset=genv["MAPSET"],
-        input=tmp_layer1,
-        output=tmp_layer2,
-        env=export_env,
-    )
-    gscript.run_command(
-        "v.out.ogr",
-        input=tmp_layer2,
-        flags="sm",
-        output=tmp_file,
-        format_="GeoJSON",
-        lco="COORDINATE_PRECISION=7",
-        quiet=True,
-        overwrite=True,
-        env=export_env,
-    )
-    with open(tmp_file) as f:
-        j = json.load(f)
-        results["median_spread_map"] = j
-    print(j)
+        columns = ["median", "probability", "mean", "min", "max", "standard_deviation"]
+        rasters = [
+            single_raster,
+            probability_raster,
+            avg_raster,
+            min_raster,
+            max_raster,
+            stddev_raster,
+        ]
+        for col, r in zip(columns, rasters):
+            gscript.run_command(
+                "v.what.rast",
+                map=tmp_layer1,
+                type="centroid",
+                raster=r,
+                column=col,
+                env=input_env,
+            )
+        gscript.run_command(
+            "v.db.dropcolumn", map=tmp_layer1, column=["value", "label"], env=input_env
+        )
+        gscript.run_command(
+            "v.proj",
+            location=genv["LOCATION_NAME"],
+            quiet=True,
+            mapset=genv["MAPSET"],
+            input=tmp_layer1,
+            output=tmp_layer2,
+            env=export_env,
+        )
+        gscript.run_command(
+            "v.out.ogr",
+            input=tmp_layer2,
+            flags="sm",
+            output=tmp_file,
+            format_="GeoJSON",
+            lco="COORDINATE_PRECISION=7",
+            quiet=True,
+            overwrite=True,
+            env=export_env,
+        )
+        with open(tmp_file) as f:
+            j = json.load(f)
+            results["median_spread_map"] = j
+        print(j)
     shutil.rmtree(tempdir)
 
     shutil.rmtree(

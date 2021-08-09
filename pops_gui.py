@@ -484,6 +484,9 @@ class PopsPanel(wx.Panel):
         if self.webDashboard:
             # call this after running through all steps?
             self.webDashboard.report_runcollection_status(success=True)
+            callback = partial(self.treatments.current_geojson_to_treatment, year=self.get_current_year())
+            self.webDashboard.update_incoming_management_callback(callback)
+            self.treatments.reset_external_treatment()
         event.Skip()
 
     def Replay(self, scenario):
@@ -682,10 +685,10 @@ class PopsPanel(wx.Panel):
 
     def _initSimulation(self, restart):
         # update params, dashboard
-        # if self.webDashboard:
+        if self.webDashboard:
             # get new run collection
-            # self.webDashboard.new_runcollection()
-            # self.params.update()
+            self.webDashboard.new_runcollection()
+            self.params.update()
 
         playerName = self._createPlayerName()
 
@@ -781,8 +784,6 @@ class PopsPanel(wx.Panel):
             self.webDashboard.set_management(geojson=geojson, cost=self.money_spent,
                                              area=self.treated_area, year=tr_year)
             self.webDashboard.update_run()
-            self.treatments.reset_external_treatment()
-            print("reset")
 
         # export treatments file to server
         self.treatments.resample(env=env)
@@ -818,7 +819,8 @@ class PopsPanel(wx.Panel):
         if self.webDashboard:
             callback = partial(self.treatments.current_geojson_to_treatment, year=self.get_current_year())
             self.webDashboard.update_incoming_management_callback(callback)
-        # self.treatments.reset_registered_treatment()
+            self.treatments.reset_external_treatment()
+            print("reset")
 
     def _run(self):
         self.steeringClient.simulation_play()
