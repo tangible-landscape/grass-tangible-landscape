@@ -16,6 +16,7 @@ class Treatments:
         self.tr_registered_name = "tmp_registered_treatment"
         self._tr_registered = False
         self.tr_external_name = "external_treatment"
+        self.tr_dashboard_modified_name = "tmp_dashboard_modified_treatment"
         self.tr_merged_name = None
         self.tr_external_json = None
         self.do_resampling = False
@@ -300,11 +301,17 @@ class Treatments:
         if self.ignore_incoming:
             self.ignore_incoming = False
             return
-        if not management_polygons or management_polygons == '0':
+        if not management_polygons or management_polygons == "0":
             gs.run_command(
                 "v.edit", map=self.tr_external_name, tool="create", env=self._env
             )
             self.tr_external_json = None
+            gs.run_command(
+                "v.edit",
+                map=self.tr_dashboard_modified_name,
+                tool="create",
+                env=self._env,
+            )
             return
         j = json.loads(management_polygons)
         print(management_polygons)
@@ -334,6 +341,12 @@ class Treatments:
         if not features:
             gs.run_command(
                 "v.edit", map=self.tr_external_name, tool="create", env=self._env
+            )
+            gs.run_command(
+                "v.edit",
+                map=self.tr_dashboard_modified_name,
+                tool="create",
+                env=self._env,
             )
             return
 
@@ -365,6 +378,50 @@ class Treatments:
             overwrite=True,
             quiet=True,
         )
+        # check whether default properties were changed
+        efficacy = self.model_settings.pops["efficacy"]
+        date = dateFromString(self.model_settings.model["treatment_date"])
+        j = json.loads(management_polygons)
+        same = True
+        for feat in j["features"]:
+            if float(feat["properties"]["efficacy"]) != efficacy:
+                same = False
+                break
+            if feat["properties"]["management_type"] != "Host removal":
+                same = False
+                break
+            fdate = dateFromString(feat["properties"]["date"])
+            if fdate.month != date.month or fdate.day != date.day:
+                same = False
+                break
+        if same:
+            gs.run_command(
+                "v.edit",
+                map=self.tr_dashboard_modified_name,
+                tool="create",
+                env=self._env,
+            )
+        else:
+            with open(out_json, "w") as f:
+                json.dump(j, f)
+            gs.run_command(
+                "v.in.ogr",
+                input=out_json,
+                output=self.tr_dashboard_modified_name,
+                quiet=True,
+                env=env,
+            )
+            gs.run_command(
+                "v.proj",
+                dbase=dbase,
+                location=location,
+                mapset="PERMANENT",
+                input=self.tr_dashboard_modified_name,
+                output=self.tr_dashboard_modified_name,
+                overwrite=True,
+                quiet=True,
+            )
+
         # cleanup
         gs.try_remove(gisrc)
         shutil.rmtree(dbase)
