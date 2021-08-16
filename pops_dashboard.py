@@ -663,12 +663,20 @@ def raster_to_proj_geojson_thread(
     )
     # check for no outputs (eradication)
     if gscript.raster_info(tmp_layer1, env=input_env)["min"] is None:
+        reg = gscript.parse_command("g.region", flags="bg", env=input_env)
+        coordinates = [
+            [float(reg["ll_e"]), float(reg["ll_n"])],
+            [float(reg["ll_w"]), float(reg["ll_n"])],
+            [float(reg["ll_w"]), float(reg["ll_s"])],
+            [float(reg["ll_e"]), float(reg["ll_s"])],
+            [float(reg["ll_e"]), float(reg["ll_n"])],
+        ]
         results["median_spread_map"] = {
             "type": "FeatureCollection",
             "features": [
                 {
                     "type": "Feature",
-                    "geometry": {"type": "Polygon", "coordinates": []},
+                    "geometry": {"type": "Polygon", "coordinates": [coordinates]},
                     "properties": {
                         "max": 0,
                         "min": 0,
