@@ -168,6 +168,12 @@ class PoPSDashboard(wx.EvtHandler):
         await self._ws_client.ws_connect()
         await self.get_external_management()
 
+    async def disconnect(self):
+        await self._ws_client.close()
+        await self._ws_session.close()
+        self._ws_client = None
+        self._ws_session = None
+
     async def authenticate(self):
         """
         Authenticate against the AUTH_URL using the provided USERNAME and PASSWORD

@@ -486,7 +486,7 @@ class PopsPanel(wx.Panel):
             self.webDashboard.report_runcollection_status(success=True)
             callback = partial(self.treatments.current_geojson_to_treatment, year=self.get_current_year())
             self.webDashboard.update_incoming_management_callback(callback)
-            self.treatments.reset_external_treatment()
+            self.treatments.reset_dashboard_treatment()
         event.Skip()
 
     def Replay(self, scenario):
@@ -766,14 +766,14 @@ class PopsPanel(wx.Panel):
         else:
             checkpoint = self.currentRealityCheckpoint
         # treatments
-        self.treatments.register_treatment()
-        self.treatments.ignore_incoming = True
-        geojson = self.UpdateTreatmentsOnDashboard()
+        # self.treatments.register_treatment(self.get_current_year(), bool(self.webDashboard))
+        # self.treatments.ignore_incoming = True
+        # geojson = self.UpdateTreatmentsOnDashboard()
         # save treatment
         tr_name = self.treatments.create_treatment_name(event, playerName, new_attempt, checkpoint)
-        self.treatments.merge_treatment()
+        # self.treatments.merge_treatment()
         # measuring area
-        self.treated_area = self.treatments.compute_treatment_area(env=env)
+        self.treated_area = self.treatments.compute_registered_treatment_area(env=env, bool(self.webDashboard))
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
         # create treatment vector of all used treatments in that scenario
@@ -781,12 +781,13 @@ class PopsPanel(wx.Panel):
 
         tr_year = self.get_current_year()
         if self.webDashboard:
-            self.webDashboard.set_management(geojson=geojson, cost=self.money_spent,
+            self.webDashboard.set_management(geojson=self.treatments.tr_dashboard_json, cost=self.money_spent,
                                              area=self.treated_area, year=tr_year)
             self.webDashboard.update_run()
 
         # export treatments file to server
-        self.treatments.resample(env=env)
+        # self.treatments.resample(env=env)
+        # TODO fix here sending multiple data
         self.steeringClient.simulation_send_data(tr_name, tr_name, env)
         # load new data here
         tr_date = dateToString(dateFromString(self.params.model['treatment_date']).replace(year=tr_year))
@@ -819,7 +820,7 @@ class PopsPanel(wx.Panel):
         if self.webDashboard:
             callback = partial(self.treatments.current_geojson_to_treatment, year=self.get_current_year())
             self.webDashboard.update_incoming_management_callback(callback)
-            self.treatments.reset_external_treatment()
+            self.treatments.reset_dashboard_treatment()
             print("reset")
 
     def _run(self):
@@ -926,12 +927,12 @@ class PopsPanel(wx.Panel):
     def StartTreatment(self):
         if self.timer.IsRunning():
             return
-        self._connect()
         self._loadConfiguration(None)
         self.params.read_initial_params()
         self.treatments.initialize(self.params,
                                    study_area=self.configuration['tasks'][self.current]['base'],
                                    workdir=self.workdir)
+        self._connect()
         self._initVisualizationModes()
 
         self.currentCheckpoint = 0
@@ -1015,11 +1016,13 @@ class PopsPanel(wx.Panel):
         self.timer.Stop()
         self.EndSimulation()
         self.currentCheckpoint = self.currentRealityCheckpoint = 0
+        if self.webDashboard:
+            StartCoroutine(self.webDashboard.disconnect(), self)
 
     def _bindButtons(self):
         # if standalone, no binding can be done
         def _register_and_update():
-            self.treatments.register_treatment()
+            self.treatments.register_treatment(self.get_current_year(), bool(self.webDashboard))
             self.UpdateTreatmentsOnDashboard()
 
         windows = [wx.GetTopLevelParent(self)]
