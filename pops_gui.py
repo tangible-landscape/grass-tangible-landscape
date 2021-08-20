@@ -729,8 +729,6 @@ class PopsPanel(wx.Panel):
         self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
-        # if not self.treatments.is_treatment_registered():
-        #     return
         if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentCheckpoint == 0:
@@ -765,19 +763,14 @@ class PopsPanel(wx.Panel):
             checkpoint = self.currentCheckpoint
         else:
             checkpoint = self.currentRealityCheckpoint
-        # treatments
-        # self.treatments.register_treatment(self.get_current_year(), bool(self.webDashboard))
-        # self.treatments.ignore_incoming = True
-        # geojson = self.UpdateTreatmentsOnDashboard()
         # save treatment
-        tr_name = self.treatments.create_treatment_name(event, playerName, new_attempt, checkpoint)
-        # self.treatments.merge_treatment()
+        tr_name = self.treatments.archive_treatments(event, playerName, new_attempt, checkpoint, bool(self.webDashboard))
         # measuring area
-        self.treated_area = self.treatments.compute_registered_treatment_area(env=env, bool(self.webDashboard))
+        self.treated_area = self.treatments.compute_registered_treatment_area(bool(self.webDashboard))
         self.treatmentHistory[self.currentCheckpoint] = self.treated_area
         self.money_spent = self.treated_area * cost_per_meter_squared
         # create treatment vector of all used treatments in that scenario
-        self.treatments.create_treatment_visualization_vector(env=env)
+        self.treatments.create_treatment_visualization_vector(event, playerName, new_attempt, checkpoint)
 
         tr_year = self.get_current_year()
         if self.webDashboard:
@@ -786,14 +779,11 @@ class PopsPanel(wx.Panel):
             self.webDashboard.update_run()
 
         # export treatments file to server
-        # self.treatments.resample(env=env)
-        # TODO fix here sending multiple data
-        self.steeringClient.simulation_send_data(tr_name, tr_name, env)
-        # load new data here
-        tr_date = dateToString(dateFromString(self.params.model['treatment_date']).replace(year=tr_year))
-        self.steeringClient.simulation_load_data(tr_name, tr_date,
-                                                 self.params.model['treatment_length'],
-                                                 self.params.model['treatment_application'])
+        for each in self.treatments.treatments_for_model:
+            tr_name = each["treatments"]
+            self.steeringClient.simulation_send_data(tr_name, tr_name, env)
+            self.steeringClient.simulation_load_data(tr_name, each['treatment_date'],
+                                                     each['treatment_length'], each["treatment_application"])
         if self.params.pops['steering']['move_current_year']:
             self.steeringClient.simulation_goto(self.currentCheckpoint)
         else:

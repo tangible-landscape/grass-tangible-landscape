@@ -210,6 +210,7 @@ class PoPSDashboard(wx.EvtHandler):
             self._websocket_auth_headers = websocket_auth_headers
 
     async def send_management(self, json):
+        print("dashboard: send_management")
         if not json:
             return
         # we don't know when new rcoll is created
@@ -222,15 +223,15 @@ class PoPSDashboard(wx.EvtHandler):
         )
 
     async def get_external_management(self):
+        print("dashboard: get_external_management")
         await self._ws_client.send_management_request(
             run_collection=self._runcollection_id, _notification=True
         )
 
     def set_management(self, geojson, cost, area, year):
         if geojson:
-            j = json.loads(geojson)
-            if j["features"]:
-                self._run["management_polygons"] = j
+            if geojson["features"]:
+                self._run["management_polygons"] = geojson
                 self._run["management_cost"] = "{v:.2f}".format(v=cost)
                 self._run["management_area"] = "{v:.2f}".format(v=area)
             else:
@@ -754,8 +755,6 @@ def raster_to_proj_geojson_thread(
     os.remove(export_gisrc)
     os.remove(input_gisrc)
     try:
-        with open("/tmp/test.txt", "w") as ff:
-            ff.write(str(results))
         res = requests.post(root + "output/", json=results)
         res.raise_for_status()
 

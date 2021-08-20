@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import shutil
 import uuid
@@ -26,7 +27,11 @@ class Treatments:
         self.ignore_incoming = False
         self._env = None
         gs.run_command(
-            "v.edit", map=self.tr_external_name, tool="create", overwrite=True, quiet=True
+            "v.edit",
+            map=self.tr_external_name,
+            tool="create",
+            overwrite=True,
+            quiet=True,
         )
         gs.run_command(
             "v.edit", map=self.tr_dashboard, tool="create", overwrite=True, quiet=True
@@ -46,54 +51,25 @@ class Treatments:
         gs.run_command(
             "v.edit", map=self.tr_external_name, tool="create", env=self._env
         )
-        gs.run_command(
-            "v.edit", map=self.tr_dashboard, tool="create", env=self._env
-        )
-
-    # def register_treatment(self):
-    #     """Register treatment from TL"""
-    #     if not self._tr_registered:
-    #         gs.run_command(
-    #             "g.copy",
-    #             raster=[self.tr_tl_name, self.tr_registered_name],
-    #             env=self._env,
-    #         )
-    #         self._tr_registered = True
-    #         return
-
-    #     registered_info = gs.raster_info(self.tr_registered_name)
-    #     new_info = gs.raster_info(self.tr_tl_name)
-    #     if registered_info["nsres"] > new_info["nsres"]:
-    #         align = self.tr_tl_name
-    #     else:
-    #         align = self.tr_registered_name
-
-    #     if "region" in self.model_settings.pops:
-    #         env = get_environment(
-    #             region=self.model_settings.pops["region"], align=align
-    #         )
-    #     else:
-    #         env = get_environment(raster=self.study_area, align=align)
-
-    #     gs.run_command(
-    #         "r.patch",
-    #         input=[self.tr_registered_name, self.tr_tl_name],
-    #         output=self.tr_registered_name,
-    #         env=env,
-    #     )
-    #     self._tr_registered = True
-    #     # TODO: send to dashboard
+        gs.run_command("v.edit", map=self.tr_dashboard, tool="create", env=self._env)
 
     def register_treatment(self, year, use_dashboard):
         """Register treatment from TL"""
         self.treatments_for_model = []
         tr_env = get_environment(raster=self.tr_tl_name)
+        tr_date = dateToString(
+            dateFromString(self.model_settings.model["treatment_date"]).replace(
+                year=year
+            )
+        )
         # convert to vector for sending to dashboard
-        gs.run_command("r.to.vect",
-                       input=self.tr_tl_name,
-                       output=self.tr_tl_name,
-                       type="area",
-                       env=tr_env)
+        gs.run_command(
+            "r.to.vect",
+            input=self.tr_tl_name,
+            output=self.tr_tl_name,
+            type="area",
+            env=tr_env,
+        )
         gs.run_command(
             "v.to.db",
             map=self.tr_tl_name,
@@ -101,6 +77,12 @@ class Treatments:
             columns="area",
             units="meters",
             env=tr_env,
+        )
+        gs.run_command(
+            "v.db.addcolumn", map=self.tr_tl_name, column="date date", env=tr_env
+        )
+        gs.run_command(
+            "v.db.update", map=self.tr_tl_name, column="date", value=tr_date, env=tr_env
         )
         # the rest is not needed with dashboard
         if use_dashboard:
@@ -132,26 +114,12 @@ class Treatments:
                 env=host_env,
             )
         params = {
-                "treatments": name,
-                "treatment_date": dateToString(dateFromString(self.params.model['treatment_date']).replace(year=year)),
-                "treatment_length": self.model_settings.model["treatment_length"],
-                "treatment_application": self.model_settings.model[
-                    "treatment_application"
-                ],
-            }
+            "treatments": name,
+            "treatment_date": tr_date,
+            "treatment_length": self.model_settings.model["treatment_length"],
+            "treatment_application": self.model_settings.model["treatment_application"],
+        }
         self.treatments_for_model.append(params)
-
-    # def create_treatment_name(self, event, player, attempt, checkpoint):
-    #     self.tr_merged_name = "__".join(
-    #         [
-    #             self.tr_tl_name,
-    #             event,
-    #             player,
-    #             f"{attempt[0]}",
-    #             str(max(0, checkpoint)),
-    #         ]
-    #     )
-    #     return self.tr_merged_name
 
     def archive_treatments(self, event, player, attempt, checkpoint, use_dashboard):
         name = "__".join(
@@ -164,9 +132,13 @@ class Treatments:
             ]
         )
         if use_dashboard:
-            gs.run_command("g.copy", vector=[self.tr_dashboard, name], overwrite=True, quiet=True)
+            gs.run_command(
+                "g.copy", vector=[self.tr_dashboard, name], overwrite=True, quiet=True
+            )
         else:
-            gs.run_command("g.copy", vector=[self.tr_tl_name, name], overwrite=True, quiet=True)
+            gs.run_command(
+                "g.copy", vector=[self.tr_tl_name, name], overwrite=True, quiet=True
+            )
         return name
 
     def merge_treatment(self):
@@ -249,40 +221,10 @@ class Treatments:
             option="area",
             flags="pc",
             units="meters",
-            separator="comma"
+            separator="comma",
         )
         area = float(data.strip().splitlines()[-1].split(",")[-1])
         return area
-
-    # def compute_treatment_area(self, env):
-    #     # compute separately area of external polygons and TL polygons
-    #     data = gs.read_command(
-    #         "v.to.db",
-    #         map=self.tr_external_name,
-    #         option="area",
-    #         flags="pc",
-    #         units="meters",
-    #         separator="comma",
-    #         env=env,
-    #     )
-    #     area_external = float(data.strip().splitlines()[-1].split(",")[-1])
-    #     host = self.model_settings.model["host"]
-    #     tmp = "tmp_exclude_host"
-    #     gs.mapcalc(
-    #         "{n} = if (isnull({t}) || {host} == 0, null(), {t}) ".format(
-    #             host=host, t=self.tr_registered_name, n=tmp
-    #         ),
-    #         env=env,
-    #     )
-    #     univar = gs.parse_command(
-    #         "r.univar", flags="g", map=self.tr_registered_name, env=env
-    #     )
-    #     gs.run_command("g.remove", type="raster", name=tmp, flags="f", env=env)
-    #     if not univar or float(univar["sum"]) == 0:
-    #         return 0 + area_external
-    #     else:
-    #         res = gs.region(env=env)
-    #         return float(univar["n"]) * res["nsres"] * res["ewres"] + area_external
 
     def current_treatment_to_geojson(self, year):
         # convert to vector and compute feature area
@@ -380,15 +322,20 @@ class Treatments:
             )
 
         print(f"convert geojson {year}")
-        # print(self.ignore_incoming)
-        # if self.ignore_incoming:
-        #     self.ignore_incoming = False
-        #     return
         if not management_polygons or management_polygons == "0":
             self.tr_external_json = None
             self.tr_dashboard_json = None
             reset_layers()
             return
+        # create tmp location and reproject
+        dbase = tempfile.mkdtemp()
+        location = "tmp_pseudo_mercator"
+        gs.create_location(dbase=dbase, location=location, epsg=4326)
+        gisrc, env = gs.create_environment(dbase, location, "PERMANENT")
+        env["GRASS_VERBOSE"] = "0"
+        env["GRASS_MESSAGE_FORMAT"] = "standard"
+        out_json = os.path.join(dbase, "tmp.json")
+
         j = json.loads(management_polygons)
         print(management_polygons)
         # filter to discard tangible polygons from this year
@@ -403,52 +350,34 @@ class Treatments:
             features.append(feat)
         j["features"] = features
         self.tr_external_json = j
-        # filter to keep only external polygons for visualization
-        j = json.loads(management_polygons)
-        features = []
-        for feat in j["features"]:
-            if "tangible" not in feat["properties"]:
-                # get only treatments from current year:
-                d = feat["properties"]["date"]
-                if dateFromString(d).year == year:
-                    features.append(feat)
         j["features"] = features
         print("incoming json after filtering")
         print(j)
-        if not features:
+        if features:
+            # export for visualization
+            with open(out_json, "w") as f:
+                json.dump(j, f)
+            gs.run_command(
+                "v.in.ogr",
+                input=out_json,
+                flags="t",
+                output=self.tr_external_name,
+                quiet=True,
+                env=env,
+            )
+            gs.run_command(
+                "v.proj",
+                dbase=dbase,
+                location=location,
+                mapset="PERMANENT",
+                input=self.tr_external_name,
+                output=self.tr_external_name,
+                overwrite=True,
+                quiet=True,
+            )
+        else:
             reset_layers()
-            return
-
-        # create tmp location and reproject
-        dbase = tempfile.mkdtemp()
-        location = "tmp_pseudo_mercator"
-        gs.create_location(dbase=dbase, location=location, epsg=4326)
-        gisrc, env = gs.create_environment(dbase, location, "PERMANENT")
-        env["GRASS_VERBOSE"] = "0"
-        env["GRASS_MESSAGE_FORMAT"] = "standard"
-        out_json = os.path.join(dbase, "tmp.json")
-        # export for visualization
-        with open(out_json, "w") as f:
-            json.dump(j, f)
-        gs.run_command(
-            "v.in.ogr",
-            input=out_json,
-            flags="t",
-            output=self.tr_external_name,
-            quiet=True,
-            env=env,
-        )
-        gs.run_command(
-            "v.proj",
-            dbase=dbase,
-            location=location,
-            mapset="PERMANENT",
-            input=self.tr_external_name,
-            output=self.tr_external_name,
-            overwrite=True,
-            quiet=True,
-        )
-        print('v.proj tmp_dashboard')
+        print("v.proj tmp_dashboard")
         # create input for model
         j = json.loads(management_polygons)
         self.tr_dashboard_json = j
@@ -550,39 +479,41 @@ class Treatments:
             }
             self.treatments_for_model.append(params)
 
-    def create_treatment_visualization_vector(self, env):
-        """TODO: fix, base on vectors"""
-        treatment = self.tr_merged_name
-        tr, evt, plr, attempt, year = treatment.split("__")
-        postfix = "cat_year"
-        gs.mapcalc(
-            "{n} = if({t} == 1, {y}, null())".format(
-                n=treatment + "__" + postfix,
-                t=treatment,
-                y=int(year)
-                + dateFromString(self.model_settings.model["start_date"]).year,
-            ),
-            env=env,
-        )
-        pattern = "__".join([tr, evt, plr, attempt, "*", postfix])
+    def create_treatment_visualization_vector(self, evt, player, attempt, checkpoint):
+        pattern = "__".join([self.tr_tl_name, evt, player, f"{attempt[0]}", "*"])
         mapset = gs.gisenv()["MAPSET"]
-        layers = gs.list_grouped(type="raster", pattern=pattern)[mapset]
+        layers = gs.list_grouped(type="vector", pattern=pattern)[mapset]
         to_patch = []
-
         for layer in layers:
-            y = int(layer.split("__")[-2])
-            if y <= int(year):
+            ch = int(layer.split("__")[-1])
+            if ch <= int(checkpoint):
                 to_patch.append(layer)
-        name = "__".join([tr, evt, plr, attempt])
-        if len(to_patch) >= 2:
-            to_patch = gs.natural_sort(to_patch)[::-1]
-            gs.run_command("r.patch", input=to_patch, output=name, flags="z", env=env)
-        else:
-            gs.run_command("g.copy", raster=[treatment + "__" + postfix, name], env=env)
+        tmpd = tempfile.mkdtemp()
+        features = []
+        for layer in to_patch:
+            path = os.path.join(tmpd, "out.json")
+            gs.run_command(
+                "v.out.ogr", input=layer, output=path, format="GeoJSON", env=self._env
+            )
+            with open(path) as f:
+                j = json.load(f)
+                features.extend(j["features"])
+        for feature in features:
+            year = re.split("\\W+", feature["properties"]["date"])[0]
+            feature["properties"]["cat"] = int(year)
+        j["features"] = features
+        j["name"] = "treatment_visualization"
+        with open(path, "w") as f:
+            json.dump(j, f)
+        name = "__".join([self.tr_tl_name, evt, player, f"{attempt[0]}"])
         gs.run_command(
-            "r.to.vect", input=name, output=name, flags="vt", type="area", env=env
+            "v.in.ogr",
+            input=path,
+            output=name,
+            key="cat",
+            flags="ct",
+            env=self._env,
         )
-
         if (
             "color_treatments" in self.model_settings.pops
             and self.model_settings.pops["color_treatments"]
@@ -596,5 +527,5 @@ class Treatments:
                         self.workdir, self.model_settings.pops["color_treatments"]
                     )
                 }
-            gs.run_command("v.colors", map=name, use="cat", env=env, **param)
+            gs.run_command("v.colors", map=name, use="cat", env=self._env, **param)
         return name
