@@ -1125,8 +1125,12 @@ class PopsPanel(wx.Panel):
                     cmd=['d.rast', 'map=' + self.empty_placeholders['results']], checked=True)
         ll.AddLayer('vector', name=self.empty_placeholders['treatments'],
                     cmd=['d.vect', 'map=' + self.empty_placeholders['treatments']], checked=True)
+        style = {}
+        if 'external_treatments_vstyle' in self.configuration['POPS']:
+            style.update(self.configuration['POPS']['external_treatments_vstyle'])
+        style = [key + '=' + str(style[key]) for key in style]
         ll.AddLayer('vector', name=self.treatments.tr_external_name,
-                    cmd=['d.vect', 'map=' + self.treatments.tr_external_name], checked=True)
+                    cmd=['d.vect', 'map=' + self.treatments.tr_external_name] + style, checked=True)
 
     def LoadLayers(self):
         if self.IsStandalone():
