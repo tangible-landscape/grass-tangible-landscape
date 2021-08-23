@@ -490,6 +490,7 @@ class Treatments:
                 to_patch.append(layer)
         tmpd = tempfile.mkdtemp()
         features = []
+        j = {}
         for layer in to_patch:
             path = os.path.join(tmpd, "out.json")
             gs.run_command(
@@ -506,6 +507,15 @@ class Treatments:
         with open(path, "w") as f:
             json.dump(j, f)
         name = "__".join([self.tr_tl_name, evt, player, f"{attempt[0]}"])
+        if not features:
+            gs.run_command(
+                "v.edit",
+                map=name,
+                tool="create",
+                overwrite=True,
+                quiet=True,
+            )
+            return name
         gs.run_command(
             "v.in.ogr",
             input=path,
