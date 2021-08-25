@@ -1273,8 +1273,8 @@ class PopsPanel(wx.Panel):
                                                          vertical=vertical, average=None)
         pos = self._getDashboardPosition(key='display')
         size = self._getDashboardSize(key='display')
-        self.dashboardFrame.SetSize(size)
         self.dashboardFrame.Show()
+        self.dashboardFrame.SetSize(size)
         self.dashboardFrame.SetPosition(pos)
 
     def _getDashboardPosition(self, key):
@@ -1323,8 +1323,8 @@ class PopsPanel(wx.Panel):
 
         pos = self._getDashboardPosition(key='time_display')
         size = self._getDashboardSize(key='time_display')
-        self.timeDisplay.SetSize(size)
         self.timeDisplay.Show()
+        self.timeDisplay.SetSize(size)
         self.timeDisplay.SetPosition(pos)
         evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
                                 currentView=self.currentCheckpoint,
@@ -1341,8 +1341,8 @@ class PopsPanel(wx.Panel):
 
         pos = self._getDashboardPosition(key='time_status_display')
         size = self._getDashboardSize(key='time_status_display')
-        self.timeStatusDisplay.SetSize(size)
         self.timeStatusDisplay.Show()
+        self.timeStatusDisplay.SetSize(size)
         self.timeStatusDisplay.SetPosition(pos)
         evt = updateTimeDisplay(current=self.currentRealityCheckpoint,
                                 currentView=self.currentCheckpoint,

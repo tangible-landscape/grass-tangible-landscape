@@ -194,6 +194,6 @@ class SimpleTimeDisplayFrame(wx.Frame):
 if __name__ == "__main__":
     app = wx.App()
     disp = SteeringDisplayFrame(None, 40, 2016, 2021, None, ['green', 'yellow'], True)
-    disp.SetSize((800, 200))
     disp.Show()
+    disp.SetSize((800, 200))
     app.MainLoop()
