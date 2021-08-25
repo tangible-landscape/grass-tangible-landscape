@@ -667,7 +667,7 @@ class PopsPanel(wx.Panel):
             # it's allowed to interact now
             # just to be sure remove results
             self.HideResultsLayers()
-            wx.FutureCall(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
+            wx.CallLater(self.configuration['POPS']['waitBeforeRun'], self.RunSimulation)
 
     def EndSimulation(self):
         if self.steeringClient and self.steeringClient.simulation_is_running():
