@@ -105,7 +105,8 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         self.list_maximum = maximum
         self.list_title = title
         self.list_formatting_string = formatting_string
-
+        self.info = ''
+        self.values = []
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         if webview:
             self.textCtrl = webview.WebView.New(self)
@@ -143,7 +144,6 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             }}
             progress::-webkit-progress-value {{
                 display: inline-block;
-                width: 100%;
                 float: left;
                 margin: 0px 0px 0 0;
                 background: #F70;
@@ -194,10 +194,10 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             """
 
     def _end_grid(self):
-        return "</div></body></html>"
+        return "</div><p>{self.info}</p></body></html>"
 
     def _end_table(self):
-        return "</table></body></html>"
+        return f"</table><p>{self.info}</p></body></html>"
 
     def _progress_element(self, max_value, value):
         # minimum is needed to generate a valid progress element
@@ -243,9 +243,14 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         if len(self.list_title) != len(values):
             print('wrong number of values!')
             return
+        self.values = values
         html = self._content_grid(values) if self.grid else self._content_table(values)
         if webview:
             self.textCtrl.SetPage(html, '')
+
+    def set_info(self, msg):
+        self.info = msg
+        self.show_value(self.values)
 
 
 if __name__ == "__main__":

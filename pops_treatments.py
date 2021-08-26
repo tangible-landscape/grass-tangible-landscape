@@ -521,7 +521,7 @@ class Treatments:
             input=path,
             output=name,
             key="cat",
-            flags="cto",
+            flags="to",
             env=self._env,
         )
         if (

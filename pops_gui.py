@@ -280,6 +280,7 @@ class PopsPanel(wx.Panel):
     def OnUpdateInfoBar(self, event):
         if event.dismiss:
             self.infoBar.Dismiss()
+            self.show_info('')
         if event.message:
             self.infoBar.ShowMessage(event.message)
 
@@ -353,9 +354,6 @@ class PopsPanel(wx.Panel):
                 self.webDashboard.upload_results(year, event.name, single_infected, average_infected,
                                                  stddev_infected, min_infected, max_infected,
                                                  spread_file, rotation, use_single=use_single)
-
-    def _processWSInfo(self, data):
-        self.infoBar.ShowMessage("PoPS Web is saying: " + str(data))
 
     def _computeDifference(self, names):
         difference = self.configuration['POPS']['difference']
@@ -660,6 +658,12 @@ class PopsPanel(wx.Panel):
         self.steeringClient.compute_baseline()
         self.infoBar.ShowMessage("Computing baseline...")
 
+    def show_info(self, msg, timeout=None):
+        if self.dashboardFrame:
+            self.dashboardFrame.set_info(msg)
+            wx.GetApp().Yield()
+            if timeout:
+                wx.CallLater(timeout, self.dashboardFrame.set_info, "")
 
     def _RunSimulation(self, event=None):
         print('_runSimulation')
@@ -743,6 +747,7 @@ class PopsPanel(wx.Panel):
         #self.showDisplayChange = False
 
         self.infoBar.ShowMessage("Running...")
+        self.show_info("Running...")
         playerName = self._createPlayerName()
         new_attempt = self.attempt.getCurrent()
 
@@ -1012,6 +1017,7 @@ class PopsPanel(wx.Panel):
     def _bindButtons(self):
         # if standalone, no binding can be done
         def _register_and_update():
+            self.show_info("Registering treatments...", 5000)
             self.treatments.register_treatment(self.get_current_year(), bool(self.webDashboard))
             self.UpdateTreatmentsOnDashboard()
 
