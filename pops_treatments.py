@@ -44,6 +44,7 @@ class Treatments:
         self.study_area = study_area
         # default env
         self._env = get_environment(raster=self.study_area)
+        self.reset_dashboard_treatment()
 
     def reset_dashboard_treatment(self):
         self.tr_external_json = None
@@ -478,6 +479,8 @@ class Treatments:
                 ],
             }
             self.treatments_for_model.append(params)
+        # sort by date needed for steering, otherwise newer may get removed
+        self.treatments_for_model.sort(key=lambda x: x['treatment_date'])
 
     def create_treatment_visualization_vector(self, evt, player, attempt, checkpoint):
         pattern = "__".join([self.tr_tl_name, evt, player, f"{attempt[0]}", "*"])
