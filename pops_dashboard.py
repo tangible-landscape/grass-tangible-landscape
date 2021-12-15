@@ -169,6 +169,8 @@ class PoPSDashboard(wx.EvtHandler):
         await self.get_external_management()
 
     async def disconnect(self):
+        if not self._ws_client:
+            return
         await self._ws_client.close()
         await self._ws_session.close()
         self._ws_client = None
@@ -226,6 +228,11 @@ class PoPSDashboard(wx.EvtHandler):
         print("dashboard: get_external_management")
         await self._ws_client.send_management_request(
             run_collection=self._runcollection_id, _notification=True
+        )
+
+    async def running(self):
+        await self._ws_client.run_pops(
+            run_id=self._run_id, run_collection=self._runcollection_id, _notification=True
         )
 
     def set_management(self, geojson, cost, area, year):

@@ -782,6 +782,7 @@ class PopsPanel(wx.Panel):
             self.webDashboard.set_management(geojson=self.treatments.tr_dashboard_json, cost=self.money_spent,
                                              area=self.treated_area, year=tr_year)
             self.webDashboard.update_run()
+            StartCoroutine(self.webDashboard.running(), self)
 
         # export treatments file to server
         for each in self.treatments.treatments_for_model:
