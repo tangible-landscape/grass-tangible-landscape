@@ -10,7 +10,8 @@ This program is free software under the GNU General Public License
 
 from numpy import interp, sqrt, arange
 import matplotlib
-matplotlib.use('WXAgg')
+
+matplotlib.use("WXAgg")
 
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -49,7 +50,9 @@ class ProfileFrame(wx.Frame):
         self.ticks = ticks
 
     def distance(self, p1, p2):
-        return sqrt((p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1]))
+        return sqrt(
+            (p1[0] - p2[0]) * (p1[0] - p2[0]) + (p1[1] - p2[1]) * (p1[1] - p2[1])
+        )
 
     def compute_profile(self, points, raster, env):
         if not points:
@@ -57,8 +60,10 @@ class ProfileFrame(wx.Frame):
             return
         coords = []
         for p in points:
-            coords.append('{},{}'.format(p[0], p[1]))
-        data = gscript.read_command('r.profile', input=raster, coordinates=coords, quiet=True, env=env).strip()
+            coords.append("{},{}".format(p[0], p[1]))
+        data = gscript.read_command(
+            "r.profile", input=raster, coordinates=coords, quiet=True, env=env
+        ).strip()
         self.distances = []
         self.elevations = []
         for line in data.splitlines():
@@ -85,14 +90,31 @@ class ProfileFrame(wx.Frame):
         self.axes.set_yticks(major_ticks)
         self.axes.yaxis.grid(True, alpha=0.7)
         if not clear:
-            self.axes.annotate('A', xy=(self.point_distances[0], self.point_elevations[0]), xycoords='data',
-                               xytext=(self.point_distances[0], self.point_elevations[0]),
-                               horizontalalignment='right', verticalalignment='top')
-            self.axes.annotate('B', xy=(self.point_distances[-1], self.point_elevations[-1]), xycoords='data',
-                               xytext=(self.point_distances[-1], self.point_elevations[-1]), textcoords='data',
-                               horizontalalignment='left', verticalalignment='top')
-            self.axes.plot(self.distances, self.elevations, color='black')
-            self.axes.plot(self.point_distances, self.point_elevations, marker='o', linestyle='None', color='red')
+            self.axes.annotate(
+                "A",
+                xy=(self.point_distances[0], self.point_elevations[0]),
+                xycoords="data",
+                xytext=(self.point_distances[0], self.point_elevations[0]),
+                horizontalalignment="right",
+                verticalalignment="top",
+            )
+            self.axes.annotate(
+                "B",
+                xy=(self.point_distances[-1], self.point_elevations[-1]),
+                xycoords="data",
+                xytext=(self.point_distances[-1], self.point_elevations[-1]),
+                textcoords="data",
+                horizontalalignment="left",
+                verticalalignment="top",
+            )
+            self.axes.plot(self.distances, self.elevations, color="black")
+            self.axes.plot(
+                self.point_distances,
+                self.point_elevations,
+                marker="o",
+                linestyle="None",
+                color="red",
+            )
         self.canvas.draw()
 
 
@@ -101,8 +123,15 @@ if __name__ == "__main__":
     fr = ProfileFrame(None)
     fr.SetPosition((800, 100))
     fr.SetSize((900, 300))
-    fr.compute_profile(points=[(301771.285097, 206878.390929), (302068.909287, 207180.593952), (302609.211663, 207311.090713)],
-                       raster='DEM_asheville_flow@task_flow', env=None)
+    fr.compute_profile(
+        points=[
+            (301771.285097, 206878.390929),
+            (302068.909287, 207180.593952),
+            (302609.211663, 207311.090713),
+        ],
+        raster="DEM_asheville_flow@task_flow",
+        env=None,
+    )
     fr.draw()
     fr.Show()
 

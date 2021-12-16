@@ -10,16 +10,18 @@ This program is free software under the GNU General Public License
 """
 
 import wx
+
 wxPythonPhoenix = False
-if 'phoenix' in wx.version():
+if "phoenix" in wx.version():
     wxPythonPhoenix = True
 
-gtk3 = True if 'gtk3' in wx.PlatformInfo else False
+gtk3 = True if "gtk3" in wx.PlatformInfo else False
 
 
 class Button(wx.Button):
     """Wrapper around wx.Button to have more control
     over the widget on different platforms/wxpython versions"""
+
     def __init__(self, *args, **kwargs):
         wx.Button.__init__(self, *args, **kwargs)
 
@@ -33,6 +35,7 @@ class Button(wx.Button):
 class TextCtrl(wx.TextCtrl):
     """Wrapper around wx.TextCtrl to have more control
     over the widget on different platforms/wxpython versions"""
+
     def __init__(self, *args, **kwargs):
         wx.TextCtrl.__init__(self, *args, **kwargs)
 
@@ -46,6 +49,7 @@ class TextCtrl(wx.TextCtrl):
 class BitmapButton(wx.BitmapButton):
     """Wrapper around wx.BitmapButton to have more control
     over the widget on different platforms/wxpython versions"""
+
     def __init__(self, *args, **kwargs):
         wx.BitmapButton.__init__(self, *args, **kwargs)
 
@@ -59,6 +63,7 @@ class BitmapButton(wx.BitmapButton):
 class CheckBox(wx.CheckBox):
     """Wrapper around wx.CheckBox to have more control
     over the widget on different platforms/wxpython versions"""
+
     def __init__(self, *args, **kwargs):
         wx.CheckBox.__init__(self, *args, **kwargs)
 
@@ -77,10 +82,12 @@ class SpinCtrl(wx.SpinCtrl):
 
     def __init__(self, *args, **kwargs):
         if gtk3:
-            if 'size' in kwargs:
-                kwargs['size'] = wx.Size(max(self.gtk3MinSize, kwargs['size'][0]), kwargs['size'][1])
+            if "size" in kwargs:
+                kwargs["size"] = wx.Size(
+                    max(self.gtk3MinSize, kwargs["size"][0]), kwargs["size"][1]
+                )
             else:
-                kwargs['size'] = wx.Size(self.gtk3MinSize, -1)
+                kwargs["size"] = wx.Size(self.gtk3MinSize, -1)
 
         wx.SpinCtrl.__init__(self, *args, **kwargs)
 

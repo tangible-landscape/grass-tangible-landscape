@@ -11,6 +11,7 @@ import os
 import shutil
 import imp
 import traceback
+
 try:
     from StringIO import StringIO  # for Python 2
 except ImportError:
@@ -23,6 +24,7 @@ from wxwrap import BitmapFromImage, ImageFromStream
 
 import wx
 import wx.lib.newevent
+
 updateGUIEvt, EVT_UPDATE_GUI = wx.lib.newevent.NewCommandEvent()
 addLayers, EVT_ADD_LAYERS = wx.lib.newevent.NewEvent()
 removeLayers, EVT_REMOVE_LAYERS = wx.lib.newevent.NewEvent()
@@ -104,23 +106,25 @@ def get_environment(**kwargs):
     @return environment as a dictionary
     """
     env = os.environ.copy()
-    env['GRASS_OVERWRITE'] = '1'
-    env['GRASS_VERBOSE'] = '0'
-    env['GRASS_MESSAGE_FORMAT'] = 'standard'
+    env["GRASS_OVERWRITE"] = "1"
+    env["GRASS_VERBOSE"] = "0"
+    env["GRASS_MESSAGE_FORMAT"] = "standard"
     region3d = False
-    if 'raster_3d' in kwargs:
+    if "raster_3d" in kwargs:
         region3d = True
-    env['GRASS_REGION'] = gscript.region_env(region3d=region3d, **kwargs)
+    env["GRASS_REGION"] = gscript.region_env(region3d=region3d, **kwargs)
     return env
 
 
 def remove_vector(name, deleteTable=False):
     """Helper function to workaround problem with deleting vectors"""
     gisenv = gscript.gisenv()
-    path_to_vector = os.path.join(gisenv['GISDBASE'], gisenv['LOCATION_NAME'], gisenv['MAPSET'], 'vector', name)
+    path_to_vector = os.path.join(
+        gisenv["GISDBASE"], gisenv["LOCATION_NAME"], gisenv["MAPSET"], "vector", name
+    )
     if deleteTable:
         try:
-            gscript.run_command('db.droptable', table=name, flags='f')
+            gscript.run_command("db.droptable", table=name, flags="f")
         except CalledModuleError:
             pass
     if os.path.exists(path_to_vector):
@@ -130,35 +134,39 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
-def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilter, **kwargs):
+def run_analyses(
+    settings, analysesFile, update, giface, eventHandler, scanFilter, **kwargs
+):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
-    scan_params = settings['tangible']['scan']  # noqa: F841
-    scan_name = settings['tangible']['output']['scan']
-    calibration = settings['tangible']['output']['calibrate']
-    calib_scan_name = settings['tangible']['output']['calibration_scan']  # noqa: F841
+    scan_params = settings["tangible"]["scan"]  # noqa: F841
+    scan_name = settings["tangible"]["output"]["scan"]
+    calibration = settings["tangible"]["output"]["calibrate"]
+    calib_scan_name = settings["tangible"]["output"]["calibration_scan"]  # noqa: F841
     if calibration:
         scan_name = calib_scan_name
-    if scanFilter['filter']:
+    if scanFilter["filter"]:
         try:
-            info = gscript.raster_info(scan_name + 'tmp')
+            info = gscript.raster_info(scan_name + "tmp")
         except CalledModuleError:
-            print('error in r.info')
+            print("error in r.info")
             return
-        if scanFilter['debug']:
+        if scanFilter["debug"]:
             try:
-                print(info['max'] - info['min'])
+                print(info["max"] - info["min"])
             except TypeError:  # unsupported operand type(s) for -: 'NoneType' and 'NoneType'
                 return
-        threshold = scanFilter['threshold']
-        if info['max'] - info['min'] > threshold:
-            scanFilter['counter'] += 1
+        threshold = scanFilter["threshold"]
+        if info["max"] - info["min"] > threshold:
+            scanFilter["counter"] += 1
             return
     try:
-        gscript.run_command('g.copy', raster=[scan_name + 'tmp', scan_name], overwrite=True, quiet=True)
+        gscript.run_command(
+            "g.copy", raster=[scan_name + "tmp", scan_name], overwrite=True, quiet=True
+        )
     except CalledModuleError:
-        print('error copying scanned data from temporary name')
+        print("error copying scanned data from temporary name")
         return
     # workaround weird georeferencing
     # filters cases when extent and elev values are in inconsistent state
@@ -166,10 +174,10 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
     try:
         info = gscript.raster_info(scan_name)
     except CalledModuleError:
-        print('error in r.info')
+        print("error in r.info")
         return
     try:
-        if (abs(info['north'] - info['south']) / (info['max'] - info['min'])) < 1:
+        if (abs(info["north"] - info["south"]) / (info["max"] - info["min"])) < 1:
             return
     except ZeroDivisionError:
         return
@@ -178,75 +186,88 @@ def run_analyses(settings, analysesFile, update, giface, eventHandler, scanFilte
         return
     # run analyses
     try:
-        myanalyses = imp.load_source('myanalyses', analysesFile)
+        myanalyses = imp.load_source("myanalyses", analysesFile)
     except Exception as e:
         print(e)
         return
 
-    functions = [func for func in dir(myanalyses)
-                 if (func.startswith('run_') and func != 'run_command')
-                 or func.startswith('drawing_')
-                 or func.startswith('calib_')]
+    functions = [
+        func
+        for func in dir(myanalyses)
+        if (func.startswith("run_") and func != "run_command")
+        or func.startswith("drawing_")
+        or func.startswith("calib_")
+    ]
     for func in functions:
-        exec('del myanalyses.' + func)
+        exec("del myanalyses." + func)
     try:
-        myanalyses = imp.load_source('myanalyses', analysesFile)
+        myanalyses = imp.load_source("myanalyses", analysesFile)
     except Exception as e:
         print(e)
         return
     # color output
     color = None
-    if settings['tangible']['output']['color']:
-        color = settings['tangible']['output']['color_name']  # noqa: F841
+    if settings["tangible"]["output"]["color"]:
+        color = settings["tangible"]["output"]["color_name"]  # noqa: F841
     # blender path
     blender_path = None
-    if settings['tangible']['output']['blender']:
-        blender_path = settings['tangible']['output']['blender_path']  # noqa: F841
+    if settings["tangible"]["output"]["blender"]:
+        blender_path = settings["tangible"]["output"]["blender_path"]  # noqa: F841
     # drawing needs different parameters
     # functions postprocessing drawing results start with 'drawing'
     # functions postprocessing scanning results start with 'run'
 
-    if settings['tangible']['drawing']['active']:
-        functions = [func for func in dir(myanalyses) if func.startswith('drawing_')]
+    if settings["tangible"]["drawing"]["active"]:
+        functions = [func for func in dir(myanalyses) if func.startswith("drawing_")]
         for func in functions:
             try:
-                exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
-                                            " scanned_elev=scan_name,"
-                                            " scanned_calib_elev=calib_scan_name,"
-                                            " blender_path=blender_path,"
-                                            " zexag=scan_params['zexag'],"
-                                            " draw_vector=settings['tangible']['drawing']['name'],"
-                                            " draw_vector_append=settings['tangible']['drawing']['append'],"
-                                            " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
-                                            " giface=giface, update=update,"
-                                            " eventHandler=eventHandler, env=env, **kwargs)")
+                exec(
+                    "myanalyses." + func + "(real_elev=scan_params['elevation'],"
+                    " scanned_elev=scan_name,"
+                    " scanned_calib_elev=calib_scan_name,"
+                    " blender_path=blender_path,"
+                    " zexag=scan_params['zexag'],"
+                    " draw_vector=settings['tangible']['drawing']['name'],"
+                    " draw_vector_append=settings['tangible']['drawing']['append'],"
+                    " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
+                    " giface=giface, update=update,"
+                    " eventHandler=eventHandler, env=env, **kwargs)"
+                )
             except (CalledModuleError, Exception, ScriptError) as e:
                 print(traceback.print_exc())
     elif calibration:
-        functions = [func for func in dir(myanalyses) if func.startswith('calib_')]
+        functions = [func for func in dir(myanalyses) if func.startswith("calib_")]
         for func in functions:
             try:
-                exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
-                                            " scanned_elev=scan_name,"
-                                            " scanned_calib_elev=scan_name,"
-                                            " scanned_color=color,"
-                                            " blender_path=blender_path,"
-                                            " zexag=scan_params['zexag'],"
-                                            " giface=giface, update=update,"
-                                            " eventHandler=eventHandler, env=env, **kwargs)")
+                exec(
+                    "myanalyses." + func + "(real_elev=scan_params['elevation'],"
+                    " scanned_elev=scan_name,"
+                    " scanned_calib_elev=scan_name,"
+                    " scanned_color=color,"
+                    " blender_path=blender_path,"
+                    " zexag=scan_params['zexag'],"
+                    " giface=giface, update=update,"
+                    " eventHandler=eventHandler, env=env, **kwargs)"
+                )
             except (CalledModuleError, Exception, ScriptError) as e:
                 print(traceback.print_exc())
     else:
-        functions = [func for func in dir(myanalyses) if func.startswith('run_') and func != 'run_command']
+        functions = [
+            func
+            for func in dir(myanalyses)
+            if func.startswith("run_") and func != "run_command"
+        ]
         for func in functions:
             try:
-                exec('myanalyses.' + func + "(real_elev=scan_params['elevation'],"
-                                            " scanned_elev=scan_name,"
-                                            " scanned_calib_elev=calib_scan_name,"
-                                            " scanned_color=color,"
-                                            " blender_path=blender_path,"
-                                            " zexag=scan_params['zexag'],"
-                                            " giface=giface, update=update,"
-                                            " eventHandler=eventHandler, env=env, **kwargs)")
+                exec(
+                    "myanalyses." + func + "(real_elev=scan_params['elevation'],"
+                    " scanned_elev=scan_name,"
+                    " scanned_calib_elev=calib_scan_name,"
+                    " scanned_color=color,"
+                    " blender_path=blender_path,"
+                    " zexag=scan_params['zexag'],"
+                    " giface=giface, update=update,"
+                    " eventHandler=eventHandler, env=env, **kwargs)"
+                )
             except (CalledModuleError, Exception, ScriptError) as e:
                 print(traceback.print_exc())
