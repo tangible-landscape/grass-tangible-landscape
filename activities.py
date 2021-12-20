@@ -27,7 +27,7 @@ try:
 except ImportError:
     ProfileFrame = None
 
-from activities_dashboard import MultipleDashboardFrame
+from activities_dashboard import MultipleHTMLDashboardFrame
 
 # lazy importing activities_slides
 
@@ -851,13 +851,14 @@ class ActivitiesPanel(wx.Panel):
         fontsize = self.tasks[self.current]["display"]["fontsize"]
         maximum = self.tasks[self.current]["display"]["maximum"]
         formatting_string = self.tasks[self.current]["display"]["formatting_string"]
-        self.dashboardFrame = MultipleDashboardFrame(
+        self.dashboardFrame = MultipleHTMLDashboardFrame(
             self,
             fontsize=fontsize,
             maximum=maximum,
             title=title,
             formatting_string=formatting_string,
             vertical=vertical,
+            average=1,
         )
 
         pos = self._getDashboardPosition(key="display")
