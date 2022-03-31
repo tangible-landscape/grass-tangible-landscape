@@ -491,9 +491,20 @@ class ActivitiesPanel(wx.Panel):
         """Hide toolbar and statusbar of active Map Display"""
         if self.IsStandalone():
             return
-        self.giface.ShowAllToolbars(False)
-        self.giface.ShowStatusbar(False)
+        self._showAllToolbars(False)
+        self._showStatusbar(False)
         wx.CallLater(1000, self.giface.GetMapDisplay().PostSizeEvent)
+
+    def _showStatusbar(self, show=True):
+        self.giface.GetMapDisplay().ShowStatusbar(show)
+
+    def _showAllToolbars(self, show=True):
+        if not show:  # hide
+            action = self.giface.GetMapDisplay().RemoveToolbar
+        else:
+            action = self.giface.GetMapDisplay().AddToolbar
+        for toolbar in self.giface.GetMapDisplay().GetToolbarNames():
+            action(toolbar)
 
     def _startTask(self):
         if self.timer.IsRunning():
