@@ -975,6 +975,19 @@ class TangibleLandscapePlugin(wx.Dialog):
             dlg.Destroy()
             return
         params = {}
+        # we need to specify the camera conditions
+        # the cloud is tilted differently for different conditions
+        if self.sensor == "k4a":
+            params["camera_resolution"] = self.scan["camera_resolution"]
+            params["resolution"] = 0.05
+            if (
+                "output" in self.settings["tangible"]
+                and self.settings["tangible"]["output"]["color"]
+                and self.settings["tangible"]["output"]["color_name"]
+            ):
+                params["color_output"] = self.settings["tangible"]["output"][
+                    "color_name"
+                ]
         if self.calib_matrix:
             params["calib_matrix"] = self.calib_matrix
         params["rotate"] = self.scan["rotation_angle"]
