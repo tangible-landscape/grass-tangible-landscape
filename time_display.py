@@ -35,67 +35,79 @@ class SteeringDisplay(wx.Panel):
         self.fontsize = fontsize
         self.color_scheme = cycle(color_scheme)
         self.textCtrl = webview.WebView.New(self)
-        self.textCtrl.SetPage(template.format(body="", fontsize=self.fontsize), '')
+        self.textCtrl.SetPage(template.format(body="", fontsize=self.fontsize), "")
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.EXPAND, 5)
         self.SetSizer(self.sizer)
         self.sizer.Fit(self)
 
     def UpdateText(self, current, currentView, vtype=None):
-        text = self.GenerateHTMLSimple(current + self.years[0], currentView + self.years[0], vtype=vtype)
+        text = self.GenerateHTMLSimple(
+            current + self.years[0], currentView + self.years[0], vtype=vtype
+        )
         html = template.format(body=text, fontsize=self.fontsize)
-        self.textCtrl.SetPage(html, '')
+        self.textCtrl.SetPage(html, "")
 
     def GenerateHTMLSimple(self, current, currentView, vtype):
-        delimiter = '&#8594;'
-        html = ''
-        highlight_style = "border-radius: 0.2em;border:0.15em solid gray;background-color:#CCC;"
-        style = {'past': 'style="font-weight:bold" color="black"',
-                 'current': 'style="font-weight:bold" color="black"',
-                 'future': 'style="font-weight:bold" color="gray"'}
+        delimiter = "&#8594;"
+        html = ""
+        highlight_style = (
+            "border-radius: 0.2em;border:0.15em solid gray;background-color:#CCC;"
+        )
+        style = {
+            "past": 'style="font-weight:bold" color="black"',
+            "current": 'style="font-weight:bold" color="black"',
+            "future": 'style="font-weight:bold" color="gray"',
+        }
         for year in self.years:
-            highlight = ''
+            highlight = ""
             if year < current:
-                styl = style['past']
-                delim_styl = style['past']
+                styl = style["past"]
+                delim_styl = style["past"]
             elif year == current:
-                styl = style['current']
-                delim_styl = style['future']
+                styl = style["current"]
+                delim_styl = style["future"]
             else:
-                styl = style['future']
-                delim_styl = style['future']
+                styl = style["future"]
+                delim_styl = style["future"]
             if year == currentView:
                 highlight = highlight_style
-            html += ' <span style=\"{h}\"><font {style}>{year}</font></span> '.format(h=highlight, year=year, style=styl)
+            html += ' <span style="{h}"><font {style}>{year}</font></span> '.format(
+                h=highlight, year=year, style=styl
+            )
             if year != self.years[-1]:
                 d = delimiter
-                html += '<font {style}> {d} </font>'.format(style=delim_styl, d=d)
+                html += "<font {style}> {d} </font>".format(style=delim_styl, d=d)
         return html
 
     def GenerateHTMLVType(self, current, currentView, vtype):
-        delim_single = '&#9148;'
-        delim_prob = '&#9776;'
-        delim_split = '&#9887;'
-        html = ''
-        style = {'past': 'weight="bold" color="black" size="{}"'.format(self.fontsize),
-                 'current': 'weight="bold" color="black" size="{}"'.format(int(self.fontsize * 1.5)),
-                 'future': 'weight="bold" color="gray" size="{}"'.format(self.fontsize)}
+        delim_single = "&#9148;"
+        delim_prob = "&#9776;"
+        delim_split = "&#9887;"
+        html = ""
+        style = {
+            "past": 'weight="bold" color="black" size="{}"'.format(self.fontsize),
+            "current": 'weight="bold" color="black" size="{}"'.format(
+                int(self.fontsize * 1.5)
+            ),
+            "future": 'weight="bold" color="gray" size="{}"'.format(self.fontsize),
+        }
         for year in self.years:
             if year < current:
-                styl = style['past']
+                styl = style["past"]
             elif year == current:
-                styl = style['current']
+                styl = style["current"]
             else:
-                styl = style['future']
-            html += ' <font {style}>{year}</font> '.format(year=year, style=styl)
+                styl = style["future"]
+            html += " <font {style}>{year}</font> ".format(year=year, style=styl)
             if year != self.years[-1]:
                 d = delim_single
-                if vtype == 'probability':
+                if vtype == "probability":
                     if year == self.years[0]:
                         d = delim_split
                     else:
                         d = delim_prob
-                elif vtype == 'combined':
+                elif vtype == "combined":
                     # TODO fix None
                     if year == current:
                         d = delim_split
@@ -103,7 +115,7 @@ class SteeringDisplay(wx.Panel):
                         d = delim_prob
                 # for now, keep simple until I figure it out
                 # d = delim_single
-                html += '<font {style}> {d} </font>'.format(style=style['future'], d=d)
+                html += "<font {style}> {d} </font>".format(style=style["future"], d=d)
         return html
 
 
@@ -114,7 +126,9 @@ class SteeringDisplayFrame(wx.Frame):
         else:
             wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
         self.test = test
-        self.timedisplay = SteeringDisplay(self, fontsize, start, end, vtype, color_scheme)
+        self.timedisplay = SteeringDisplay(
+            self, fontsize, start, end, vtype, color_scheme
+        )
         if test:
             self.slider1 = wx.Slider(self, minValue=0, maxValue=(end - start), value=0)
             self.slider2 = wx.Slider(self, minValue=0, maxValue=(end - start), value=0)
@@ -142,20 +156,37 @@ class SteeringDisplayFrame(wx.Frame):
 
 
 class CurrentViewDisplayFrame(wx.Frame):
-    def __init__(self, parent, fontsize, start, end, beginning_of_year, bgcolor=None, fgcolor=None):
+    def __init__(
+        self,
+        parent,
+        fontsize,
+        start,
+        end,
+        beginning_of_year,
+        bgcolor=None,
+        fgcolor=None,
+    ):
         wx.Frame.__init__(self, parent=parent, style=wx.NO_BORDER)
         panel = wx.Panel(self)
         self.years = range(start, end + 1)
         self.beginning_of_year = beginning_of_year
-        s = int(fontsize / 2.)
+        s = int(fontsize / 2.0)
         if self.beginning_of_year:
             year = str(self.years[0])
         else:
             year = str(self.years[0] - 1)
         self.yearCtrl = wx.StaticText(panel, -1, year, style=wx.ALIGN_CENTRE_HORIZONTAL)
-        self.yearCtrl.SetFont(wx.Font(fontsize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-        self.typeCtrl = wx.StaticText(panel, -1, "forecast", style=wx.ALIGN_CENTRE_HORIZONTAL)
-        self.typeCtrl.SetFont(wx.Font(s, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
+        self.yearCtrl.SetFont(
+            wx.Font(
+                fontsize, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD
+            )
+        )
+        self.typeCtrl = wx.StaticText(
+            panel, -1, "forecast", style=wx.ALIGN_CENTRE_HORIZONTAL
+        )
+        self.typeCtrl.SetFont(
+            wx.Font(s, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        )
         if bgcolor:
             panel.SetBackgroundColour(wx.Colour(*bgcolor))
         if fgcolor:
@@ -193,7 +224,7 @@ class SimpleTimeDisplayFrame(wx.Frame):
 
 if __name__ == "__main__":
     app = wx.App()
-    disp = SteeringDisplayFrame(None, 40, 2016, 2021, None, ['green', 'yellow'], True)
+    disp = SteeringDisplayFrame(None, 40, 2016, 2021, None, ["green", "yellow"], True)
     disp.Show()
     disp.SetSize((800, 200))
     app.MainLoop()

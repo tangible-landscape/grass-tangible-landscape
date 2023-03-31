@@ -480,7 +480,7 @@ class Treatments:
             }
             self.treatments_for_model.append(params)
         # sort by date needed for steering, otherwise newer may get removed
-        self.treatments_for_model.sort(key=lambda x: x['treatment_date'])
+        self.treatments_for_model.sort(key=lambda x: x["treatment_date"])
 
     def create_treatment_visualization_vector(self, evt, player, attempt, checkpoint):
         pattern = "__".join([self.tr_tl_name, evt, player, f"{attempt[0]}", "*"])

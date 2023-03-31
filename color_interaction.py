@@ -21,42 +21,42 @@ class ColorInteractionPanel(wx.Panel):
     def __init__(self, parent, giface, settings, scaniface):
         wx.Panel.__init__(self, parent)
         self.group = None
-        self.segment = 'segment'
-        self.segment_clump = 'segment_clump'
-        self.signature = 'signature'
-        self.classification = 'classification'
-        self.filtered_classification = 'fclassification'
-        self.reject = 'reject'
-        self.output = 'objects'
+        self.segment = "segment"
+        self.segment_clump = "segment_clump"
+        self.signature = "signature"
+        self.classification = "classification"
+        self.filtered_classification = "fclassification"
+        self.reject = "reject"
+        self.output = "objects"
 
-        self.hasSuperpixels = gscript.find_program('i.superpixels.slic', '--help')
+        self.hasSuperpixels = gscript.find_program("i.superpixels.slic", "--help")
 
         self.env = None
         self.giface = giface
         self.parent = parent
         self.settings = settings
         self.scaniface = scaniface
-        self.settingsChanged = Signal('ColorInteractionPanel.settingsChanged')
+        self.settingsChanged = Signal("ColorInteractionPanel.settingsChanged")
 
-        if 'color' not in self.settings:
-            self.settings['color'] = {}
-            self.settings['color']['active'] = False
-            self.settings['color']['name'] = ''
-            self.settings['color']['training'] = ''
+        if "color" not in self.settings:
+            self.settings["color"] = {}
+            self.settings["color"]["active"] = False
+            self.settings["color"]["name"] = ""
+            self.settings["color"]["training"] = ""
 
         self.hide = []
         self.ifColor = wx.CheckBox(self, label=_("Save color rasters:"))
-        self.ifColor.SetValue(self.settings['color']['active'])
+        self.ifColor.SetValue(self.settings["color"]["active"])
         self.ifColor.Bind(wx.EVT_CHECKBOX, self.OnChange)
-        self.exportColor = Select(self, size=(-1, -1), type='raster')
-        self.exportColor.SetValue(self.settings['color']['name'])
+        self.exportColor = Select(self, size=(-1, -1), type="raster")
+        self.exportColor.SetValue(self.settings["color"]["name"])
         self.exportColor.Bind(wx.EVT_TEXT, self.OnChange)
         self.hide.append(self.exportColor)
-        if self.settings['color']['name']:
-            self.group = self.settings['color']['name']
+        if self.settings["color"]["name"]:
+            self.group = self.settings["color"]["name"]
 
-        self.trainingAreas = Select(self, size=(-1, -1), type='raster')
-        self.trainingAreas.SetValue(self.settings['color']['training'])
+        self.trainingAreas = Select(self, size=(-1, -1), type="raster")
+        self.trainingAreas.SetValue(self.settings["color"]["training"])
         self.trainingAreas.Bind(wx.EVT_TEXT, self.OnChange)
         labelTraining = wx.StaticText(self, label=_("Training areas:"))
         self.hide.append(self.trainingAreas)
@@ -72,11 +72,15 @@ class ColorInteractionPanel(wx.Panel):
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.ifColor, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.exportColor, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(
+            self.exportColor, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5
+        )
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(labelTraining, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
-        sizer.Add(self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
+        sizer.Add(
+            self.trainingAreas, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL, border=5
+        )
         sizer.Add(calibrateBtn, flag=wx.ALIGN_CENTER_VERTICAL, border=5)
         self.mainSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -89,10 +93,10 @@ class ColorInteractionPanel(wx.Panel):
         self._enable()
 
     def OnChange(self, event):
-        self.settings['color']['training'] = self.trainingAreas.GetValue()
-        self.settings['color']['active'] = self.ifColor.IsChecked()
-        self.settings['color']['name'] = self.exportColor.GetValue()
-        self.group = self.settings['color']['name']
+        self.settings["color"]["training"] = self.trainingAreas.GetValue()
+        self.settings["color"]["active"] = self.ifColor.IsChecked()
+        self.settings["color"]["name"] = self.exportColor.GetValue()
+        self.group = self.settings["color"]["name"]
         self._enable()
 
     def _enable(self):
@@ -101,11 +105,24 @@ class ColorInteractionPanel(wx.Panel):
 
     def _defineEnvironment(self):
         try:
-            gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group, env=self.env)
+            gscript.read_command(
+                "i.group",
+                flags="g",
+                group=self.group,
+                subgroup=self.group,
+                env=self.env,
+            )
         except CalledModuleError:
-            gscript.run_command('i.group', group=self.group, subgroup=self.group,
-                                input=[self.group + '_' + ext for ext in ('r', 'g', 'b')], env=self.env)
-        maps = gscript.read_command('i.group', flags='g', group=self.group, subgroup=self.group).strip()
+            gscript.run_command(
+                "i.group",
+                group=self.group,
+                subgroup=self.group,
+                input=[self.group + "_" + ext for ext in ("r", "g", "b")],
+                env=self.env,
+            )
+        maps = gscript.read_command(
+            "i.group", flags="g", group=self.group, subgroup=self.group
+        ).strip()
         if maps:
             self.env = get_environment(raster=maps.splitlines()[0])
 
@@ -148,21 +165,66 @@ class ColorInteractionPanel(wx.Panel):
                 ll.CheckLayer(l, True)
 
     def Calibrate(self):
-        gscript.run_command('i.gensigset', trainingmap=self.settings['color']['training'], group=self.group,
-                            subgroup=self.group, signaturefile=self.signature, env=self.env, overwrite=True)  # we need here overwrite=True
+        gscript.run_command(
+            "i.gensigset",
+            trainingmap=self.settings["color"]["training"],
+            group=self.group,
+            subgroup=self.group,
+            signaturefile=self.signature,
+            env=self.env,
+            overwrite=True,
+        )  # we need here overwrite=True
 
     def Analyze(self):
         if self.hasSuperpixels:
-            gscript.run_command('i.superpixels.slic', group=self.group, output=self.segment, compactness=2,
-                                minsize=50, env=self.env)
+            gscript.run_command(
+                "i.superpixels.slic",
+                group=self.group,
+                output=self.segment,
+                compactness=2,
+                minsize=50,
+                env=self.env,
+            )
         else:
-            gscript.run_command('i.segment', group=self.group, output=self.segment, threshold=0.3, minsize=50, env=self.env)
-            gscript.run_command('r.clump', input=self.segment, output=self.segment_clump, env=self.env)
+            gscript.run_command(
+                "i.segment",
+                group=self.group,
+                output=self.segment,
+                threshold=0.3,
+                minsize=50,
+                env=self.env,
+            )
+            gscript.run_command(
+                "r.clump", input=self.segment, output=self.segment_clump, env=self.env
+            )
 
-        gscript.run_command('i.smap', group=self.group, subgroup=self.group, signaturefile=self.signature,
-                            output=self.classification, goodness=self.reject, env=self.env)
-        percentile = float(gscript.parse_command('r.univar', flags='ge', map=self.reject, env=self.env)['percentile_90'])
-        gscript.mapcalc('{new} = if({classif} < {thres}, {classif}, null())'.format(new=self.filtered_classification,
-                                                                                    classif=self.classification, thres=percentile), env=self.env)
+        gscript.run_command(
+            "i.smap",
+            group=self.group,
+            subgroup=self.group,
+            signaturefile=self.signature,
+            output=self.classification,
+            goodness=self.reject,
+            env=self.env,
+        )
+        percentile = float(
+            gscript.parse_command(
+                "r.univar", flags="ge", map=self.reject, env=self.env
+            )["percentile_90"]
+        )
+        gscript.mapcalc(
+            "{new} = if({classif} < {thres}, {classif}, null())".format(
+                new=self.filtered_classification,
+                classif=self.classification,
+                thres=percentile,
+            ),
+            env=self.env,
+        )
         segments = self.segment if self.hasSuperpixels else self.segment_clump
-        gscript.run_command('r.stats.quantile', base=segments, cover=self.filtered_classification, output=self.output, env=self.env)
+        gscript.run_command(
+            "r.stats.quantile",
+            base=segments,
+            cover=self.filtered_classification,
+            output=self.output,
+            env=self.env,
+        )

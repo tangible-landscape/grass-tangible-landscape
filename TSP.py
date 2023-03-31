@@ -2,6 +2,7 @@ from __future__ import division
 from itertools import islice
 from array import array as pyarray
 import numpy
+
 ################################################################################
 # A simple algorithm for solving the Travelling Salesman Problem
 # Finds a suboptimal solution
@@ -54,15 +55,12 @@ def restore_path(connections):
     Guarantees that first index < last index
     """
     # there are 2 nodes with valency 1 - start and end. Get them.
-    start, end = [idx
-                  for idx, conn in enumerate(connections)
-                  if len(conn) == 1]
+    start, end = [idx for idx, conn in enumerate(connections) if len(conn) == 1]
     path = [start]
     prev_point = None
     cur_point = start
     while True:
-        next_points = [pnt for pnt in connections[cur_point]
-                       if pnt != prev_point]
+        next_points = [pnt for pnt in connections[cur_point] if pnt != prev_point]
         if not next_points:
             break
         next_point = next_points[0]
@@ -98,7 +96,7 @@ def solve_tsp(distances, optim_steps=3, pairs_by_dist=pairs_by_dist):
             raise ValueError("Matrix is not square")
 
     # State of the TSP solver algorithm.
-    node_valency = pyarray('i', [2]) * N  # Initially, each node has 2 sticky ends
+    node_valency = pyarray("i", [2]) * N  # Initially, each node has 2 sticky ends
 
     # for each node, stores 1 or 2 connected nodes
     connections = [[] for i in xrange(N)]
@@ -111,9 +109,11 @@ def solve_tsp(distances, optim_steps=3, pairs_by_dist=pairs_by_dist):
             # Generate sequence of
             for ij in sorted_pairs:
                 i, j = ij
-                if not node_valency[i] or\
-                        not node_valency[j] or\
-                        (segments[i] is segments[j]):
+                if (
+                    not node_valency[i]
+                    or not node_valency[j]
+                    or (segments[i] is segments[j])
+                ):
                     continue
                 yield ij
 
@@ -144,14 +144,13 @@ def solve_tsp(distances, optim_steps=3, pairs_by_dist=pairs_by_dist):
 
 
 def pairs_by_dist_np(N, distances):
-    pairs = numpy.zeros((N * (N - 1) // 2, ), dtype=('f4, i2, i2'))
+    pairs = numpy.zeros((N * (N - 1) // 2,), dtype=("f4, i2, i2"))
 
     idx = 0
     for i in xrange(N):
         row_size = N - i - 1
         dist_i = distances[i]
-        pairs[idx:(idx + row_size)] = [(dist_i[j], i, j)
-                                       for j in xrange(i + 1, N)]
+        pairs[idx : (idx + row_size)] = [(dist_i[j], i, j) for j in xrange(i + 1, N)]
         idx += row_size
     pairs.sort(order=["f0"])  # sort by the first field
     return pairs[["f1", "f2"]]

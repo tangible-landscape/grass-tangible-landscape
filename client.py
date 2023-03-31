@@ -25,8 +25,16 @@ BaselineDoneEvent, EVT_BASELINE_DONE = wx.lib.newevent.NewEvent()
 
 
 class SteeringClient:
-    def __init__(self, url, port_interface, port_simulation,
-                 launch_server, local_gdbase=True, log=None, eventHandler=None):
+    def __init__(
+        self,
+        url,
+        port_interface,
+        port_simulation,
+        launch_server,
+        local_gdbase=True,
+        log=None,
+        eventHandler=None,
+    ):
         self._socket = socket.socket()
         self._threading_event = threading.Event()
         self._local_gdbase = local_gdbase
@@ -34,7 +42,7 @@ class SteeringClient:
         self._eventHandler = eventHandler
         if not url:
             return
-        url = url.replace('http://', '')
+        url = url.replace("http://", "")
         self._url = [url, port_interface]
 
         self._simulation_is_running = False
@@ -45,19 +53,36 @@ class SteeringClient:
         self._simulation_done = None
         self._step_done = None
         self._server = None
-        self._debug_file = open('/tmp/debug.txt', 'wb')
+        self._debug_file = open("/tmp/debug.txt", "wb")
         self._steering = True
-        self._model_params = ''
-        self._baseline_params = ''
+        self._model_params = ""
+        self._baseline_params = ""
         self._baseline_computing = False
         if launch_server:
             import stat
-            os.chmod(launch_server, stat.S_IXUSR | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+
+            os.chmod(
+                launch_server,
+                stat.S_IXUSR
+                | stat.S_IRUSR
+                | stat.S_IWUSR
+                | stat.S_IRGRP
+                | stat.S_IROTH,
+            )
             # should be list
             if port_simulation:
-                self._server = subprocess.Popen([launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
+                self._server = subprocess.Popen(
+                    [
+                        launch_server,
+                        str(port_interface),
+                        str(port_simulation),
+                        str(int(local_gdbase)),
+                    ]
+                )
             else:
-                self._server = subprocess.Popen([launch_server, str(port_interface), str(int(local_gdbase))])
+                self._server = subprocess.Popen(
+                    [launch_server, str(port_interface), str(int(local_gdbase))]
+                )
             time.sleep(1)
             relaunch = False
             if self._server.poll() == 1:
@@ -68,9 +93,18 @@ class SteeringClient:
             time.sleep(1)
             if relaunch:
                 if port_simulation:
-                    self._server = subprocess.Popen([launch_server, str(port_interface), str(port_simulation), str(int(local_gdbase))])
+                    self._server = subprocess.Popen(
+                        [
+                            launch_server,
+                            str(port_interface),
+                            str(port_simulation),
+                            str(int(local_gdbase)),
+                        ]
+                    )
                 else:
-                    self._server = subprocess.Popen([launch_server, str(port_interface), str(int(local_gdbase))])
+                    self._server = subprocess.Popen(
+                        [launch_server, str(port_interface), str(int(local_gdbase))]
+                    )
                 time.sleep(1)
 
     def _debug(self, message):
@@ -78,14 +112,16 @@ class SteeringClient:
         if type(message) != bytes:
             message = message.encode()
         self._debug_file.write(message)
-        self._debug_file.write(b'\n')
+        self._debug_file.write(b"\n")
         self._debug_file.flush()
 
     def _kill_process(self, port):
         """Kill process on specified port, may be dangerous if somebody else is using it."""
-        res = subprocess.Popen("netstat -tulpn|grep " + str(port), shell=True, stdout=subprocess.PIPE).communicate()
+        res = subprocess.Popen(
+            "netstat -tulpn|grep " + str(port), shell=True, stdout=subprocess.PIPE
+        ).communicate()
         if res[0]:
-            pid = res[0].strip().split()[-1].split(b'/')[0].decode()
+            pid = res[0].strip().split()[-1].split(b"/")[0].decode()
             subprocess.Popen("kill " + pid, shell=True)
 
     def connect(self):
@@ -93,16 +129,20 @@ class SteeringClient:
             self._socket.connect((self._url[0], int(self._url[1])))
         except socket.error as exc:
             if self._log:
-                self._log.WriteError("Error connecting to steering server: {}".format(exc))
+                self._log.WriteError(
+                    "Error connecting to steering server: {}".format(exc)
+                )
             self._socket = None
             self._is_client_running = False
             return False
-#        self.s = ssl.wrap_socket(self.s, cert_reqs=ssl.CERT_REQUIRED,
-#                                 certfile="/etc/ssl/certs/SOD.crt",
-#                                 keyfile="/etc/ssl/private/ssl-cert-snakeoil.key",
-#                                 ca_certs="/etc/ssl/certs/test_certificate.crt")
+        #        self.s = ssl.wrap_socket(self.s, cert_reqs=ssl.CERT_REQUIRED,
+        #                                 certfile="/etc/ssl/certs/SOD.crt",
+        #                                 keyfile="/etc/ssl/private/ssl-cert-snakeoil.key",
+        #                                 ca_certs="/etc/ssl/certs/test_certificate.crt")
         self._is_client_running = True
-        self._client_thread = threading.Thread(target=self._client, args=(self._results_queue, self._threading_event))
+        self._client_thread = threading.Thread(
+            target=self._client, args=(self._results_queue, self._threading_event)
+        )
         self._client_thread.start()
         return True
 
@@ -114,7 +154,7 @@ class SteeringClient:
             if self._socket:
                 self._socket.shutdown(socket.SHUT_WR)
         except socket.error as e:
-            print (e)
+            print(e)
             pass
         # wait for ending the thread
         if self._client_thread and self._client_thread.isAlive():
@@ -140,40 +180,46 @@ class SteeringClient:
                 continue
 
             self._debug(data)
-            message = data.split(b':')
-            if message[0] == b'clientfile':
+            message = data.split(b":")
+            if message[0] == b"clientfile":
                 _, fsize, path = message
-                with open(message[2].decode(), 'rb') as f:
+                with open(message[2].decode(), "rb") as f:
                     data = f.read()
                     try:
                         self._sendall(data)
                     except socket.error:
-                        print ('erroro sending file')
-            elif message[0] == b'serverfile':
+                        print("erroro sending file")
+            elif message[0] == b"serverfile":
                 # receive file
                 fsize, path = int(message[1]), message[2].decode()
                 self._sendall(data)
                 data = self._socket.recv(1024)
                 total_received = len(data)
                 new_path = os.path.join(self._tmp_directory, os.path.basename(path))
-                f = open(new_path, 'wb')
+                f = open(new_path, "wb")
                 f.write(data)
-                while(total_received < fsize):
-                    sz = 1024 if fsize - total_received > 1024 else fsize - total_received
+                while total_received < fsize:
+                    sz = (
+                        1024
+                        if fsize - total_received > 1024
+                        else fsize - total_received
+                    )
                     data = self._socket.recv(sz)
                     total_received += len(data)
                     f.write(data)
                 f.close()
                 try:
-                    gscript.run_command('r.unpack', input=new_path, overwrite=True, quiet=True)
+                    gscript.run_command(
+                        "r.unpack", input=new_path, overwrite=True, quiet=True
+                    )
                 except:
-                    self._debug('failed r.unpack '+ new_path)
-                name = os.path.basename(path).replace('.pack', '')
+                    self._debug("failed r.unpack " + new_path)
+                name = os.path.basename(path).replace(".pack", "")
                 # avoid showing aggregate result
                 # event_player_year_month_day
-                self._debug('serverfile: ' + name)
-                if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
-                    self._debug('_step_done: ' + name)
+                self._debug("serverfile: " + name)
+                if re.search("[0-9]*_[0-9]*_[0-9]*$", name):
+                    self._debug("_step_done: " + name)
                     if not self._baseline_computing:
                         results_queue.put(name)
                         if self._eventHandler:
@@ -181,25 +227,27 @@ class SteeringClient:
                             wx.PostEvent(self._eventHandler, evt)
 
                 ##########
-            elif message[0] == b'info':
-                if message[1] == b'output':
+            elif message[0] == b"info":
+                if message[1] == b"output":
                     name = message[2].decode()
-                    if re.search('[0-9]*_[0-9]*_[0-9]*$', name):
+                    if re.search("[0-9]*_[0-9]*_[0-9]*$", name):
                         results_queue.put(name)
                         if self._eventHandler:
                             evt = ProcessForDashboardEvent(name=name)
                             wx.PostEvent(self._eventHandler, evt)
-                    self._sendall('info:received')
-                elif message[1] == b'last':
+                    self._sendall("info:received")
+                elif message[1] == b"last":
                     if self._simulation_done:
                         name = message[2].decode()
                         self._simulation_done(name)
-                elif message[1] == b'received':
+                elif message[1] == b"received":
                     event.set()
-                elif message[1] == b'model_running':
-                    self._simulation_is_running = True if message[2] == b'yes' else False
+                elif message[1] == b"model_running":
+                    self._simulation_is_running = (
+                        True if message[2] == b"yes" else False
+                    )
                     event.set()
-                elif message[1] == b'baseline':
+                elif message[1] == b"baseline":
                     if self._eventHandler:
                         evt = BaselineDoneEvent()
                         wx.PostEvent(self._eventHandler, evt)
@@ -223,8 +271,8 @@ class SteeringClient:
         if flags:
             message += "|flags=" + flags
         for key in params:
-            message += '|'
-            message += '{k}={v}'.format(k=key, v=params[key])
+            message += "|"
+            message += "{k}={v}".format(k=key, v=params[key])
         self._model_params = message
 
     def baseline_set_params(self, model_name, params, flags, region):
@@ -233,8 +281,8 @@ class SteeringClient:
         if flags:
             message += "|flags=" + flags
         for key in params:
-            message += '|'
-            message += '{k}={v}'.format(k=key, v=params[key])
+            message += "|"
+            message += "{k}={v}".format(k=key, v=params[key])
         self._baseline_params = message
 
     def simulation_start(self, restart=False):
@@ -242,69 +290,71 @@ class SteeringClient:
             return
 
         if restart:
-            message = 'cmd:restart:'
+            message = "cmd:restart:"
         else:
-            message = 'cmd:start:'
+            message = "cmd:start:"
 
         self._sendall(message + self._model_params)
 
     def simulation_stop(self):
-        self._sendall('cmd:end')
+        self._sendall("cmd:end")
 
     def simulation_play(self):
         if self._steering:
-            self._sendall('cmd:play')
+            self._sendall("cmd:play")
         else:
-            self._sendall('cmd:start:' + self._model_params)
+            self._sendall("cmd:start:" + self._model_params)
 
     def simulation_pause(self):
-        self._sendall('cmd:pause')
+        self._sendall("cmd:pause")
         self._wait_for_confirmation()
 
     def simulation_stepf(self):
-        self._sendall('cmd:stepf')
+        self._sendall("cmd:stepf")
         self._wait_for_confirmation()
 
     def simulation_stepb(self):
-        self._sendall('cmd:stepb')
+        self._sendall("cmd:stepb")
         self._wait_for_confirmation()
 
     def simulation_goto(self, step):
-        self._sendall('cmd:goto:' + str(step))
+        self._sendall("cmd:goto:" + str(step))
         self._wait_for_confirmation()
 
     def simulation_send_data(self, layer_name, file_name, env):
         if self._local_gdbase:
             return
-        self._debug('simulation_send_data')
-        path = os.path.join(self._tmp_directory, file_name + '.pack')
-        gscript.run_command('r.pack', input=layer_name, output=path, env=env)
-        self._sendall('clientfile:{}:{}'.format(os.path.getsize(path), path))
+        self._debug("simulation_send_data")
+        path = os.path.join(self._tmp_directory, file_name + ".pack")
+        gscript.run_command("r.pack", input=layer_name, output=path, env=env)
+        self._sendall("clientfile:{}:{}".format(os.path.getsize(path), path))
         self._wait_for_confirmation()
 
     def simulation_load_data(self, name, date, length, application):
-        self._debug('simulation_load_data')
+        self._debug("simulation_load_data")
         if self._steering:
-            self._sendall('load:{n}:{d}:{l}:{a}'.format(n=name, d=date, l=length, a=application))
+            self._sendall(
+                "load:{n}:{d}:{l}:{a}".format(n=name, d=date, l=length, a=application)
+            )
             self._wait_for_confirmation()
         else:
-            self._model_params += '|' + '{k}={v}'.format(k='treatments', v=name)
-            self._model_params += '|' + '{k}={v}'.format(k='treatment_date', v=date)
+            self._model_params += "|" + "{k}={v}".format(k="treatments", v=name)
+            self._model_params += "|" + "{k}={v}".format(k="treatment_date", v=date)
 
     def simulation_sync_runs(self):
-        self._sendall('cmd:sync')
+        self._sendall("cmd:sync")
         self._wait_for_confirmation()
 
     def simulation_is_running(self):
-        self._debug('simulation_is_running')
+        self._debug("simulation_is_running")
         if self._is_client_running:
-            self._sendall('info:model_running')
+            self._sendall("info:model_running")
             self._wait_for_confirmation()
             return self._simulation_is_running
         return False
 
     def compute_baseline(self):
-        self._sendall('baseline:' + self._baseline_params)
+        self._sendall("baseline:" + self._baseline_params)
         self._baseline_computing = True
 
     def set_on_done(self, func):

@@ -232,7 +232,9 @@ class PoPSDashboard(wx.EvtHandler):
 
     async def running(self):
         await self._ws_client.run_pops(
-            run_id=self._run_id, run_collection=self._runcollection_id, _notification=True
+            run_id=self._run_id,
+            run_collection=self._runcollection_id,
+            _notification=True,
         )
 
     def set_management(self, geojson, cost, area, year):

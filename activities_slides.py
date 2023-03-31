@@ -25,4 +25,4 @@ class Slides(wx.Frame):
         self.wv.LoadURL(url)
 
     def Next(self):
-        self.wv.RunScript('Reveal.next()')
+        self.wv.RunScript("Reveal.next()")
