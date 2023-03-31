@@ -984,6 +984,19 @@ class TangibleLandscapePlugin(wx.Dialog):
             dlg.Destroy()
             return
         params = {}
+        # we need to specify the camera conditions
+        # the cloud is tilted differently for different conditions
+        if self.sensor == "k4a":
+            params["camera_resolution"] = self.scan["camera_resolution"]
+            params["resolution"] = 0.05
+            if (
+                "output" in self.settings["tangible"]
+                and self.settings["tangible"]["output"]["color"]
+                and self.settings["tangible"]["output"]["color_name"]
+            ):
+                params["color_output"] = self.settings["tangible"]["output"][
+                    "color_name"
+                ]
         if self.calib_matrix:
             params["calib_matrix"] = self.calib_matrix
         params["rotate"] = self.scan["rotation_angle"]
@@ -1021,7 +1034,22 @@ class TangibleLandscapePlugin(wx.Dialog):
             return
         dlg.Destroy()
 
-        res = gscript.parse_command("r.in.kinect", flags="c", overwrite=True)
+        params = {}
+        # we need to specify the camera conditions
+        # the cloud is tilted differently for different conditions
+        if self.sensor == "k4a":
+            params["camera_resolution"] = self.scan["camera_resolution"]
+            params["resolution"] = 0.05
+            if (
+                "output" in self.settings["tangible"]
+                and self.settings["tangible"]["output"]["color"]
+                and self.settings["tangible"]["output"]["color_name"]
+            ):
+                params["color_output"] = self.settings["tangible"]["output"][
+                    "color_name"
+                ]
+
+        res = gscript.parse_command("r.in.kinect", flags="c", overwrite=True, **params)
         if not (res["calib_matrix"] and len(res["calib_matrix"].split(",")) == 9):
             gscript.message(_("Failed to calibrate"))
             return
@@ -1054,7 +1082,14 @@ class TangibleLandscapePlugin(wx.Dialog):
         into r.in.kinect during scanning. Parameter continuous is needed when
         the scanning is supposed to run in loop and not just once"""
         params = {}
-        if self.settings["tangible"]["output"]["scan"]:
+        if (
+            self.settings["tangible"]["output"]["calibrate"]
+            and self.settings["tangible"]["output"]["calibration_scan"]
+        ):
+            params["output"] = (
+                self.settings["tangible"]["output"]["calibration_scan"] + "tmp"
+            )
+        elif self.settings["tangible"]["output"]["scan"]:
             params["output"] = self.settings["tangible"]["output"]["scan"] + "tmp"
         # drawing
         if (

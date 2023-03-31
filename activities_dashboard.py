@@ -165,7 +165,6 @@ class MultipleHTMLDashboardFrame(wx.Frame):
                 text-align: left;
                 position: relative;
                 font-family: sans-serif;
-                font-size: {fontsize}px;
             }}
             progress::-webkit-progress-bar {{
                 display: inline-block;
@@ -224,7 +223,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
             + self._progressbar()
             + """
             </style></head><body>
-            <table style="width:100%">
+            <table style="width:100%; font-size: {fontsize}px;">
             """
         )
 

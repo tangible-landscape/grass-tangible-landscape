@@ -142,6 +142,10 @@ def run_analyses(
 
     scan_params = settings["tangible"]["scan"]  # noqa: F841
     scan_name = settings["tangible"]["output"]["scan"]
+    calibration = settings["tangible"]["output"]["calibrate"]
+    calib_scan_name = settings["tangible"]["output"]["calibration_scan"]  # noqa: F841
+    if calibration:
+        scan_name = calib_scan_name
     if scanFilter["filter"]:
         try:
             info = gscript.raster_info(scan_name + "tmp")
@@ -192,6 +196,7 @@ def run_analyses(
         for func in dir(myanalyses)
         if (func.startswith("run_") and func != "run_command")
         or func.startswith("drawing_")
+        or func.startswith("calib_")
     ]
     for func in functions:
         exec("del myanalyses." + func)
@@ -219,11 +224,28 @@ def run_analyses(
                 exec(
                     "myanalyses." + func + "(real_elev=scan_params['elevation'],"
                     " scanned_elev=scan_name,"
+                    " scanned_calib_elev=calib_scan_name,"
                     " blender_path=blender_path,"
                     " zexag=scan_params['zexag'],"
                     " draw_vector=settings['tangible']['drawing']['name'],"
                     " draw_vector_append=settings['tangible']['drawing']['append'],"
                     " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
+                    " giface=giface, update=update,"
+                    " eventHandler=eventHandler, env=env, **kwargs)"
+                )
+            except (CalledModuleError, Exception, ScriptError) as e:
+                print(traceback.print_exc())
+    elif calibration:
+        functions = [func for func in dir(myanalyses) if func.startswith("calib_")]
+        for func in functions:
+            try:
+                exec(
+                    "myanalyses." + func + "(real_elev=scan_params['elevation'],"
+                    " scanned_elev=scan_name,"
+                    " scanned_calib_elev=scan_name,"
+                    " scanned_color=color,"
+                    " blender_path=blender_path,"
+                    " zexag=scan_params['zexag'],"
                     " giface=giface, update=update,"
                     " eventHandler=eventHandler, env=env, **kwargs)"
                 )
@@ -240,6 +262,7 @@ def run_analyses(
                 exec(
                     "myanalyses." + func + "(real_elev=scan_params['elevation'],"
                     " scanned_elev=scan_name,"
+                    " scanned_calib_elev=calib_scan_name,"
                     " scanned_color=color,"
                     " blender_path=blender_path,"
                     " zexag=scan_params['zexag'],"
