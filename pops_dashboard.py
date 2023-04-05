@@ -80,7 +80,7 @@ class ModelParameters:
             session = self._web.get_session()
             self.model["reproductive_rate"] = float(session["reproductive_rate"])
             # disable this for now
-            parameters = self.get_pest_parameters()
+            parameters = self._web.get_pest_parameters()
             self.model["reproductive_rate"] = parameters[0]
             self.model["natural_distance"] = parameters[1]
             self.model["percent_natural_dispersal"] = parameters[2]
