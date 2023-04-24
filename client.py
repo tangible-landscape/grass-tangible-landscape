@@ -172,7 +172,7 @@ class SteeringClient:
 
     def _client(self, results_queue, event):
         while self._is_client_running:
-            data = self._socket.recv(1024)
+            data = self._socket.recv(1524)
             if not data:
                 # GUI received close from server
                 # finish while loop

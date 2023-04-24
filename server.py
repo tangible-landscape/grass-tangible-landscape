@@ -56,7 +56,7 @@ def clientInterface(conn, connections, event, steering):
     _debug_file = open("/tmp/debugServer.txt", "wb")
     while True:
         # receiving from client
-        data = conn.recv(1024)
+        data = conn.recv(1524)
         message = data.split(b":")
         if message[0] == "clientfile":
             # receive file

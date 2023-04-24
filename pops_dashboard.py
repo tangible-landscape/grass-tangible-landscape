@@ -78,8 +78,6 @@ class ModelParameters:
         # assume dashboard is initialized
         if self._web:
             session = self._web.get_session()
-            self.model["reproductive_rate"] = float(session["reproductive_rate"])
-            # disable this for now
             parameters = self._web.get_pest_parameters()
             self.model["reproductive_rate"] = parameters[0]
             self.model["natural_distance"] = parameters[1]
@@ -360,7 +358,7 @@ class PoPSDashboard(wx.EvtHandler):
     def get_pest_parameters(self):
         session = self._session if self._session else self.get_session()
         try:
-            res = requests.get(f"{self._root}/case_study/{session['case_study']}/")
+            res = requests.get(f"{self._root}case_study/{session['case_study']}/")
             res.raise_for_status()
             return res.json()["pest_set"][0]["parameters"]["means"]
         except requests.exceptions.HTTPError as e:
