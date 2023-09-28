@@ -240,7 +240,8 @@ class ActivitiesPanel(wx.Panel):
                     win.Bind(
                         wx.EVT_MENU,
                         bindings.get(
-                            eventName, lambda evt, name=eventName: self.CustomAction(name)
+                            eventName,
+                            lambda evt, name=eventName: self.CustomAction(name),
                         ),
                         id=eventId,
                     )
