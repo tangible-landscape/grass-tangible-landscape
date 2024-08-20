@@ -8,7 +8,6 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import os
-import imp
 import datetime
 import json
 import traceback
@@ -20,7 +19,7 @@ from wx.lib.wordwrap import wordwrap
 from grass.exceptions import CalledModuleError, ScriptError
 from grass.pydispatch.signal import Signal
 
-from tangible_utils import get_environment
+from tangible_utils import get_environment, load_source
 
 try:
     from activities_profile import ProfileFrame
@@ -780,7 +779,7 @@ class ActivitiesPanel(wx.Panel):
         wx.SafeYield()
         env = get_environment(rast=self.settings["output"]["scan"])  # noqa: F841
         try:
-            postprocess = imp.load_source(
+            postprocess = load_source(
                 "postprocess",
                 os.path.join(self._getTaskDir(), self.tasks[self.current]["analyses"]),
             )
@@ -792,7 +791,7 @@ class ActivitiesPanel(wx.Panel):
         for func in functions:
             exec("del postprocess." + func)
         try:
-            postprocess = imp.load_source(
+            postprocess = load_source(
                 "postprocess",
                 os.path.join(self._getTaskDir(), self.tasks[self.current]["analyses"]),
             )
@@ -1032,14 +1031,14 @@ class ActivitiesPanel(wx.Panel):
             self._getTaskDir(), self.configuration["tasks"][self.current]["analyses"]
         )
         try:
-            myanalyses = imp.load_source("myanalyses", analysesFile)
+            myanalyses = load_source("myanalyses", analysesFile)
         except Exception:
             return None
         functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
         for func in functions:
             exec("del myanalyses." + func)
         try:
-            myanalyses = imp.load_source("myanalyses", analysesFile)
+            myanalyses = load_source("myanalyses", analysesFile)
         except Exception:
             return None
         functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]

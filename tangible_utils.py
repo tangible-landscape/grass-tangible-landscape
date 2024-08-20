@@ -9,7 +9,7 @@ This program is free software under the GNU General Public License
 """
 import os
 import shutil
-import imp
+import importlib
 import traceback
 
 try:
@@ -93,6 +93,18 @@ def get_show_layer_icon():
     r1TbrM5vfWHSizmR8CybMbfiEYxcGVocToQuL0cibz/dX//SLY5+wLSKne7dZbc3Aa93uA26PUm
     Sqkk8AIfF8U7S8Efz/n9/vV77f9TwN/Vf/+H8z/g3wf8BtScfGRhgC1qAAAAAElFTkSuQmCC"""
     return BitmapFromImage(ImageFromStream(StringIO(base64.b64decode(SHOW_LAYER_ICON))))
+
+
+def load_source(modname, filename):
+    """Replacement for imp.load_source"""
+    loader = importlib.machinery.SourceFileLoader(modname, filename)
+    spec = importlib.util.spec_from_file_location(modname, filename, loader=loader)
+    module = importlib.util.module_from_spec(spec)
+    # The module is always executed and not cached in sys.modules.
+    # Uncomment the following line to cache the module.
+    # sys.modules[module.__name__] = module
+    loader.exec_module(module)
+    return module
 
 
 def get_environment(**kwargs):
@@ -188,7 +200,7 @@ def run_analyses(
         return
     # run analyses
     try:
-        myanalyses = imp.load_source("myanalyses", analysesFile)
+        myanalyses = load_source("myanalyses", analysesFile)
     except Exception as e:
         print(e)
         return
@@ -203,7 +215,7 @@ def run_analyses(
     for func in functions:
         exec("del myanalyses." + func)
     try:
-        myanalyses = imp.load_source("myanalyses", analysesFile)
+        myanalyses = load_source("myanalyses", analysesFile)
     except Exception as e:
         print(e)
         return
