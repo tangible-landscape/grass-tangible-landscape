@@ -124,7 +124,7 @@ class PoPSDashboard(wx.EvtHandler):
         self._temp_location = "temp_export_location_" + str(os.getpid())
         try:
             gscript.run_command(
-                "g.proj", epsg=4326, location=self._temp_location, quiet=True
+                "g.proj", epsg=4326, project=self._temp_location, quiet=True
             )
         except CalledModuleError:
             # assume it's because it is already there

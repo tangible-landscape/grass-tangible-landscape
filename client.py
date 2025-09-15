@@ -157,7 +157,7 @@ class SteeringClient:
             print(e)
             pass
         # wait for ending the thread
-        if self._client_thread and self._client_thread.isAlive():
+        if self._client_thread and self._client_thread.is_alive:
             self._client_thread.join()
         self._socket = None
         try:

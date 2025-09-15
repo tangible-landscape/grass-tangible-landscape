@@ -426,7 +426,7 @@ if __name__ == "__main__":
                 thread = Thread(
                     target=clientInterface, args=(conn, connections, event, bool(s_c))
                 )
-                thread.setDaemon(True)
+                thread.daemon = True
                 thread.start()
             elif r == s_c:
                 connections["computation"] = conn
