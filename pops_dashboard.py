@@ -173,6 +173,9 @@ class PoPSDashboard(wx.EvtHandler):
         await self._ws_client.ws_connect()
         await self.get_external_management()
 
+    def is_connected(self):
+        return self._ws_client and self._ws_client.connected
+
     async def disconnect(self):
         if not self._ws_client:
             return

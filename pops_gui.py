@@ -125,6 +125,7 @@ class PopsPanel(wx.Panel):
         defaultRegion = wx.Button(modelingBox, label="Default")
         startTreatmentButton = wx.Button(self, label="Start")
         stopTreatmentButton = wx.Button(self, label="Stop")
+        reconnectButton = wx.Button(self, label="Reconnect")
 
         runBtn = wx.Button(modelingBox, label="Run simulation")
         self.visualizationChoice = wx.Choice(
@@ -143,6 +144,7 @@ class PopsPanel(wx.Panel):
         self.visualizationChoice.Bind(wx.EVT_CHOICE, self.SwitchVizMode)
         startTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StartTreatment())
         stopTreatmentButton.Bind(wx.EVT_BUTTON, lambda evt: self.StopTreatment())
+        reconnectButton.Bind(wx.EVT_BUTTON, lambda evt: self.ReconnectDashboard())
         self.treatmentSelect.Bind(wx.EVT_TEXT, lambda evt: self.ChangeRegion())
         defaultRegion.Bind(wx.EVT_BUTTON, self._onDefaultRegion)
 
@@ -159,12 +161,18 @@ class PopsPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(
             startTreatmentButton,
-            proportion=1,
+            proportion=2,
             flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             border=5,
         )
         sizer.Add(
             stopTreatmentButton,
+            proportion=2,
+            flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
+            border=5,
+        )
+        sizer.Add(
+            reconnectButton,
             proportion=1,
             flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             border=5,
@@ -268,6 +276,13 @@ class PopsPanel(wx.Panel):
         year = dateFromString(self.configuration["POPS"]["model"]["start_date"]).year
         callback = partial(self.treatments.current_geojson_to_treatment, year=year)
         StartCoroutine(self.webDashboard.connect(callback), self)
+
+    def ReconnectDashboard(self):
+        if self.webDashboard and not self.webDashboard.is_connected():
+            print("disconnected, reconnectiong...")
+            year = self.get_current_year()
+            callback = partial(self.treatments.current_geojson_to_treatment, year=year)
+            StartCoroutine(self.webDashboard.connect(callback), self)
 
     def _connectSteering(self):
         if self.steeringClient:
@@ -926,6 +941,7 @@ class PopsPanel(wx.Panel):
 
     def _RunSimulation(self, event=None):
         print("_runSimulation")
+        self.ReconnectDashboard()
         if self.switchCurrentResult == 0:
             # it's allowed to interact now
             # just to be sure remove results
