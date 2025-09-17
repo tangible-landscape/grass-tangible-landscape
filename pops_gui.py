@@ -9,7 +9,6 @@ This program is free software under the GNU General Public License
 """
 import os
 import json
-import imp
 import re
 import wx
 import wx.lib.newevent
@@ -22,7 +21,7 @@ import grass.script as gscript
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
-from tangible_utils import get_environment, changeLayer, checkLayers
+from tangible_utils import load_source, get_environment, changeLayer, checkLayers
 
 from activities_dashboard import MultipleHTMLDashboardFrame
 
@@ -1220,14 +1219,14 @@ class PopsPanel(wx.Panel):
             self.workdir, self.configuration["tasks"][self.current]["analyses"]
         )
         try:
-            myanalyses = imp.load_source("myanalyses", analysesFile)
+            myanalyses = load_source("myanalyses", analysesFile)
         except StandardError:
             return None
         functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
         for func in functions:
             exec("del myanalyses." + func)
         try:
-            myanalyses = imp.load_source("myanalyses", analysesFile)
+            myanalyses = load_source("myanalyses", analysesFile)
         except StandardError:
             return None
         functions = [func for func in dir(myanalyses) if func.startswith(funcPrefix)]
