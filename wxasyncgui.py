@@ -27,7 +27,7 @@ import sys
 import getopt
 import atexit
 from wxasync import WxAsyncApp
-from asyncio.events import get_event_loop
+import asyncio
 
 # i18n is taken care of in the grass library code.
 # So we need to import it before any of the GUI code.
@@ -140,7 +140,7 @@ def cleanup():
     unregisterPid(os.getpid())
 
 
-def main(argv=None):
+async def main(argv=None):
 
     if argv is None:
         argv = sys.argv
@@ -163,11 +163,9 @@ def main(argv=None):
 
     # register GUI PID
     registerPid(os.getpid())
-
-    loop = get_event_loop()
-    loop.run_until_complete(app.MainLoop())
+    await app.MainLoop()
 
 
 if __name__ == "__main__":
     atexit.register(cleanup)
-    sys.exit(main())
+    asyncio.run(main())
