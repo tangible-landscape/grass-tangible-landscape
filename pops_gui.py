@@ -1403,7 +1403,7 @@ class PopsPanel(wx.Panel):
                     win.Bind(
                         wx.EVT_MENU,
                         bindings.get(
-                            eventName, lambda evt: self.CustomAction(eventName)
+                            eventName, lambda evt, name=eventName: self.CustomAction(name)
                         ),
                         id=eventId,
                     )

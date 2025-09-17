@@ -1098,8 +1098,11 @@ def classify_colors(
         ]
     )
     grast.mapcalc(
-        "{new} = if({classif} < {thres}, {classif}, null())".format(
-            new=filtered_classification, classif=classification, thres=percentile
+        "{new} = if({reject} < {thres}, {classif}, null())".format(
+            new=filtered_classification,
+            reject=reject,
+            classif=classification,
+            thres=percentile,
         ),
         env=env,
     )
