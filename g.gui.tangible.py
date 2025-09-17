@@ -1,10 +1,16 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
 """
 Created on Wed Nov 20 14:44:32 2013
 
 @author: anna
 """
+
+# %module
+# % description: Tangible Landscape is a collaborative modeling environment for analysis of terrain changes
+#% keyword: raster
+#% keyword: elevation
+# %end
+
 
 import os
 import wx
