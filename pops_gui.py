@@ -1286,6 +1286,7 @@ class PopsPanel(wx.Panel):
         self.scaniface.additionalParams4Analyses = {
             "pops": self.configuration["POPS"],
             "zoom_name": self._zoomName,
+            "external_treatment": self.treatments.tr_external_name,
         }
         self.LoadLayers()
         self.AddTempLayers()
