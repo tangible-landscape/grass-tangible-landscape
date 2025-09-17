@@ -1424,24 +1424,33 @@ def main(giface=None):
     else:
         from core.giface import StandaloneGrassInterface
 
-        try:
-            from wxasync import WxAsyncApp
-            from asyncio.events import get_event_loop
+        app = wx.App()
+        dlg = TangibleLandscapePlugin(
+            giface=StandaloneGrassInterface(), parent=None
+        )
+        dlg.Show()
+        app.MainLoop()
 
-            app = WxAsyncApp()
-            dlg = TangibleLandscapePlugin(
-                giface=StandaloneGrassInterface(), parent=None
-            )
-            dlg.Show()
-            loop = get_event_loop()
-            loop.run_until_complete(app.MainLoop())
-        except ImportError:
-            app = wx.App()
-            dlg = TangibleLandscapePlugin(
-                giface=StandaloneGrassInterface(), parent=None
-            )
-            dlg.Show()
-            app.MainLoop()
+
+async def main_async(giface=None):
+    global Observer, SignalFileChangeHandler, DrawingChangeHandler
+    from watchdog.observers import Observer
+    from change_handler import SignalFileChangeHandler, DrawingChangeHandler
+
+    if wx.GetApp():
+        dlg = TangibleLandscapePlugin(giface, parent=None)
+        dlg.Show()
+    else:
+        from core.giface import StandaloneGrassInterface
+
+        from wxasync import WxAsyncApp
+
+        app = WxAsyncApp()
+        dlg = TangibleLandscapePlugin(
+            giface=StandaloneGrassInterface(), parent=None
+        )
+        dlg.Show()
+        await app.MainLoop()
 
 
 if __name__ == "__main__":
@@ -1449,4 +1458,10 @@ if __name__ == "__main__":
     from watchdog.observers import Observer
     from change_handler import SignalFileChangeHandler, DrawingChangeHandler
 
-    main()
+    try:
+        import wxasync
+        import asyncio
+
+        asyncio.run(main_async())
+    except ImportError:
+        main()
