@@ -1793,7 +1793,7 @@ class PopsPanel(wx.Panel):
             md = self.giface.GetMapDisplay()
         mdSize = md.GetSize()
         mdPos = md.GetPosition()
-        return (mdPos[0] + pos[0] * mdSize[0], mdPos[1] + pos[1] * mdSize[1])
+        return (round(mdPos[0] + pos[0] * mdSize[0]), round(mdPos[1] + pos[1] * mdSize[1]))
 
     def _getSizeFromRelative(self, size):
         if self.IsStandalone():
@@ -1801,7 +1801,7 @@ class PopsPanel(wx.Panel):
         else:
             md = self.giface.GetMapDisplay()
         mdSize = md.GetSize()
-        return (size[0] * mdSize[0], size[1] * mdSize[1])
+        return (round(size[0] * mdSize[0]), round(size[1] * mdSize[1]))
 
     def StartTimeDisplay(self):
         self.timeDisplay = SteeringDisplayFrame(
