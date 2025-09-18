@@ -1193,17 +1193,21 @@ class TangibleLandscapePlugin(wx.Dialog):
         """Disable/enable watchdog monitoring current mapset"""
         # TODO: improve when better API is available in GRASS
         try:
-            tree = self.giface.lmgr.datacatalog.tree
-            if enable:
-                tree.ScheduleWatchCurrentMapset()
-            else:
-                observer = tree.observer
-                if observer and observer.is_alive():
-                    observer.stop()
-                    observer.join()
-                    observer.unschedule_all()
+            watchdog_control = self.giface.lmgr.datacatalog.tree._mapset_watchdog
+            observer = watchdog_control._observer
         except AttributeError:
-            pass
+            watchdog_control = self.giface.lmgr.datacatalog.tree
+            observer = watchdog_control.observer
+        except AttributeError:
+            return
+
+        if enable:
+            watchdog_control.ScheduleWatchCurrentMapset()
+        else:
+            if observer and observer.is_alive():
+                observer.stop()
+                observer.join()
+                observer.unschedule_all()
 
     def IsScanning(self):
         if self.process and self.process.poll() is None:
