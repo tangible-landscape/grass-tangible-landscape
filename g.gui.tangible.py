@@ -979,7 +979,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         # the cloud is tilted differently for different conditions
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
-            params["resolution"] = 0.05
+            params["resolution"] = 0.01
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
