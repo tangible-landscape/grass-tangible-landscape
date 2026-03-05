@@ -823,6 +823,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.observer = None
         self.signal_file = None
         self.timer = wx.Timer(self)
+        self.display_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.OnUpdate, self.display_timer)
         self.changedInput = False
         self.filter = {"filter": False, "counter": 0, "threshold": 0.1, "debug": False}
         # to be able to add params to runAnalyses from outside
@@ -974,12 +976,33 @@ class TangibleLandscapePlugin(wx.Dialog):
             dlg.ShowModal()
             dlg.Destroy()
             return
+
+        trim_values = self.scan["trim_nsewtb"].split(",")
+        try:
+            t_val = float(trim_values[4])
+            b_val = float(trim_values[5])
+            
+            if t_val >= b_val:
+                dlg = wx.MessageDialog(
+                    self,
+                    "Top (T) trim value must be strictly less than the Bottom (B) value.\n\n"
+                    "Because Z measures distance away from the scanner, 'T' (the top of the model) "
+                    "must be closer to the scanner than 'B' (the table). Please lower the 'T' value.",
+                    "Invalid Vertical Trim",
+                    wx.OK | wx.ICON_WARNING,
+                )
+                dlg.ShowModal()
+                dlg.Destroy()
+                return
+        except (ValueError, IndexError):
+            pass
+
         params = {}
         # we need to specify the camera conditions
         # the cloud is tilted differently for different conditions
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
-            params["resolution"] = 0.01
+            params["resolution"] = 0.005
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
@@ -994,8 +1017,19 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ",".join(self.scan["trim_nsewtb"].split(",")[4:])
         params["zrange"] = zrange
         res = gscript.parse_command("r.in.kinect", flags="m", overwrite=True, **params)
+        # Check if res is empty OR if 'bbox' is missing BEFORE trying to access it
+        with open("/tmp/tl.log", "a") as f:
+            f.write("DEBUG: Calib 2 \n")
+            f.write(f"DEBUG: {params} \n")
+            f.write(f"DEBUG: {res}\n")
+            f.write(f"DEBUG: bbox={res.get("bbox", "bbox not found in res")}\n\n")
+        if not res or "bbox" not in res:
+            gscript.warning(_("Failed to find model extent. Scanner returned no data."))
+            return
+            
         if not res["bbox"]:
             gscript.message(_("Failed to find model extent"))
+            return
         offsetcm = 2
         n, s, e, w = [int(round(float(each))) for each in res["bbox"].split(",")]
         self.scanning_panel.trim["n"].SetValue(str(n + offsetcm))
@@ -1030,7 +1064,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         # the cloud is tilted differently for different conditions
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
-            params["resolution"] = 0.05
+            params["resolution"] = 0.005
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
@@ -1041,6 +1075,12 @@ class TangibleLandscapePlugin(wx.Dialog):
                 ]
 
         res = gscript.parse_command("r.in.kinect", flags="c", overwrite=True, **params)
+        with open("/tmp/tl.log", "a") as f:
+            f.write("DEBUG: Calib 1 \n")
+            f.write(f"DEBUG: {params} \n")
+            f.write(f"DEBUG: {res} \n")
+            f.write(f"DEBUG: bbox={res.get("bbox", "bbox not found in res")} \n\n")
+
         if not (res["calib_matrix"] and len(res["calib_matrix"].split(",")) == 9):
             gscript.message(_("Failed to calibrate"))
             return
@@ -1288,6 +1328,7 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         self.observer.start()
         self.timer.Start(1000)
+        self.display_timer.Start(500)
 
     def Stop(self):
         if self.process and self.process.poll() is None:  # still running
@@ -1302,6 +1343,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                 self.observer.join()
                 self.observer = None
         self.timer.Stop()
+        self.display_timer.Stop()
         self.status.SetLabel("Real-time scanning stopped.")
         self.pause = False
         self.btnPause.SetLabel("Pause")
