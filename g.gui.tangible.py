@@ -1018,11 +1018,6 @@ class TangibleLandscapePlugin(wx.Dialog):
         params["zrange"] = zrange
         res = gscript.parse_command("r.in.kinect", flags="m", overwrite=True, **params)
         # Check if res is empty OR if 'bbox' is missing BEFORE trying to access it
-        with open("/tmp/tl.log", "a") as f:
-            f.write("DEBUG: Calib 2 \n")
-            f.write(f"DEBUG: {params} \n")
-            f.write(f"DEBUG: {res}\n")
-            f.write(f"DEBUG: bbox={res.get("bbox", "bbox not found in res")}\n\n")
         if not res or "bbox" not in res:
             gscript.warning(_("Failed to find model extent. Scanner returned no data."))
             return
@@ -1075,12 +1070,6 @@ class TangibleLandscapePlugin(wx.Dialog):
                 ]
 
         res = gscript.parse_command("r.in.kinect", flags="c", overwrite=True, **params)
-        with open("/tmp/tl.log", "a") as f:
-            f.write("DEBUG: Calib 1 \n")
-            f.write(f"DEBUG: {params} \n")
-            f.write(f"DEBUG: {res} \n")
-            f.write(f"DEBUG: bbox={res.get("bbox", "bbox not found in res")} \n\n")
-
         if not (res["calib_matrix"] and len(res["calib_matrix"].split(",")) == 9):
             gscript.message(_("Failed to calibrate"))
             return
