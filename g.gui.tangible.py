@@ -823,8 +823,6 @@ class TangibleLandscapePlugin(wx.Dialog):
         self.observer = None
         self.signal_file = None
         self.timer = wx.Timer(self)
-        self.display_timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.OnUpdate, self.display_timer)
         self.changedInput = False
         self.filter = {"filter": False, "counter": 0, "threshold": 0.1, "debug": False}
         # to be able to add params to runAnalyses from outside
@@ -981,14 +979,12 @@ class TangibleLandscapePlugin(wx.Dialog):
         try:
             t_val = float(trim_values[4])
             b_val = float(trim_values[5])
-            
+
             if t_val >= b_val:
                 dlg = wx.MessageDialog(
                     self,
-                    "Top (T) trim value must be strictly less than the Bottom (B) value.\n\n"
-                    "Because Z measures distance away from the scanner, 'T' (the top of the model) "
-                    "must be closer to the scanner than 'B' (the table). Please lower the 'T' value.",
-                    "Invalid Vertical Trim",
+                    "Top (T) must be less than Bottom (B).\n\nPlease decrease T.",
+                    "Invalid Trim",
                     wx.OK | wx.ICON_WARNING,
                 )
                 dlg.ShowModal()
@@ -1002,7 +998,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         # the cloud is tilted differently for different conditions
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
-            params["resolution"] = 0.005
+            params["resolution"] = 0.01
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
@@ -1059,7 +1055,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         # the cloud is tilted differently for different conditions
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
-            params["resolution"] = 0.005
+            params["resolution"] = 0.01
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
@@ -1317,7 +1313,6 @@ class TangibleLandscapePlugin(wx.Dialog):
 
         self.observer.start()
         self.timer.Start(1000)
-        self.display_timer.Start(500)
 
     def Stop(self):
         if self.process and self.process.poll() is None:  # still running
@@ -1332,7 +1327,6 @@ class TangibleLandscapePlugin(wx.Dialog):
                 self.observer.join()
                 self.observer = None
         self.timer.Stop()
-        self.display_timer.Stop()
         self.status.SetLabel("Real-time scanning stopped.")
         self.pause = False
         self.btnPause.SetLabel("Pause")
