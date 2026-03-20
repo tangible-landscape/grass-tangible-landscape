@@ -1017,10 +1017,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if not res or "bbox" not in res:
             gscript.warning(_("Failed to find model extent. Scanner returned no data."))
             return
-            
-        if not res["bbox"]:
-            gscript.message(_("Failed to find model extent"))
-            return
+    
         offsetcm = 2
         n, s, e, w = [int(round(float(each))) for each in res["bbox"].split(",")]
         self.scanning_panel.trim["n"].SetValue(str(n + offsetcm))
