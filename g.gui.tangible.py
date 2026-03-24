@@ -974,6 +974,25 @@ class TangibleLandscapePlugin(wx.Dialog):
             dlg.ShowModal()
             dlg.Destroy()
             return
+
+        trim_values = self.scan["trim_nsewtb"].split(",")
+        try:
+            t_val = float(trim_values[4])
+            b_val = float(trim_values[5])
+
+            if t_val >= b_val:
+                dlg = wx.MessageDialog(
+                    self,
+                    "Top (T) must be less than Bottom (B).\n\nPlease decrease T.",
+                    "Invalid Trim",
+                    wx.OK | wx.ICON_WARNING,
+                )
+                dlg.ShowModal()
+                dlg.Destroy()
+                return
+        except (ValueError, IndexError):
+            pass
+
         params = {}
         # we need to specify the camera conditions
         # the cloud is tilted differently for different conditions
@@ -994,8 +1013,11 @@ class TangibleLandscapePlugin(wx.Dialog):
         zrange = ",".join(self.scan["trim_nsewtb"].split(",")[4:])
         params["zrange"] = zrange
         res = gscript.parse_command("r.in.kinect", flags="m", overwrite=True, **params)
-        if not res["bbox"]:
-            gscript.message(_("Failed to find model extent"))
+        # Check if res is empty OR if 'bbox' is missing BEFORE trying to access it
+        if not res or "bbox" not in res:
+            gscript.warning(_("Failed to find model extent. Scanner returned no data."))
+            return
+    
         offsetcm = 2
         n, s, e, w = [int(round(float(each))) for each in res["bbox"].split(",")]
         self.scanning_panel.trim["n"].SetValue(str(n + offsetcm))
@@ -1030,7 +1052,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         # the cloud is tilted differently for different conditions
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
-            params["resolution"] = 0.05
+            params["resolution"] = 0.01
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
