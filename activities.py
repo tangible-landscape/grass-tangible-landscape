@@ -159,7 +159,8 @@ class ActivitiesPanel(wx.Panel):
         self.Bind(EVT_UPDATE_PROFILE, self.OnProfileUpdate)
         self.Bind(EVT_UPDATE_DISPLAY, self.OnDisplayUpdate)
 
-        self._init()
+        # self._init()
+        self._loadConfiguration()
 
     def IsStandalone(self):
         """If TL plugin runs standalone without GUI"""
@@ -167,38 +168,6 @@ class ActivitiesPanel(wx.Panel):
             return False
         return True
 
-    def _init(self):
-        if self.configFile:
-            try:
-                with open(self.configFile, "r") as f:
-                    try:
-                        self.configuration = json.load(f)
-                        self.tasks = self.configuration["tasks"]
-                        # this should reset the analysis file only when configuration is successfully loaded
-                        self.settings["analyses"]["file"] = ""
-                    except ValueError:
-                        self.configFile = None
-            except IOError:
-                self.configFile = None
-
-        self.current = 0
-        if self.tasks:
-            self.title.SetLabel(self.tasks[self.current]["title"])
-            self.buttonBack.Enable(False)
-            self.buttonForward.Enable(True)
-            self.timeText.SetLabel("00:00")
-            self.slidesStatus.Show(
-                bool("slides" in self.configuration and self.configuration["slides"])
-            )
-            self.instructions.SetLabel(self._getInstructions())
-        else:
-            self._enableGUI(False)
-        if self.configFile:
-            self.buttonNext.Show("sublayers" in self.tasks[self.current])
-            self.buttonCalibrate.Show("calibrate" in self.tasks[self.current])
-
-        self._bindUserStop()
-        self.Layout()
 
     def _enableGUI(self, enable):
         self.buttonBack.Enable(enable)
@@ -285,7 +254,7 @@ class ActivitiesPanel(wx.Panel):
             return False
         return True
 
-    def _loadConfiguration(self, event):
+    def _loadConfiguration(self, event=None):
         def _includeTasks():
             tasks = []
             if "includeTasks" in self.configuration:
@@ -311,34 +280,48 @@ class ActivitiesPanel(wx.Panel):
             return tasks
 
         self.configFile = self.configPath.GetValue().strip()
-        if self.configFile:
-            self.settings["activities"]["config"] = self.configFile
-            self._enableGUI(True)
+        self.tasks = []
+        self.current = 0
+        self.configuration = {}
+        self.settings["activities"]["config"] = ""
+        self._enableGUI(False)
+        if not self.configFile:
+            return
+
+        try:
             with open(self.configFile, "r") as f:
                 try:
                     self.configuration = json.load(f)
+                    self.settings["activities"]["config"] = self.configFile
                     self.tasks = self.configuration["tasks"]
                     self.tasks += _includeTasks()
-                    self.title.SetLabel(self.tasks[self.current]["title"])
-                    self.instructions.SetLabel(self._getInstructions())
+                    self.settings["analyses"]["file"] = ""  
+                      
                 except ValueError:
-                    self.configuration = {}
-                    self.settings["activities"]["config"] = ""
-                    self._enableGUI(False)
+                    self.configFile = None
                     wx.MessageBox(
                         parent=self,
                         message="Parsing error while reading JSON file, please correct it and try again.",
                         caption="Can't read JSON file",
                         style=wx.OK | wx.ICON_ERROR,
                     )
-            self._bindUserStop()
-        else:
-            self.settings["activities"]["config"] = ""
-            self._enableGUI(False)
+        except IOError:
+            self.configFile = None
 
-        self.slidesStatus.Show(
-            bool("slides" in self.configuration and self.configuration["slides"])
-        )
+        if self.tasks:
+            self.title.SetLabel(self.tasks[self.current]["title"])
+            self.buttonBack.Enable(False)
+            self.buttonForward.Enable(True)
+            self.buttonNext.Show("sublayers" in self.tasks[self.current])
+            self.buttonCalibrate.Show("calibrate" in self.tasks[self.current])
+            self.timeText.SetLabel("00:00")
+            self.slidesStatus.Show(
+                bool("slides" in self.configuration and self.configuration["slides"])
+            )
+            self.instructions.SetLabel(self._getInstructions())
+            self._enableGUI(True)
+            self._bindUserStop()
+
         self.Layout()
 
     def _loadScanningParams(self, key):
