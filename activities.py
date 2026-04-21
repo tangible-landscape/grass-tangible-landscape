@@ -7,6 +7,7 @@ This program is free software under the GNU General Public License
 
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
+
 import os
 import datetime
 import json
@@ -168,7 +169,6 @@ class ActivitiesPanel(wx.Panel):
             return False
         return True
 
-
     def _enableGUI(self, enable):
         self.buttonBack.Enable(enable)
         self.buttonForward.Enable(enable)
@@ -295,8 +295,8 @@ class ActivitiesPanel(wx.Panel):
                     self.settings["activities"]["config"] = self.configFile
                     self.tasks = self.configuration["tasks"]
                     self.tasks += _includeTasks()
-                    self.settings["analyses"]["file"] = ""  
-                      
+                    self.settings["analyses"]["file"] = ""
+
                 except ValueError:
                     self.configFile = None
                     wx.MessageBox(
