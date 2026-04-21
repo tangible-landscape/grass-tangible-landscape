@@ -160,7 +160,6 @@ class ActivitiesPanel(wx.Panel):
         self.Bind(EVT_UPDATE_PROFILE, self.OnProfileUpdate)
         self.Bind(EVT_UPDATE_DISPLAY, self.OnDisplayUpdate)
 
-        # self._init()
         self._loadConfiguration()
 
     def IsStandalone(self):
@@ -281,11 +280,11 @@ class ActivitiesPanel(wx.Panel):
 
         self.configFile = self.configPath.GetValue().strip()
         self.tasks = []
-        self.current = 0
         self.configuration = {}
         self.settings["activities"]["config"] = ""
         self._enableGUI(False)
         if not self.configFile:
+            self.current = 0
             return
 
         try:
@@ -299,6 +298,7 @@ class ActivitiesPanel(wx.Panel):
 
                 except ValueError:
                     self.configFile = None
+                    self.current = 0
                     wx.MessageBox(
                         parent=self,
                         message="Parsing error while reading JSON file, please correct it and try again.",
@@ -307,13 +307,17 @@ class ActivitiesPanel(wx.Panel):
                     )
         except IOError:
             self.configFile = None
+            self.current = 0
 
         if self.tasks:
             self.title.SetLabel(self.tasks[self.current]["title"])
             self.buttonBack.Enable(False)
             self.buttonForward.Enable(True)
             self.buttonNext.Show("sublayers" in self.tasks[self.current])
-            self.buttonCalibrate.Show("calibrate" in self.tasks[self.current])
+            self.buttonCalibrate.Show(
+                "calibrate" in self.tasks[self.current]
+                and self.tasks[self.current]["calibrate"]
+            )
             self.timeText.SetLabel("00:00")
             self.slidesStatus.Show(
                 bool("slides" in self.configuration and self.configuration["slides"])
@@ -321,6 +325,8 @@ class ActivitiesPanel(wx.Panel):
             self.instructions.SetLabel(self._getInstructions())
             self._enableGUI(True)
             self._bindUserStop()
+        else:
+            self.current = 0
 
         self.Layout()
 
@@ -330,7 +336,7 @@ class ActivitiesPanel(wx.Panel):
                 self.settings["scan"][each] = self.tasks[self.current][key][each]
 
     def Calibrate(self, startTask):
-        self._loadConfiguration(None)
+        self._loadConfiguration()
         if "base" in self.tasks[self.current]:
             self.settings["scan"]["elevation"] = self.tasks[self.current]["base"]
         elif "base_region" in self.tasks[self.current]:
@@ -409,7 +415,7 @@ class ActivitiesPanel(wx.Panel):
 
     def StartAutomated(self, event):
         # Doesn't implement slides
-        self._loadConfiguration(None)
+        self._loadConfiguration()
         if (
             "calibrate" in self.tasks[self.current]
             and self.tasks[self.current]["calibrate"]
@@ -419,7 +425,7 @@ class ActivitiesPanel(wx.Panel):
             self._startTask()
 
     def OnStart(self, event):
-        self._loadConfiguration(None)
+        self._loadConfiguration()
         if "slides" in self.configuration and self.configuration["slides"]:
             self._startSlides()
         else:
