@@ -140,10 +140,10 @@ class ColorInteractionPanel(wx.Panel):
     def Run(self, func):
         ll = self.giface.GetLayerList()
         checked = []
-        for l in ll:
-            if ll.IsLayerChecked(l):
-                checked.append(l.cmd)
-                ll.CheckLayer(l, False)
+        for layer in ll:
+            if ll.IsLayerChecked(layer):
+                checked.append(layer.cmd)
+                ll.CheckLayer(layer, False)
         wx.Yield()
 
         if not self.scaniface.IsScanning():
@@ -160,9 +160,9 @@ class ColorInteractionPanel(wx.Panel):
     def Done(self, func, checked):
         func()
         ll = self.giface.GetLayerList()
-        for l in ll:
-            if l.cmd in checked:
-                ll.CheckLayer(l, True)
+        for layer in ll:
+            if layer.cmd in checked:
+                ll.CheckLayer(layer, True)
 
     def Calibrate(self):
         gscript.run_command(

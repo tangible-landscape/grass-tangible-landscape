@@ -247,7 +247,7 @@ def run_analyses(
                     " giface=giface, update=update,"
                     " eventHandler=eventHandler, env=env, **kwargs)"
                 )
-            except (CalledModuleError, Exception, ScriptError) as e:
+            except (CalledModuleError, Exception, ScriptError):
                 print(traceback.print_exc())
     elif calibration:
         functions = [func for func in dir(myanalyses) if func.startswith("calib_")]
@@ -263,7 +263,7 @@ def run_analyses(
                     " giface=giface, update=update,"
                     " eventHandler=eventHandler, env=env, **kwargs)"
                 )
-            except (CalledModuleError, Exception, ScriptError) as e:
+            except (CalledModuleError, Exception, ScriptError):
                 print(traceback.print_exc())
     else:
         functions = [
@@ -283,5 +283,5 @@ def run_analyses(
                     " giface=giface, update=update,"
                     " eventHandler=eventHandler, env=env, **kwargs)"
                 )
-            except (CalledModuleError, Exception, ScriptError) as e:
+            except (CalledModuleError, Exception, ScriptError):
                 print(traceback.print_exc())
