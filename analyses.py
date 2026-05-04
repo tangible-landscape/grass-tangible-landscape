@@ -58,7 +58,7 @@ def difference(real_elev, scanned_elev, new, zexag=1, env=None):
     std2 = zexag * 2 * std1
     std3 = zexag * 3 * std1
     rules = [
-        f"-1000000 black",
+        "-1000000 black",
         f"-{std3} black",
         f"-{std2} 202:000:032",
         f"-{std1} 244:165:130",
@@ -66,7 +66,7 @@ def difference(real_elev, scanned_elev, new, zexag=1, env=None):
         f"{std1} 146:197:222",
         f"{std2} 5:113:176",
         f"{std3} black",
-        f"1000000 black",
+        "1000000 black",
     ]
     gcore.write_command("r.colors", map=new, rules="-", stdin="\n".join(rules), env=env)
 
@@ -445,7 +445,7 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
                 env=env,
             )
         gcore.run_command("g.rename", vector=[name, new], env=env)
-    except Exception as e:
+    except Exception:
         # catching exception when a vector is added to GUI in the same time
         pass
     except CalledModuleError as e:
@@ -607,7 +607,7 @@ def change_detection(
             name=[diff_thr, diff_thr_clump],
             env=env,
         )
-    except:
+    except Exception:
         gcore.run_command(
             "g.remove",
             flags="f",

@@ -580,8 +580,8 @@ class ActivitiesPanel(wx.Panel):
 
     def _removeAllLayers(self):
         ll = self.giface.GetLayerList()
-        for l in reversed(ll):
-            ll.DeleteLayer(l)
+        for layer in reversed(ll):
+            ll.DeleteLayer(layer)
 
     def OnStop(self, event):
         self.timer.Stop()
@@ -812,7 +812,7 @@ class ActivitiesPanel(wx.Panel):
                     " logDir=self.configuration['logDir'],"
                     " env=env)"
                 )
-            except (CalledModuleError, Exception, ScriptError) as e:
+            except (CalledModuleError, Exception, ScriptError):
                 traceback.print_exc()
         wx.EndBusyCursor()
         if self.handsoff and not self.IsStandalone():
@@ -971,18 +971,21 @@ class ActivitiesPanel(wx.Panel):
         else:
             # load new layers
             ll = self.giface.GetLayerList()
-            for l in ll:
+            for layer in ll:
                 if (
                     "solutions" in self.tasks[self.current]
-                    and l.cmd
+                    and layer.cmd
                     == self.tasks[self.current]["solutions"][self.currentSubtask]
                 ):
-                    ll.DeleteLayer(l)
+                    ll.DeleteLayer(layer)
                     break
             ll = self.giface.GetLayerList()
-            for l in ll:
-                if l.cmd == self.tasks[self.current]["sublayers"][self.currentSubtask]:
-                    ll.DeleteLayer(l)
+            for layer in ll:
+                if (
+                    layer.cmd
+                    == self.tasks[self.current]["sublayers"][self.currentSubtask]
+                ):
+                    ll.DeleteLayer(layer)
                     cmd = self.tasks[self.current]["sublayers"][self.currentSubtask + 1]
                     if cmd[0] == "d.rast":
                         ll.AddLayer(

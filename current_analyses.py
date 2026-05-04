@@ -4,13 +4,13 @@ This file serves as a control file with analyses
 which are running in real-time. The name of the analyses
 must start with 'run_'. The file has to be saved so that the change is applied.
 """
-import subprocess
-import uuid
+import subprocess  # noqa: F401
+import uuid  # noqa: F401
 
-import analyses
-from tangible_utils import get_environment
-import grass.script as gscript
-from grass.exceptions import CalledModuleError
+import analyses  # noqa: F401
+from tangible_utils import get_environment  # noqa: F401
+import grass.script as gscript  # noqa: F401
+from grass.exceptions import CalledModuleError  # noqa: F401
 
 
 # def run_difference(real_elev, scanned_elev, env, **kwargs):

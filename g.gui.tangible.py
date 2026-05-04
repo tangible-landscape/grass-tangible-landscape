@@ -311,10 +311,10 @@ class AnalysesPanel(wx.Panel):
     def CalibrateColor(self):
         ll = self.giface.GetLayerList()
         checked = []
-        for l in ll:
-            if ll.IsLayerChecked(l):
-                checked.append(l.cmd)
-                ll.CheckLayer(l, False)
+        for layer in ll:
+            if ll.IsLayerChecked(layer):
+                checked.append(layer.cmd)
+                ll.CheckLayer(layer, False)
         wx.Yield()
 
         self.scaniface.Scan(continuous=False)
@@ -327,9 +327,9 @@ class AnalysesPanel(wx.Panel):
         self._calibrateColor()
         # check the layers back to previous state
         ll = self.giface.GetLayerList()
-        for l in ll:
-            if l.cmd in checked:
-                ll.CheckLayer(l, True)
+        for layer in ll:
+            if layer.cmd in checked:
+                ll.CheckLayer(layer, True)
 
     def _calibrateColor(self):
         gscript.run_command(
@@ -1017,7 +1017,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if not res or "bbox" not in res:
             gscript.warning(_("Failed to find model extent. Scanner returned no data."))
             return
-    
+
         offsetcm = 2
         n, s, e, w = [int(round(float(each))) for each in res["bbox"].split(",")]
         self.scanning_panel.trim["n"].SetValue(str(n + offsetcm))
@@ -1351,6 +1351,9 @@ class TangibleLandscapePlugin(wx.Dialog):
         )
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
+
+    def _onRenderDone(self, env=None):
+        self.rendering_in_progress = False
 
     def runImportDrawing(self):
         self.drawing_panel.appendVector()
