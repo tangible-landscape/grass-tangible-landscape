@@ -10,9 +10,9 @@ This program is free software under the GNU General Public License
 import wx
 
 from gui_core.gselect import Select
-import grass.script as gscript
+from grass.script import find_program
+from grass.tools import Tools, ToolError
 from grass.pydispatch.signal import Signal
-from grass.exceptions import CalledModuleError
 
 from tangible_utils import get_environment
 
@@ -29,9 +29,10 @@ class ColorInteractionPanel(wx.Panel):
         self.reject = "reject"
         self.output = "objects"
 
-        self.hasSuperpixels = gscript.find_program("i.superpixels.slic", "--help")
+        self.hasSuperpixels = find_program("i.superpixels.slic", "--help")
 
         self.env = None
+        self.tools = Tools()
         self.giface = giface
         self.parent = parent
         self.settings = settings
@@ -105,26 +106,23 @@ class ColorInteractionPanel(wx.Panel):
 
     def _defineEnvironment(self):
         try:
-            gscript.read_command(
-                "i.group",
-                flags="g",
+            self.tools.i_group(
+                format="json",
                 group=self.group,
                 subgroup=self.group,
-                env=self.env,
             )
-        except CalledModuleError:
-            gscript.run_command(
-                "i.group",
+        except ToolError:
+            self.tools.i_group(
                 group=self.group,
                 subgroup=self.group,
                 input=[self.group + "_" + ext for ext in ("r", "g", "b")],
-                env=self.env,
             )
-        maps = gscript.read_command(
-            "i.group", flags="g", group=self.group, subgroup=self.group
-        ).strip()
+        maps = self.tools.i_group(
+            format="json", flags="l", group=self.group, subgroup=self.group
+        )
         if maps:
-            self.env = get_environment(raster=maps.splitlines()[0])
+            self.env = get_environment(raster=maps[0])
+            self.tools = Tools(env=self.env)
 
     def OnAnalysis(self, event):
         self._defineEnvironment()
@@ -165,66 +163,54 @@ class ColorInteractionPanel(wx.Panel):
                 ll.CheckLayer(layer, True)
 
     def Calibrate(self):
-        gscript.run_command(
-            "i.gensigset",
+        self.tools.i_gensigset(
             trainingmap=self.settings["color"]["training"],
             group=self.group,
             subgroup=self.group,
             signaturefile=self.signature,
-            env=self.env,
             overwrite=True,
         )  # we need here overwrite=True
 
     def Analyze(self):
         if self.hasSuperpixels:
-            gscript.run_command(
-                "i.superpixels.slic",
+            self.tools.i_superpixels_slic(
                 group=self.group,
                 output=self.segment,
                 compactness=2,
                 minsize=50,
-                env=self.env,
             )
         else:
-            gscript.run_command(
-                "i.segment",
+            self.tools.i_segment(
                 group=self.group,
                 output=self.segment,
                 threshold=0.3,
                 minsize=50,
-                env=self.env,
             )
-            gscript.run_command(
-                "r.clump", input=self.segment, output=self.segment_clump, env=self.env
-            )
+            self.tools.r_clump(input=self.segment, output=self.segment_clump)
 
-        gscript.run_command(
-            "i.smap",
+        self.tools.i_smap(
             group=self.group,
             subgroup=self.group,
             signaturefile=self.signature,
             output=self.classification,
             goodness=self.reject,
-            env=self.env,
         )
-        percentile = float(
-            gscript.parse_command(
-                "r.univar", flags="ge", map=self.reject, env=self.env
-            )["percentile_90"]
-        )
-        gscript.mapcalc(
-            "{new} = if({classif} < {thres}, {classif}, null())".format(
+        percentile = self.tools.r_univar(
+            flags="e",
+            format="json",
+            map=self.reject,
+            percentile=90,
+        )["percentiles"][0]["value"]
+        self.tools.r_mapcalc(
+            expression="{new} = if({classif} < {thres}, {classif}, null())".format(
                 new=self.filtered_classification,
                 classif=self.classification,
                 thres=percentile,
             ),
-            env=self.env,
         )
         segments = self.segment if self.hasSuperpixels else self.segment_clump
-        gscript.run_command(
-            "r.stats.quantile",
+        self.tools.r_stats_quantile(
             base=segments,
             cover=self.filtered_classification,
             output=self.output,
-            env=self.env,
         )

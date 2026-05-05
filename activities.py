@@ -18,6 +18,7 @@ import wx.lib.filebrowsebutton as filebrowse
 from wx.lib.wordwrap import wordwrap
 
 from grass.exceptions import CalledModuleError, ScriptError
+from grass.tools import ToolError
 from grass.pydispatch.signal import Signal
 
 from tangible_utils import get_environment, load_source
@@ -227,7 +228,7 @@ class ActivitiesPanel(wx.Panel):
                     + func
                     + "(eventHandler=wx.GetTopLevelParent(self), env=env)"
                 )
-            except (CalledModuleError, Exception, ScriptError):
+            except (CalledModuleError, ToolError, Exception, ScriptError):
                 print(traceback.print_exc())
 
     def OnNextTask(self, event):
@@ -801,7 +802,7 @@ class ActivitiesPanel(wx.Panel):
                     " logDir=self.configuration['logDir'],"
                     " env=env)"
                 )
-            except (CalledModuleError, Exception, ScriptError):
+            except (CalledModuleError, ToolError, Exception, ScriptError):
                 traceback.print_exc()
         wx.EndBusyCursor()
         if self.handsoff and not self.IsStandalone():

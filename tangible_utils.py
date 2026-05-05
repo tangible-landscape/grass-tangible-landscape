@@ -18,7 +18,8 @@ except ImportError:
     from io import BytesIO as StringIO  # for Python 3
 import base64
 
-import grass.script as gscript
+from grass.script import gisenv, region_env
+from grass.tools import Tools, ToolError
 from grass.exceptions import CalledModuleError, ScriptError
 from wxwrap import BitmapFromImage, ImageFromStream
 
@@ -124,20 +125,20 @@ def get_environment(**kwargs):
     region3d = False
     if "raster_3d" in kwargs:
         region3d = True
-    env["GRASS_REGION"] = gscript.region_env(region3d=region3d, **kwargs)
+    env["GRASS_REGION"] = region_env(region3d=region3d, **kwargs)
     return env
 
 
 def remove_vector(name, deleteTable=False):
     """Helper function to workaround problem with deleting vectors"""
-    gisenv = gscript.gisenv()
+    gis_env = gisenv()
     path_to_vector = os.path.join(
-        gisenv["GISDBASE"], gisenv["LOCATION_NAME"], gisenv["MAPSET"], "vector", name
+        gis_env["GISDBASE"], gis_env["LOCATION_NAME"], gis_env["MAPSET"], "vector", name
     )
     if deleteTable:
         try:
-            gscript.run_command("db.droptable", table=name, flags="f")
-        except CalledModuleError:
+            Tools().db_droptable(table=name, flags="f")
+        except ToolError:
             pass
     if os.path.exists(path_to_vector):
         try:
@@ -152,6 +153,7 @@ def run_analyses(
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
+    tools = Tools(overwrite=True, quiet=True)
     scan_params = settings["tangible"]["scan"]  # noqa: F841
     scan_name = settings["tangible"]["output"]["scan"]
     calibration = settings["tangible"]["output"]["calibrate"]
@@ -160,8 +162,8 @@ def run_analyses(
         scan_name = calib_scan_name
     if scanFilter["filter"]:
         try:
-            info = gscript.raster_info(scan_name + "tmp")
-        except CalledModuleError:
+            info = tools.r_info(map=scan_name + "tmp", format="json")
+        except ToolError:
             print("error in r.info")
             return
         if scanFilter["debug"]:
@@ -176,18 +178,16 @@ def run_analyses(
             scanFilter["counter"] += 1
             return
     try:
-        gscript.run_command(
-            "g.copy", raster=[scan_name + "tmp", scan_name], overwrite=True, quiet=True
-        )
-    except CalledModuleError:
+        tools.g_copy(raster=[scan_name + "tmp", scan_name])
+    except ToolError:
         print("error copying scanned data from temporary name")
         return
     # workaround weird georeferencing
     # filters cases when extent and elev values are in inconsistent state
     # probably it reads it before the header is written
     try:
-        info = gscript.raster_info(scan_name)
-    except CalledModuleError:
+        info = tools.r_info(map=scan_name, format="json")
+    except ToolError:
         print("error in r.info")
         return
     try:
@@ -247,7 +247,7 @@ def run_analyses(
                     " giface=giface, update=update,"
                     " eventHandler=eventHandler, env=env, **kwargs)"
                 )
-            except (CalledModuleError, Exception, ScriptError):
+            except (CalledModuleError, ToolError, Exception, ScriptError):
                 print(traceback.print_exc())
     elif calibration:
         functions = [func for func in dir(myanalyses) if func.startswith("calib_")]
@@ -263,7 +263,7 @@ def run_analyses(
                     " giface=giface, update=update,"
                     " eventHandler=eventHandler, env=env, **kwargs)"
                 )
-            except (CalledModuleError, Exception, ScriptError):
+            except (CalledModuleError, ToolError, Exception, ScriptError):
                 print(traceback.print_exc())
     else:
         functions = [
@@ -283,5 +283,5 @@ def run_analyses(
                     " giface=giface, update=update,"
                     " eventHandler=eventHandler, env=env, **kwargs)"
                 )
-            except (CalledModuleError, Exception, ScriptError):
+            except (CalledModuleError, ToolError, Exception, ScriptError):
                 print(traceback.print_exc())
