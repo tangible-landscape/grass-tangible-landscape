@@ -12,16 +12,16 @@ import os
 import uuid
 from math import sqrt
 
-import grass.script as gscript
+import grass.script as gs
 from grass.tools import Tools, ToolError
 
 from tangible_utils import remove_vector
 
 
-def difference_scaled(real_elev, scanned_elev, new, env):
+def difference_scaled(real_elev, scanned_elev, new, env=None, tools=None):
     """!Computes difference of original and scanned (scan - orig).
     Uses regression for automatic scaling"""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     regression = "regression"
     regression_params = tools.r_regression_line(
         format="json", mapx=scanned_elev, mapy=real_elev
@@ -42,9 +42,9 @@ def difference_scaled(real_elev, scanned_elev, new, env):
     tools.r_colors(map=new, color="differences")
 
 
-def difference(real_elev, scanned_elev, new, zexag=1, env=None):
+def difference(real_elev, scanned_elev, new, zexag=1, env=None, tools=None):
     """Compute difference and set color table using standard deviations"""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     tmp = "tmp_resampled"
     tools.r_resamp_interp(input=real_elev, output=tmp, method="bilinear")
     tools.r_mapcalc(expression=f"{new} = {tmp} - {scanned_elev}")
@@ -66,9 +66,9 @@ def difference(real_elev, scanned_elev, new, zexag=1, env=None):
     tools.r_colors(map=new, rules=io.StringIO("\n".join(rules)))
 
 
-def match_scan(base, scan, matched, env):
+def match_scan(base, scan, matched, env=None, tools=None):
     """Vertically match scan to base using linear regression"""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     coeff = tools.r_regression_line(mapx=scan, mapy=base, format="json")
     tools.r_mapcalc(
         expression="{matched} = {a} + {b} * {scan}".format(
@@ -77,8 +77,8 @@ def match_scan(base, scan, matched, env):
     )
 
 
-def rlake(scanned_elev, new, base, env, seed, level, **kwargs):
-    tools = Tools(env=env)
+def rlake(scanned_elev, new, base, seed, level, env=None, tools=None, **kwargs):
+    tools = tools or Tools(env=env)
     suffix = str(uuid.uuid4()).replace("-", "")[:5]
     match = "tmp_match" + suffix
     params = {}
@@ -86,31 +86,35 @@ def rlake(scanned_elev, new, base, env, seed, level, **kwargs):
         params["coordinates"] = ",".join(str(each) for each in seed)
     else:
         params["seed"] = seed
-    match_scan(base=base, scan=scanned_elev, matched=match, env=env)
+    match_scan(base=base, scan=scanned_elev, matched=match, tools=tools)
     tools.r_lake(elevation=match, water_level=level, lake=new, **params)
     tools.g_remove(flags="f", type="raster", name=[match])
 
 
-def flowacc(scanned_elev, new, env):
-    Tools(env=env).r_flow(elevation=scanned_elev, flowaccumulation=new)
+def flowacc(scanned_elev, new, env=None, tools=None):
+    tools = tools or Tools(env=env)
+    tools.r_flow(elevation=scanned_elev, flowaccumulation=new)
 
 
-def slope(scanned_elev, new, env):
-    Tools(env=env).r_slope_aspect(elevation=scanned_elev, slope=new)
+def slope(scanned_elev, new, env=None, tools=None):
+    tools = tools or Tools(env=env)
+    tools.r_slope_aspect(elevation=scanned_elev, slope=new)
 
 
-def aspect(scanned_elev, new, env):
-    Tools(env=env).r_slope_aspect(elevation=scanned_elev, aspect=new)
+def aspect(scanned_elev, new, env=None, tools=None):
+    tools = tools or Tools(env=env)
+    tools.r_slope_aspect(elevation=scanned_elev, aspect=new)
 
 
-def slope_aspect(scanned_elev, slope, aspect, env):
-    tools = Tools(env=env)
+def slope_aspect(scanned_elev, slope, aspect, env=None, tools=None):
+    tools = tools or Tools(env=env)
     tools.r_slope_aspect(elevation=scanned_elev, aspect=aspect, slope=slope)
     tools.r_colors(map=aspect, color="aspectcolr")
 
 
-def shaded_relief(scanned_elev, new, zscale=10, env=None):
-    Tools(env=env).r_shaded_relief(input=scanned_elev, output=new, zscale=zscale)
+def shaded_relief(scanned_elev, new, zscale=10, env=None, tools=None):
+    tools = tools or Tools(env=env)
+    tools.r_shaded_relief(input=scanned_elev, output=new, zscale=zscale)
 
 
 def simwe(
@@ -123,8 +127,9 @@ def simwe(
     man=None,
     man_value=None,
     env=None,
+    tools=None,
 ):
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     suffix = str(uuid.uuid4()).replace("-", "")[:5]
     options = {}
     if slope:
@@ -174,8 +179,9 @@ def erosion(
     man=None,
     man_value=None,
     env=None,
+    tools=None,
 ):
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     suffix = str(uuid.uuid4()).replace("-", "")[:5]
     options = {}
     if slope:
@@ -238,8 +244,8 @@ def erosion(
     )
 
 
-def max_curv(scanned_elev, new, size=15, zscale=5, env=None):
-    tools = Tools(env=env)
+def max_curv(scanned_elev, new, size=15, zscale=5, env=None, tools=None):
+    tools = tools or Tools(env=env)
     tools.r_param_scale(
         input=scanned_elev,
         output=new,
@@ -250,8 +256,9 @@ def max_curv(scanned_elev, new, size=15, zscale=5, env=None):
     tools.r_colors(map=new, color="byr")
 
 
-def landform(scanned_elev, new, size=25, zscale=1, env=None):
-    Tools(env=env).r_param_scale(
+def landform(scanned_elev, new, size=25, zscale=1, env=None, tools=None):
+    tools = tools or Tools(env=env)
+    tools.r_param_scale(
         input=scanned_elev,
         output=new,
         size=size,
@@ -260,8 +267,9 @@ def landform(scanned_elev, new, size=25, zscale=1, env=None):
     )
 
 
-def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None):
-    Tools(env=env).r_geomorphon(
+def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None, tools=None):
+    tools = tools or Tools(env=env)
+    tools.r_geomorphon(
         elevation=scanned_elev,
         forms=new,
         search=search,
@@ -271,9 +279,9 @@ def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None):
     )
 
 
-def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
+def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env=None, tools=None):
     """!Computes net erosion and deposition (USPED model)"""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     suffix = str(uuid.uuid4()).replace("-", "")[:5]
     sedflow = "sedflow_" + suffix
     qsx = "qsx_" + suffix
@@ -322,9 +330,9 @@ def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env):
     )
 
 
-def depression(scanned_elev, new, env, filter_depth=0, repeat=2):
+def depression(scanned_elev, new, filter_depth=0, repeat=2, env=None, tools=None):
     """Run r.fill.dir to compute depressions"""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     suffix = str(uuid.uuid4()).replace("-", "")[:5]
     input_dem = scanned_elev
     output = "tmp_filldir" + suffix
@@ -341,8 +349,8 @@ def depression(scanned_elev, new, env, filter_depth=0, repeat=2):
     tools.g_remove(flags="f", type="raster", name=[output, tmp_dir])
 
 
-def contours(scanned_elev, new, env, maxlevel=None, step=None):
-    tools = Tools(env=env)
+def contours(scanned_elev, new, maxlevel=None, step=None, env=None, tools=None):
+    tools = tools or Tools(env=env)
     name = "x" + str(uuid.uuid4()).replace("-", "")
     if not step:
         info = tools.r_info(map=scanned_elev, format="json")
@@ -374,11 +382,12 @@ def contours(scanned_elev, new, env, maxlevel=None, step=None):
 
 
 def change_detection_area(
-    before, after, change, height_threshold, filter_slope_threshold, add, env
+    before, after, change, height_threshold, filter_slope_threshold, add,
+    env=None, tools=None,
 ):
     """Detects change in area. Result are areas with value
     equals the max difference between the scans as a positive value."""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     slope = "slope_tmp_get_change"
     before_after_regression = "before_after_regression_tmp"
 
@@ -425,9 +434,10 @@ def change_detection(
     add,
     max_detected,
     debug,
-    env,
+    env=None,
+    tools=None,
 ):
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     diff_thr = "diff_thr_" + str(uuid.uuid4()).replace("-", "")
     diff_thr_clump = "diff_thr_clump_" + str(uuid.uuid4()).replace("-", "")
     coeff = tools.r_regression_line(mapx=after, mapy=before, format="json")
@@ -500,10 +510,10 @@ def change_detection(
                     centroids=change,
                 )
             else:
-                gscript.warning("No change found!")
+                gs.warning("No change found!")
                 tools.v_edit(map=change, tool="create")
         else:
-            gscript.warning("No change found!")
+            gs.warning("No change found!")
             tools.v_edit(map=change, tool="create")
 
         tools.g_remove(
@@ -519,8 +529,8 @@ def change_detection(
         )
 
 
-def drain(elevation, point, drain, conditioned, env):
-    tools = Tools(env=env)
+def drain(elevation, point, drain, conditioned, env=None, tools=None):
+    tools = tools or Tools(env=env)
     data = tools.v_out_ascii(input=point, format="point").text
     if data:
         x, y, cat = data.split("|")
@@ -561,11 +571,12 @@ def trails_combinations(
     raster_route,
     vector_routes,
     mask,
-    env,
+    env=None,
+    tools=None,
 ):
     import itertools
 
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     coordinates = tools.v_out_ascii(input=points, format="point", separator=",").text
     coords_list = []
     for coords in coordinates.split(os.linesep):
@@ -582,36 +593,34 @@ def trails_combinations(
     walk_dir_tmp = "walk_dir_tmp"
     raster_route_tmp = "raster_route_tmp"
 
-    if mask:
-        gscript.message("Activating mask")
-        tools.r_mask(
-            raster=mask,
-        )
-    for points in combinations:
-        i += 1
-        point_from = ",".join(points[0][0])
-        points_to = [",".join(pair[1]) for pair in points]
-        vector_routes_list_drain = []
-        for each in points_to:
-            vector_route_tmp = "route_path_" + str(k)
-            vector_routes_list_drain.append(vector_route_tmp)
-            k += 1
-        vector_routes_list.extend(vector_routes_list_drain)
+    with gs.MaskManager(env=env):
+        if mask:
+            tools.r_mask(raster=mask)
+        for points in combinations:
+            i += 1
+            point_from = ",".join(points[0][0])
+            points_to = [",".join(pair[1]) for pair in points]
+            vector_routes_list_drain = []
+            for each in points_to:
+                vector_route_tmp = "route_path_" + str(k)
+                vector_routes_list_drain.append(vector_route_tmp)
+                k += 1
+            vector_routes_list.extend(vector_routes_list_drain)
 
-        trail(
-            scanned_elev,
-            friction,
-            walk_coeff,
-            _lambda,
-            slope_factor,
-            walk_tmp,
-            walk_dir_tmp,
-            point_from,
-            points_to,
-            raster_route_tmp,
-            vector_routes_list_drain,
-            env,
-        )
+            trail(
+                scanned_elev,
+                friction,
+                walk_coeff,
+                _lambda,
+                slope_factor,
+                walk_tmp,
+                walk_dir_tmp,
+                point_from,
+                points_to,
+                raster_route_tmp,
+                vector_routes_list_drain,
+                tools=tools,
+            )
     tools.v_patch(
         input=vector_routes_list,
         output=vector_routes,
@@ -622,9 +631,6 @@ def trails_combinations(
         type="raster",
         name=[walk_tmp, walk_dir_tmp, raster_route_tmp],
     )
-    gscript.message("Removing mask")
-    if mask:
-        tools.r_mask(flags="r")
 
 
 # procedure for finding a trail in real-time
@@ -640,9 +646,10 @@ def trail(
     points_to,
     raster_route,
     vector_routes,
-    env,
+    env=None,
+    tools=None,
 ):
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     tools.r_walk(
         flags="k",
         elevation=scanned_elev,
@@ -666,8 +673,8 @@ def trail(
         )
 
 
-def trail_salesman(trails, points, output, env):
-    tools = Tools(env=env)
+def trail_salesman(trails, points, output, env=None, tools=None):
+    tools = tools or Tools(env=env)
     net_tmp = "net_tmp"
     tools.v_net(
         input=trails,
@@ -687,9 +694,10 @@ def trail_salesman(trails, points, output, env):
 
 
 def viewshed(
-    scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7, env=None
+    scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7,
+    env=None, tools=None,
 ):
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     coordinates = tools.v_out_ascii(input=vector, separator=",").text
     coordinate = None
     for line in coordinates.split(os.linesep):
@@ -715,10 +723,10 @@ def viewshed(
         )
 
 
-def polygons(points_map, output, env):
+def polygons(points_map, output, env=None, tools=None):
     """Clusters markers together and creates polygons.
     Requires GRASS 7.1."""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     tmp_cluster = "tmp_cluster"
     tmp_hull = "tmp_hull"
     tools.v_cluster(
@@ -769,9 +777,9 @@ def polygons(points_map, output, env):
     )
 
 
-def polylines(points_map, output, env):
+def polylines(points_map, output, env=None, tools=None):
     """Cluster points and connect points by line in each cluster"""
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     tmp_cluster = "tmp_cluster"
     tools.v_cluster(
         flags="t",
@@ -819,8 +827,8 @@ def polylines(points_map, output, env):
     tools.v_to_rast(input=output, output=output, type="line", use="cat")
 
 
-def cross_section(scanned_elev, voxel, new, env):
-    tools = Tools(env=env)
+def cross_section(scanned_elev, voxel, new, env=None, tools=None):
+    tools = tools or Tools(env=env)
     tools.r3_cross_rast(
         input=voxel,
         elevation=scanned_elev,
@@ -829,8 +837,8 @@ def cross_section(scanned_elev, voxel, new, env):
     tools.r_colors(map=new, raster_3d=voxel)
 
 
-def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env):
-    tools = Tools(env=env)
+def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env=None, tools=None):
+    tools = tools or Tools(env=env)
     topo = tools.v_info(map=points, flags="t", format="json")
     if topo:
         if topo["points"] != 2:
@@ -858,8 +866,8 @@ def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env
     )
 
 
-def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env):
-    tools = Tools(env=env)
+def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env=None, tools=None):
+    tools = tools or Tools(env=env)
     coordinates = tools.v_out_ascii(input=points, format="point", separator=",").text
     coords_list = []
 
@@ -877,9 +885,10 @@ def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env):
 
 
 def classify_colors(
-    new, group, compactness=2, threshold=0.3, minsize=10, useSuperPixels=True, env=None
+    new, group, compactness=2, threshold=0.3, minsize=10, useSuperPixels=True,
+    env=None, tools=None,
 ):
-    tools = Tools(env=env)
+    tools = tools or Tools(env=env)
     segment = "tmp_segment"
     segment_clump = "tmp_segment_clump"
     # we expect this name of signature
