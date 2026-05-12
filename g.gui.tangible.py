@@ -393,6 +393,7 @@ class ScanningPanel(wx.Panel):
             if self.scaniface.sensor == "k4a":
                 self.settings["scan"]["color_resolution"] = ""
                 self.settings["scan"]["camera_resolution"] = "720P"
+                self.settings["scan"]["white_balance"] = 0
 
         self.scan = self.settings["scan"]
 
@@ -409,6 +410,7 @@ class ScanningPanel(wx.Panel):
             colorBox = wx.StaticBox(self, label=" Color quality ")
             colorSizer = wx.StaticBoxSizer(colorBox, wx.VERTICAL)
             georefSizer = wx.StaticBoxSizer(georefBox, wx.HORIZONTAL)
+
         else:
             georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
 
@@ -494,6 +496,12 @@ class ScanningPanel(wx.Panel):
                 "Raster resolution of color output in mm of the ungeoreferenced scan"
             )
             self.colorResolution.SetValue(str(self.scan.get("color_resolution", "")))
+            self.whiteBalance = SpinCtrl(self, min=0, max=6500, initial=0)
+            self.whiteBalance.SetToolTip(
+                "Manual white balance color temperature in Kelvin.\n"
+                "0 = auto AWB. Set to e.g. 4200 to fix bluish cast on white."
+            )
+            self.whiteBalance.SetValue(self.scan.get("white_balance", 0))
 
         # layout
         #
@@ -676,6 +684,18 @@ class ScanningPanel(wx.Panel):
             )
             colorSizer.Add(hSizer, flag=wx.EXPAND)
 
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            hSizer.Add(
+                wx.StaticText(self, label="White balance [K]:"),
+                proportion=1,
+                flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL,
+                border=5,
+            )
+            hSizer.Add(
+                self.whiteBalance, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5
+            )
+            colorSizer.Add(hSizer, flag=wx.EXPAND)
+
             hSizer2.Add(colorSizer, proportion=1, flag=wx.EXPAND)
         mainSizer.Add(
             hSizer2, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10
@@ -753,6 +773,8 @@ class ScanningPanel(wx.Panel):
         if self.scaniface.sensor == "k4a":
             self.cameraResolution.Bind(wx.EVT_CHOICE, self.OnModelProperties)
             self.colorResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
+            self.whiteBalance.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
+            self.whiteBalance.Bind(wx.EVT_TEXT, self.OnModelProperties)
 
     def OnModelProperties(self, event):
         self.scan["elevation"] = self.elevInput.GetValue()
@@ -776,6 +798,7 @@ class ScanningPanel(wx.Panel):
         if self.scaniface.sensor == "k4a":
             self.scan["color_resolution"] = self.colorResolution.GetValue()
             self.scan["camera_resolution"] = self.cameraResolution.GetStringSelection()
+            self.scan["white_balance"] = self.whiteBalance.GetValue()
 
         self.settingsChanged.emit()
 
@@ -999,6 +1022,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
             params["resolution"] = 0.01
+            if self.scan.get("white_balance", 0) > 0:
+                params["white_balance"] = self.scan["white_balance"]
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
@@ -1017,7 +1042,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         if not res or "bbox" not in res:
             gscript.warning(_("Failed to find model extent. Scanner returned no data."))
             return
-    
+
         offsetcm = 2
         n, s, e, w = [int(round(float(each))) for each in res["bbox"].split(",")]
         self.scanning_panel.trim["n"].SetValue(str(n + offsetcm))
@@ -1053,6 +1078,8 @@ class TangibleLandscapePlugin(wx.Dialog):
         if self.sensor == "k4a":
             params["camera_resolution"] = self.scan["camera_resolution"]
             params["resolution"] = 0.01
+            if self.scan.get("white_balance", 0) > 0:
+                params["white_balance"] = self.scan["white_balance"]
             if (
                 "output" in self.settings["tangible"]
                 and self.settings["tangible"]["output"]["color"]
@@ -1162,6 +1189,8 @@ class TangibleLandscapePlugin(wx.Dialog):
             params["color_output"] = self.settings["tangible"]["output"]["color_name"]
             if self.sensor == "k4a":
                 params["camera_resolution"] = self.scan["camera_resolution"]
+                if self.scan.get("white_balance", 0) > 0:
+                    params["white_balance"] = self.scan["white_balance"]
                 color_res = self.scan["color_resolution"]
                 if color_res:
                     params["color_resolution"] = float(color_res) / 1000
