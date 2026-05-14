@@ -254,6 +254,7 @@ def run_analyses(
     base_env = os.environ.copy()
     base_env["GRASS_VERBOSE"] = "0"
     base_env["GRASS_MESSAGE_FORMAT"] = "standard"
+    base_env["GRASS_OVERWRITE"] = "1"
 
     common_kwargs = {
         "real_elev": scan_params["elevation"],

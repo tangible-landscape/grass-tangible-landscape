@@ -481,9 +481,9 @@ def change_detection(
         )
         if debug:
             stat_list = [
-                f"{st['categories'][0]['category']}: {st['count']}" for st in stats
+                f"Category {st['categories'][0]['category']}: {st['count']} cells" for st in stats
             ]
-            print(f"DEBUG: {stat_list}")
+            print(f"DEBUG: {', '.join(stat_list)}")
         if len(stats) > 0 and stats[0]:
             cats = []
             found = 0
