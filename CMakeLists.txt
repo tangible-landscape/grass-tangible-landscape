@@ -12,7 +12,6 @@ add_files_to_etc_dir(${PROJECT_NAME}
     current_analyses.py
     drawing.py
     export.py
-    color_interaction.py
     activities.py
     activities_profile.py
     activities_dashboard.py

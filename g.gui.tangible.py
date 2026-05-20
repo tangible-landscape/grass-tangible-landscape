@@ -158,8 +158,8 @@ class AnalysesPanel(wx.Panel):
         self.trainingAreas = Select(self, size=(-1, -1), type="raster")
         self.trainingAreas.SetValue(self.settings["analyses"]["color_training"])
         self.trainingAreas.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
-        calibrateBtn = wx.Button(self, label="Calibrate")
-        calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
+        self.calibrateBtn = wx.Button(self, label="Calibrate")
+        self.calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
 
         bmp = get_show_layer_icon()
         addLayerBtn = BitmapButton(
@@ -239,7 +239,7 @@ class AnalysesPanel(wx.Panel):
             flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             border=5,
         )
-        sizer.Add(calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(self.calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
         colorSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(colorSizer, flag=wx.EXPAND | wx.ALL, border=5)
 
@@ -278,20 +278,18 @@ class AnalysesPanel(wx.Panel):
         dlg.Destroy()
 
     def OnColorCalibration(self, event):
-        if self.scaniface.IsScanning():
+        training = self.trainingAreas.GetValue()
+        if not training:
             dlg = wx.MessageDialog(
                 self,
-                "In order to calibrate, please stop scanning process first.",
-                "Stop scanning",
+                "In order to calibrate colors, please specify the raster with training areas.",
+                "Need training raster",
                 wx.OK | wx.ICON_WARNING,
             )
             dlg.ShowModal()
             dlg.Destroy()
             return
 
-        training = self.trainingAreas.GetValue()
-        if not training:
-            return
         if self.settings["output"]["color"] and self.settings["output"]["color_name"]:
             self.group = self.settings["output"]["color_name"]
         else:
@@ -300,6 +298,17 @@ class AnalysesPanel(wx.Panel):
                 self,
                 "In order to calibrate colors, please specify name of output color raster in 'Output' tab.",
                 "Need color output",
+                wx.OK | wx.ICON_WARNING,
+            )
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+
+        if not self.scaniface.IsScanning():
+            dlg = wx.MessageDialog(
+                self,
+                "In order to calibrate, please start scanning process first.",
+                "Start scanning",
                 wx.OK | wx.ICON_WARNING,
             )
             dlg.ShowModal()
@@ -315,40 +324,42 @@ class AnalysesPanel(wx.Panel):
             if ll.IsLayerChecked(layer):
                 checked.append(layer.cmd)
                 ll.CheckLayer(layer, False)
-        wx.Yield()
+        self.calibrateBtn.SetLabel("Calibrating...")
+        # wx.Yield()
 
-        self.scaniface.Scan(continuous=False)
-        self.scaniface.process.communicate()
-        self.scaniface.process = None
-        self.scaniface.status.SetLabel("Done.")
+        was_paused_before = False
+        if self.scaniface.pause:
+            was_paused_before = True
+            self.scaniface.pause = False
+            self.scaniface.changedInput = True
+        wx.CallLater(4000, self._calibrateColor, checked, was_paused_before)
 
-        self._defineEnvironment()
+    def _calibrateColor(self, checked, was_paused_before):
+        if was_paused_before:
+            self.scaniface.pause = True
+            self.scaniface.changedInput = True
+        self.calibrateBtn.SetLabel("Calibrate")
 
-        self._calibrateColor()
+        maps = gscript.read_command(
+            "i.group", flags="g", group=self.group, subgroup=self.group, quiet=True
+        ).strip()
+        if maps:
+            env = get_environment(raster=maps.splitlines()[0])
+            gscript.run_command(
+                "i.gensigset",
+                trainingmap=self.settings["analyses"]["color_training"],
+                group=self.group,
+                subgroup=self.group,
+                signaturefile="signature",
+                env=env,
+                overwrite=True,
+            )
+
         # check the layers back to previous state
         ll = self.giface.GetLayerList()
         for layer in ll:
             if layer.cmd in checked:
                 ll.CheckLayer(layer, True)
-
-    def _calibrateColor(self):
-        gscript.run_command(
-            "i.gensigset",
-            trainingmap=self.settings["analyses"]["color_training"],
-            group=self.group,
-            subgroup=self.group,
-            signaturefile="signature",
-            env=self.env,
-            overwrite=True,
-        )  # we need here overwrite=True
-
-    def _defineEnvironment(self):
-        self.env = None
-        maps = gscript.read_command(
-            "i.group", flags="g", group=self.group, subgroup=self.group, quiet=True
-        ).strip()
-        if maps:
-            self.env = get_environment(raster=maps.splitlines()[0])
 
     def _addCalibLayer(self, event):
         if not self.giface.GetLayerTree():
