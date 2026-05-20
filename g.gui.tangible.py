@@ -29,7 +29,6 @@ from grass.tools import Tools
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
-from wxwrap import TextCtrl, Button, BitmapButton, SpinCtrl, CheckBox
 from tangible_utils import (
     get_environment,
     run_analyses,
@@ -114,7 +113,7 @@ class AnalysesPanel(wx.Panel):
         topoBox = wx.StaticBox(self, label="  Topographic analyses ")
         topoSizer = wx.StaticBoxSizer(topoBox, wx.VERTICAL)
         self.contoursSelect = Select(self, size=(-1, -1), type="vector")
-        self.contoursStepTextCtrl = TextCtrl(self, size=(40, -1))
+        self.contoursStepTextCtrl = wx.TextCtrl(self, size=(40, -1))
         self.contoursStepTextCtrl.SetToolTip("Contour step")
 
         if (
@@ -160,11 +159,11 @@ class AnalysesPanel(wx.Panel):
         self.trainingAreas = Select(self, size=(-1, -1), type="raster")
         self.trainingAreas.SetValue(self.settings["analyses"]["color_training"])
         self.trainingAreas.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
-        calibrateBtn = wx.Button(self, label="Calibrate")
-        calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
+        self.calibrateBtn = wx.Button(self, label="Calibrate")
+        self.calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
 
         bmp = get_show_layer_icon()
-        addLayerBtn = BitmapButton(
+        addLayerBtn = wx.BitmapButton(
             self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8)
         )
         addLayerBtn.SetToolTip("Add layer to display")
@@ -241,7 +240,7 @@ class AnalysesPanel(wx.Panel):
             flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             border=5,
         )
-        sizer.Add(calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(self.calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
         colorSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(colorSizer, flag=wx.EXPAND | wx.ALL, border=5)
 
@@ -280,20 +279,18 @@ class AnalysesPanel(wx.Panel):
         dlg.Destroy()
 
     def OnColorCalibration(self, event):
-        if self.scaniface.IsScanning():
+        training = self.trainingAreas.GetValue()
+        if not training:
             dlg = wx.MessageDialog(
                 self,
-                "In order to calibrate, please stop scanning process first.",
-                "Stop scanning",
+                "In order to calibrate colors, please specify the raster with training areas.",
+                "Need training raster",
                 wx.OK | wx.ICON_WARNING,
             )
             dlg.ShowModal()
             dlg.Destroy()
             return
 
-        training = self.trainingAreas.GetValue()
-        if not training:
-            return
         if self.settings["output"]["color"] and self.settings["output"]["color_name"]:
             self.group = self.settings["output"]["color_name"]
         else:
@@ -302,6 +299,17 @@ class AnalysesPanel(wx.Panel):
                 self,
                 "In order to calibrate colors, please specify name of output color raster in 'Output' tab.",
                 "Need color output",
+                wx.OK | wx.ICON_WARNING,
+            )
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+
+        if not self.scaniface.IsScanning():
+            dlg = wx.MessageDialog(
+                self,
+                "In order to calibrate, please start scanning process first.",
+                "Start scanning",
                 wx.OK | wx.ICON_WARNING,
             )
             dlg.ShowModal()
@@ -317,38 +325,39 @@ class AnalysesPanel(wx.Panel):
             if ll.IsLayerChecked(layer):
                 checked.append(layer.cmd)
                 ll.CheckLayer(layer, False)
-        wx.Yield()
+        self.calibrateBtn.SetLabel("Calibrating...")
+        # wx.Yield()
 
-        self.scaniface.Scan(continuous=False)
-        self.scaniface.process.communicate()
-        self.scaniface.process = None
-        self.scaniface.status.SetLabel("Done.")
+        was_paused_before = False
+        if self.scaniface.pause:
+            was_paused_before = True
+            self.scaniface.pause = False
+            self.scaniface.changedInput = True
+        wx.CallLater(4000, self._calibrateColor, checked, was_paused_before)
 
-        self._defineEnvironment()
+    def _calibrateColor(self, checked, was_paused_before):
+        if was_paused_before:
+            self.scaniface.pause = True
+            self.scaniface.changedInput = True
+        self.calibrateBtn.SetLabel("Calibrate")
 
-        self._calibrateColor()
+        maps = self.tools.i_group(
+            flags="l", group=self.group, subgroup=self.group, format="json"
+        )
+        if maps:
+            with gscript.RegionManagerEnv(raster=maps[0]):
+                self.tools.i_gensigset(
+                    trainingmap=self.settings["analyses"]["color_training"],
+                    group=self.group,
+                    subgroup=self.group,
+                    signaturefile="signature",
+                )
+
         # check the layers back to previous state
         ll = self.giface.GetLayerList()
         for layer in ll:
             if layer.cmd in checked:
                 ll.CheckLayer(layer, True)
-
-    def _calibrateColor(self):
-        self.tools.i_gensigset(
-            trainingmap=self.settings["analyses"]["color_training"],
-            group=self.group,
-            subgroup=self.group,
-            signaturefile="signature",
-        )
-
-    def _defineEnvironment(self):
-        self.env = None
-        maps = self.tools.i_group(
-            flags="l", group=self.group, subgroup=self.group, format="json"
-        )
-        if maps:
-            self.env = get_environment(raster=maps[0])
-            self.tools = Tools(env=self.env)
 
     def _addCalibLayer(self, event):
         if not self.giface.GetLayerTree():
@@ -413,11 +422,11 @@ class ScanningPanel(wx.Panel):
             georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
 
         # create widgets
-        self.btnCalibrateTilt = Button(self, label="Calibration 1")
+        self.btnCalibrateTilt = wx.Button(self, label="Calibration 1")
         self.btnCalibrateTilt.SetToolTip(
             "Calibrate to remove tilt of the scanner and to set suitable distance from the scanner"
         )
-        self.btnCalibrateExtent = Button(self, label="Calibration 2")
+        self.btnCalibrateExtent = wx.Button(self, label="Calibration 2")
         self.btnCalibrateExtent.SetToolTip(
             "Calibrate to identify the extent and position of the scanned object"
         )
@@ -431,37 +440,37 @@ class ScanningPanel(wx.Panel):
         self.regionInput.SetToolTip(
             "Saved region from which we take the georeferencing information"
         )
-        self.zexag = TextCtrl(self)
+        self.zexag = wx.TextCtrl(self)
         self.zexag.SetMinSize((50, -1))
         self.zexag.SetToolTip("Set vertical exaggeration of the physical model")
-        self.numscans = SpinCtrl(self, min=1, max=5, initial=1)
+        self.numscans = wx.SpinCtrl(self, min=1, max=5, initial=1)
         self.numscans.SetToolTip("Set number of scans to integrate")
-        self.rotate = SpinCtrl(self, min=0, max=360, initial=180)
+        self.rotate = wx.SpinCtrl(self, min=0, max=360, initial=180)
         self.rotate.SetToolTip(
             "Set angle of rotation of the sensor around Z axis (typically 180 degrees)"
         )
-        self.smooth = TextCtrl(self)
+        self.smooth = wx.TextCtrl(self)
         self.smooth.SetToolTip(
             "Set smoothing of the DEM (typically between 7 to 12, higher value means more smoothing)"
         )
-        self.resolution = TextCtrl(self)
+        self.resolution = wx.TextCtrl(self)
         self.resolution.SetToolTip(
             "Raster resolution in mm of the ungeoreferenced scan"
         )
         self.trim = {}
         for each in "tbnsew":
-            self.trim[each] = TextCtrl(self, size=(40, -1))
+            self.trim[each] = wx.TextCtrl(self, size=(40, -1))
             if each in "tb":
                 self.trim[each].SetToolTip("Distance from the scanner")
             else:
                 self.trim[each].SetToolTip(
                     "Distance from the center of scanning to the scanning boundary"
                 )
-        self.trim_tolerance = TextCtrl(self)
+        self.trim_tolerance = wx.TextCtrl(self)
         self.trim_tolerance.SetToolTip(
             "Automatic trimming of the edges for rectangular models"
         )
-        self.interpolate = CheckBox(self, label="Use interpolation instead of binning")
+        self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
         self.interpolate.SetToolTip(
             "Interpolation avoids gaps in the scan, but takes longer"
         )
@@ -489,7 +498,7 @@ class ScanningPanel(wx.Panel):
             self.cameraResolution.SetStringSelection(
                 self.scan.get("camera_resolution", "720P")
             )
-            self.colorResolution = TextCtrl(self)
+            self.colorResolution = wx.TextCtrl(self)
             self.colorResolution.SetToolTip(
                 "Raster resolution of color output in mm of the ungeoreferenced scan"
             )
