@@ -25,6 +25,7 @@ set_gui_path()
 from gui_core.gselect import Select
 from core.settings import UserSettings
 import grass.script as gscript
+from grass.tools import Tools
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
@@ -99,6 +100,7 @@ class AnalysesPanel(wx.Panel):
         self.giface = giface
         self.settings = settings
         self.scaniface = scaniface
+        self.tools = Tools(overwrite=True)
         self.settingsChanged = Signal("AnalysesPanel.settingsChanged")
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -339,20 +341,17 @@ class AnalysesPanel(wx.Panel):
             self.scaniface.changedInput = True
         self.calibrateBtn.SetLabel("Calibrate")
 
-        maps = gscript.read_command(
-            "i.group", flags="g", group=self.group, subgroup=self.group, quiet=True
-        ).strip()
+        maps = self.tools.i_group(
+            flags="l", group=self.group, subgroup=self.group, format="json"
+        )
         if maps:
-            env = get_environment(raster=maps.splitlines()[0])
-            gscript.run_command(
-                "i.gensigset",
-                trainingmap=self.settings["analyses"]["color_training"],
-                group=self.group,
-                subgroup=self.group,
-                signaturefile="signature",
-                env=env,
-                overwrite=True,
-            )
+            with gscript.RegionManagerEnv(raster=maps[0]):
+                self.tools.i_gensigset(
+                    trainingmap=self.settings["analyses"]["color_training"],
+                    group=self.group,
+                    subgroup=self.group,
+                    signaturefile="signature",
+                )
 
         # check the layers back to previous state
         ll = self.giface.GetLayerList()
@@ -800,6 +799,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         )
         self.giface = giface
         self.parent = parent
+        self.tools = Tools()
 
         if not gscript.find_program("r.in.kinect"):
             self.giface.WriteError("ERROR: Module r.in.kinect not found.")
@@ -939,13 +939,11 @@ class TangibleLandscapePlugin(wx.Dialog):
             self.notebook.GetPage(c).SetSize(size)
 
     def getSensorVersion(self):
-        nuldev = open(os.devnull, "w+")
         try:
-            out = gscript.read_command("r.in.kinect", flags="i", stderr=nuldev)
-            version = out.strip().split("=")[-1]
+            out = self.tools.r_in_kinect(flags="i").keyval
+            version = out["sensor"]
         except CalledModuleError:
             version = "k4w_v2"
-        nuldev.close()
         return version
 
     def _getSignalFile(self):
@@ -1022,14 +1020,14 @@ class TangibleLandscapePlugin(wx.Dialog):
         params["rotate"] = self.scan["rotation_angle"]
         zrange = ",".join(self.scan["trim_nsewtb"].split(",")[4:])
         params["zrange"] = zrange
-        res = gscript.parse_command("r.in.kinect", flags="m", overwrite=True, **params)
+        res = self.tools.r_in_kinect(flags="m", overwrite=True, **params)
         # Check if res is empty OR if 'bbox' is missing BEFORE trying to access it
-        if not res or "bbox" not in res:
+        if not res or "bbox" not in res.keyval:
             gscript.warning(_("Failed to find model extent. Scanner returned no data."))
             return
 
         offsetcm = 2
-        n, s, e, w = [int(round(float(each))) for each in res["bbox"].split(",")]
+        n, s, e, w = [int(round(float(each))) for each in res.keyval["bbox"].split(",")]
         self.scanning_panel.trim["n"].SetValue(str(n + offsetcm))
         self.scanning_panel.trim["s"].SetValue(str(abs(s) + offsetcm))
         self.scanning_panel.trim["e"].SetValue(str(e + offsetcm))
@@ -1072,7 +1070,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                     "color_name"
                 ]
 
-        res = gscript.parse_command("r.in.kinect", flags="c", overwrite=True, **params)
+        res = self.tools.r_in_kinect(flags="c", overwrite=True, **params).keyval
         if not (res["calib_matrix"] and len(res["calib_matrix"].split(",")) == 9):
             gscript.message(_("Failed to calibrate"))
             return
@@ -1361,9 +1359,6 @@ class TangibleLandscapePlugin(wx.Dialog):
         )
         evt = updateGUIEvt(self.GetId())
         wx.PostEvent(self, evt)
-
-    def _onRenderDone(self, env=None):
-        self.rendering_in_progress = False
 
     def runImportDrawing(self):
         self.drawing_panel.appendVector()

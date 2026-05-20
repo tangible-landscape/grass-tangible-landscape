@@ -18,7 +18,8 @@ except ImportError:
     from io import BytesIO as StringIO  # for Python 3
 import base64
 
-import grass.script as gscript
+from grass.script import gisenv, region_env, MaskManager, RegionManager
+from grass.tools import Tools, ToolError
 from grass.exceptions import CalledModuleError, ScriptError
 
 import wx
@@ -123,20 +124,20 @@ def get_environment(**kwargs):
     region3d = False
     if "raster_3d" in kwargs:
         region3d = True
-    env["GRASS_REGION"] = gscript.region_env(region3d=region3d, **kwargs)
+    env["GRASS_REGION"] = region_env(region3d=region3d, **kwargs)
     return env
 
 
 def remove_vector(name, deleteTable=False):
     """Helper function to workaround problem with deleting vectors"""
-    gisenv = gscript.gisenv()
+    gis_env = gisenv()
     path_to_vector = os.path.join(
-        gisenv["GISDBASE"], gisenv["LOCATION_NAME"], gisenv["MAPSET"], "vector", name
+        gis_env["GISDBASE"], gis_env["LOCATION_NAME"], gis_env["MAPSET"], "vector", name
     )
     if deleteTable:
         try:
-            gscript.run_command("db.droptable", table=name, flags="f")
-        except CalledModuleError:
+            Tools().db_droptable(table=name, flags="f")
+        except ToolError:
             pass
     if os.path.exists(path_to_vector):
         try:
@@ -145,22 +146,45 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
+def _dispatch_user_funcs(myanalyses, prefix, scan_name, base_env, call_kwargs, exclude=()):
+    """Run each function in `myanalyses` whose name starts with `prefix`,
+    each in its own isolated MaskManager / RegionManager / Tools(env=env) context.
+
+    `tools` and `env` are injected into the per-call kwargs."""
+    funcs = [
+        f for f in dir(myanalyses)
+        if f.startswith(prefix) and f not in exclude
+    ]
+    for func in funcs:
+        env = base_env.copy()
+        with (
+            MaskManager(env=env),
+            RegionManager(raster=scan_name, env=env),
+            Tools(env=env, overwrite=True) as tools,
+        ):
+            try:
+                getattr(myanalyses, func)(tools=tools, env=env, **call_kwargs)
+            except (CalledModuleError, ToolError, Exception, ScriptError):
+                traceback.print_exc()
+
+
 def run_analyses(
     settings, analysesFile, update, giface, eventHandler, scanFilter, **kwargs
 ):
     """Runs all functions in specified Python file which start with 'run_'.
     The Python file is reloaded every time"""
 
-    scan_params = settings["tangible"]["scan"]  # noqa: F841
+    tools = Tools(overwrite=True, quiet=True)
+    scan_params = settings["tangible"]["scan"]
     scan_name = settings["tangible"]["output"]["scan"]
     calibration = settings["tangible"]["output"]["calibrate"]
-    calib_scan_name = settings["tangible"]["output"]["calibration_scan"]  # noqa: F841
+    calib_scan_name = settings["tangible"]["output"]["calibration_scan"]
     if calibration:
         scan_name = calib_scan_name
     if scanFilter["filter"]:
         try:
-            info = gscript.raster_info(scan_name + "tmp")
-        except CalledModuleError:
+            info = tools.r_info(map=scan_name + "tmp", format="json")
+        except ToolError:
             print("error in r.info")
             return
         if scanFilter["debug"]:
@@ -175,18 +199,16 @@ def run_analyses(
             scanFilter["counter"] += 1
             return
     try:
-        gscript.run_command(
-            "g.copy", raster=[scan_name + "tmp", scan_name], overwrite=True, quiet=True
-        )
-    except CalledModuleError:
+        tools.g_copy(raster=[scan_name + "tmp", scan_name])
+    except ToolError:
         print("error copying scanned data from temporary name")
         return
     # workaround weird georeferencing
     # filters cases when extent and elev values are in inconsistent state
     # probably it reads it before the header is written
     try:
-        info = gscript.raster_info(scan_name)
-    except CalledModuleError:
+        info = tools.r_info(map=scan_name, format="json")
+    except ToolError:
         print("error in r.info")
         return
     try:
@@ -194,7 +216,6 @@ def run_analyses(
             return
     except ZeroDivisionError:
         return
-    env = get_environment(rast=scan_name)  # noqa: F841
     if not analysesFile or not os.path.exists(analysesFile):
         return
     # run analyses
@@ -221,66 +242,48 @@ def run_analyses(
     # color output
     color = None
     if settings["tangible"]["output"]["color"]:
-        color = settings["tangible"]["output"]["color_name"]  # noqa: F841
+        color = settings["tangible"]["output"]["color_name"]
     # blender path
     blender_path = None
     if settings["tangible"]["output"]["blender"]:
-        blender_path = settings["tangible"]["output"]["blender_path"]  # noqa: F841
+        blender_path = settings["tangible"]["output"]["blender_path"]
     # drawing needs different parameters
     # functions postprocessing drawing results start with 'drawing'
     # functions postprocessing scanning results start with 'run'
+    base_env = os.environ.copy()
+    base_env["GRASS_VERBOSE"] = "0"
+    base_env["GRASS_MESSAGE_FORMAT"] = "standard"
+    base_env["GRASS_OVERWRITE"] = "1"
+
+    common_kwargs = {
+        "real_elev": scan_params["elevation"],
+        "scanned_elev": scan_name,
+        "blender_path": blender_path,
+        "zexag": scan_params["zexag"],
+        "giface": giface,
+        "update": update,
+        "eventHandler": eventHandler,
+        **kwargs,
+    }
 
     if settings["tangible"]["drawing"]["active"]:
-        functions = [func for func in dir(myanalyses) if func.startswith("drawing_")]
-        for func in functions:
-            try:
-                exec(
-                    "myanalyses." + func + "(real_elev=scan_params['elevation'],"
-                    " scanned_elev=scan_name,"
-                    " scanned_calib_elev=calib_scan_name,"
-                    " blender_path=blender_path,"
-                    " zexag=scan_params['zexag'],"
-                    " draw_vector=settings['tangible']['drawing']['name'],"
-                    " draw_vector_append=settings['tangible']['drawing']['append'],"
-                    " draw_vector_append_name=settings['tangible']['drawing']['appendName'],"
-                    " giface=giface, update=update,"
-                    " eventHandler=eventHandler, env=env, **kwargs)"
-                )
-            except (CalledModuleError, Exception, ScriptError):
-                print(traceback.print_exc())
+        drawing = settings["tangible"]["drawing"]
+        _dispatch_user_funcs(myanalyses, "drawing_", scan_name, base_env, {
+            **common_kwargs,
+            "scanned_calib_elev": calib_scan_name,
+            "draw_vector": drawing["name"],
+            "draw_vector_append": drawing["append"],
+            "draw_vector_append_name": drawing["appendName"],
+        })
     elif calibration:
-        functions = [func for func in dir(myanalyses) if func.startswith("calib_")]
-        for func in functions:
-            try:
-                exec(
-                    "myanalyses." + func + "(real_elev=scan_params['elevation'],"
-                    " scanned_elev=scan_name,"
-                    " scanned_calib_elev=scan_name,"
-                    " scanned_color=color,"
-                    " blender_path=blender_path,"
-                    " zexag=scan_params['zexag'],"
-                    " giface=giface, update=update,"
-                    " eventHandler=eventHandler, env=env, **kwargs)"
-                )
-            except (CalledModuleError, Exception, ScriptError):
-                print(traceback.print_exc())
+        _dispatch_user_funcs(myanalyses, "calib_", scan_name, base_env, {
+            **common_kwargs,
+            "scanned_calib_elev": scan_name,
+            "scanned_color": color,
+        })
     else:
-        functions = [
-            func
-            for func in dir(myanalyses)
-            if func.startswith("run_") and func != "run_command"
-        ]
-        for func in functions:
-            try:
-                exec(
-                    "myanalyses." + func + "(real_elev=scan_params['elevation'],"
-                    " scanned_elev=scan_name,"
-                    " scanned_calib_elev=calib_scan_name,"
-                    " scanned_color=color,"
-                    " blender_path=blender_path,"
-                    " zexag=scan_params['zexag'],"
-                    " giface=giface, update=update,"
-                    " eventHandler=eventHandler, env=env, **kwargs)"
-                )
-            except (CalledModuleError, Exception, ScriptError):
-                print(traceback.print_exc())
+        _dispatch_user_funcs(myanalyses, "run_", scan_name, base_env, {
+            **common_kwargs,
+            "scanned_calib_elev": calib_scan_name,
+            "scanned_color": color,
+        }, exclude={"run_command"})

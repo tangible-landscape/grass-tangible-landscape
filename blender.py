@@ -12,7 +12,7 @@ import shutil
 import glob
 from datetime import datetime
 
-import grass.script as gscript
+from grass.tools import Tools
 from grass.exceptions import CalledModuleError
 
 
@@ -59,15 +59,13 @@ def blender_export_DEM(
         out = os.path.join(path, fullname)
     else:
         out = os.path.join(tmp_path, fullname)
-    gscript.run_command(
-        "r.out.gdal",
+    tools = Tools(env=env, quiet=True)
+    tools.r_out_gdal(
         flags="cf",
         input=raster,
         type="Float32",
         create="TFW=YES",
         out=out,
-        quiet=True,
-        env=env,
     )
 
     if not local:
@@ -127,14 +125,8 @@ def blender_export_vector(
             params["lco"] = "SHPT=POINT"
         if z:
             params["lco"] += "Z"
-        gscript.run_command(
-            "v.out.ogr",
-            input=vector,
-            output=out,
-            env=env,
-            format="ESRI_Shapefile",
-            **params
-        )
+        tools = Tools(env=env)
+        tools.v_out_ogr(input=vector, output=out, format="ESRI_Shapefile", **params)
     except CalledModuleError as e:
         print(e)
 
@@ -184,9 +176,8 @@ def blender_export_PNG(
         out = os.path.join(path, fullname)
     else:
         out = os.path.join(tmp_path, fullname)
-    gscript.run_command(
-        "r.out.gdal", input=raster, format="PNG", out=out, quiet=True, env=env
-    )
+    tools = Tools(env=env, quiet=True)
+    tools.r_out_gdal(input=raster, format="PNG", out=out)
 
     if not local:
         try:
