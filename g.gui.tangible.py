@@ -28,7 +28,6 @@ import grass.script as gscript
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
-from wxwrap import TextCtrl, Button, BitmapButton, SpinCtrl, CheckBox
 from tangible_utils import (
     get_environment,
     run_analyses,
@@ -112,7 +111,7 @@ class AnalysesPanel(wx.Panel):
         topoBox = wx.StaticBox(self, label="  Topographic analyses ")
         topoSizer = wx.StaticBoxSizer(topoBox, wx.VERTICAL)
         self.contoursSelect = Select(self, size=(-1, -1), type="vector")
-        self.contoursStepTextCtrl = TextCtrl(self, size=(40, -1))
+        self.contoursStepTextCtrl = wx.TextCtrl(self, size=(40, -1))
         self.contoursStepTextCtrl.SetToolTip("Contour step")
 
         if (
@@ -162,7 +161,7 @@ class AnalysesPanel(wx.Panel):
         self.calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
 
         bmp = get_show_layer_icon()
-        addLayerBtn = BitmapButton(
+        addLayerBtn = wx.BitmapButton(
             self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8)
         )
         addLayerBtn.SetToolTip("Add layer to display")
@@ -424,11 +423,11 @@ class ScanningPanel(wx.Panel):
             georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
 
         # create widgets
-        self.btnCalibrateTilt = Button(self, label="Calibration 1")
+        self.btnCalibrateTilt = wx.Button(self, label="Calibration 1")
         self.btnCalibrateTilt.SetToolTip(
             "Calibrate to remove tilt of the scanner and to set suitable distance from the scanner"
         )
-        self.btnCalibrateExtent = Button(self, label="Calibration 2")
+        self.btnCalibrateExtent = wx.Button(self, label="Calibration 2")
         self.btnCalibrateExtent.SetToolTip(
             "Calibrate to identify the extent and position of the scanned object"
         )
@@ -442,37 +441,37 @@ class ScanningPanel(wx.Panel):
         self.regionInput.SetToolTip(
             "Saved region from which we take the georeferencing information"
         )
-        self.zexag = TextCtrl(self)
+        self.zexag = wx.TextCtrl(self)
         self.zexag.SetMinSize((50, -1))
         self.zexag.SetToolTip("Set vertical exaggeration of the physical model")
-        self.numscans = SpinCtrl(self, min=1, max=5, initial=1)
+        self.numscans = wx.SpinCtrl(self, min=1, max=5, initial=1)
         self.numscans.SetToolTip("Set number of scans to integrate")
-        self.rotate = SpinCtrl(self, min=0, max=360, initial=180)
+        self.rotate = wx.SpinCtrl(self, min=0, max=360, initial=180)
         self.rotate.SetToolTip(
             "Set angle of rotation of the sensor around Z axis (typically 180 degrees)"
         )
-        self.smooth = TextCtrl(self)
+        self.smooth = wx.TextCtrl(self)
         self.smooth.SetToolTip(
             "Set smoothing of the DEM (typically between 7 to 12, higher value means more smoothing)"
         )
-        self.resolution = TextCtrl(self)
+        self.resolution = wx.TextCtrl(self)
         self.resolution.SetToolTip(
             "Raster resolution in mm of the ungeoreferenced scan"
         )
         self.trim = {}
         for each in "tbnsew":
-            self.trim[each] = TextCtrl(self, size=(40, -1))
+            self.trim[each] = wx.TextCtrl(self, size=(40, -1))
             if each in "tb":
                 self.trim[each].SetToolTip("Distance from the scanner")
             else:
                 self.trim[each].SetToolTip(
                     "Distance from the center of scanning to the scanning boundary"
                 )
-        self.trim_tolerance = TextCtrl(self)
+        self.trim_tolerance = wx.TextCtrl(self)
         self.trim_tolerance.SetToolTip(
             "Automatic trimming of the edges for rectangular models"
         )
-        self.interpolate = CheckBox(self, label="Use interpolation instead of binning")
+        self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
         self.interpolate.SetToolTip(
             "Interpolation avoids gaps in the scan, but takes longer"
         )
@@ -500,7 +499,7 @@ class ScanningPanel(wx.Panel):
             self.cameraResolution.SetStringSelection(
                 self.scan.get("camera_resolution", "720P")
             )
-            self.colorResolution = TextCtrl(self)
+            self.colorResolution = wx.TextCtrl(self)
             self.colorResolution.SetToolTip(
                 "Raster resolution of color output in mm of the ungeoreferenced scan"
             )

@@ -17,8 +17,7 @@ add_files_to_etc_dir(${PROJECT_NAME}
     activities_dashboard.py
     activities_slides.py
     TSP.py
-    blender.py
-    wxwrap.py)
+    blender.py)
 
 build_addon(
   ${PROJECT_NAME}

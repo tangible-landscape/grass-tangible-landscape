@@ -20,7 +20,6 @@ import base64
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError, ScriptError
-from wxwrap import BitmapFromImage, ImageFromStream
 
 import wx
 import wx.lib.newevent
@@ -66,7 +65,7 @@ def get_TL_logo():
     gnq9xqrty7qrmo1QUY7Qhy2b8MGyqp9LmWBNFAevNRq0gsX87aR0TmQLRAZzbm9gn2DU89AGvXa
     weIhIH5bkH0E0g3iu2PbA6FDKPH/FxIOoJZjKF1/1goHCMQpFI/f5/qOYnfBvH8kD3uUaVdKwGQ
     9B9EeS8BtYd+AKiYO9ra3ve1tF/sPe5g93ox3Xi8AAAAASUVORK5CYII="""
-    return BitmapFromImage(ImageFromStream(StringIO(base64.b64decode(logo))))
+    return wx.Bitmap(wx.Image(StringIO(base64.b64decode(logo))))
 
 
 def get_show_layer_icon():
@@ -92,7 +91,7 @@ def get_show_layer_icon():
     6W5sYTJpZlwSd20Hf9J4QjPADAXKBFY50FWpUclFJcvjK0PjA4eLH30qXOux/oHkBa9UeP2h4qM
     r1TbrM5vfWHSizmR8CybMbfiEYxcGVocToQuL0cibz/dX//SLY5+wLSKne7dZbc3Aa93uA26PUm
     Sqkk8AIfF8U7S8Efz/n9/vV77f9TwN/Vf/+H8z/g3wf8BtScfGRhgC1qAAAAAElFTkSuQmCC"""
-    return BitmapFromImage(ImageFromStream(StringIO(base64.b64decode(SHOW_LAYER_ICON))))
+    return wx.Bitmap(wx.Image(StringIO(base64.b64decode(SHOW_LAYER_ICON))))
 
 
 def load_source(modname, filename):
