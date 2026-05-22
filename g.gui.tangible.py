@@ -54,10 +54,12 @@ class AboutPanel(wx.Panel):
         wx.Panel.__init__(self, parent)
         scaniface = scaniface
         sensor = wx.StaticText(self, label="", style=wx.ALIGN_CENTRE_HORIZONTAL)
+        if scaniface.sensor == "femto":
+            sensor.SetLabel("Using Orbbec Femto Bolt")
         if scaniface.sensor == "k4a":
-            sensor.SetLabel("Using Kinect Azure DK version of r.in.kinect")
+            sensor.SetLabel("Using Kinect Azure DK")
         elif scaniface.sensor == "k4w_v2":
-            sensor.SetLabel("Using Kinect Xbox One version of r.in.kinect")
+            sensor.SetLabel("Using Kinect Xbox One")
         elif sensor is None:
             sensor.SetLabel("WARNING: r.in.kinect not available")
 
@@ -65,7 +67,7 @@ class AboutPanel(wx.Panel):
         hbitmap = wx.StaticBitmap(self, wx.ID_ANY, get_TL_logo())
         name = wx.StaticText(
             self,
-            label="Tangible Landscape plugin for GRASS GIS",
+            label="Tangible Landscape plugin for GRASS",
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
@@ -399,7 +401,7 @@ class ScanningPanel(wx.Panel):
             self.settings["scan"]["interpolate"] = False
             self.settings["scan"]["trim_tolerance"] = ""
             self.settings["scan"]["resolution"] = 2
-            if self.scaniface.sensor == "k4a":
+            if self.scaniface.sensor in ("k4a", "femto"):
                 self.settings["scan"]["color_resolution"] = ""
                 self.settings["scan"]["camera_resolution"] = "720P"
 
@@ -414,7 +416,7 @@ class ScanningPanel(wx.Panel):
         demBox = wx.StaticBox(self, label=" DEM quality ")
         demSizer = wx.StaticBoxSizer(demBox, wx.VERTICAL)
         georefBox = wx.StaticBox(self, label="  Georeferencing  ")
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             colorBox = wx.StaticBox(self, label=" Color quality ")
             colorSizer = wx.StaticBoxSizer(colorBox, wx.VERTICAL)
             georefSizer = wx.StaticBoxSizer(georefBox, wx.HORIZONTAL)
@@ -486,7 +488,7 @@ class ScanningPanel(wx.Panel):
         self.smooth.SetValue(str(self.scan["smooth"]))
         self.resolution.SetValue(str(self.scan["resolution"]))
         self.trim_tolerance.SetValue(str(self.scan["trim_tolerance"]))
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             self.cameraResolution = wx.Choice(
                 self, choices=["depth", "720P", "1080P", "1440P", "2160P"]
             )
@@ -574,7 +576,7 @@ class ScanningPanel(wx.Panel):
         mainSizer.Add(geomSizer, flag=wx.EXPAND | wx.ALL, border=10)
 
         hSizer2 = wx.BoxSizer(wx.HORIZONTAL)
-        if self.scaniface.sensor != "k4a":
+        if self.scaniface.sensor not in ("k4a", "femto"):
             #
             # Georeferencing box
             #
@@ -658,7 +660,7 @@ class ScanningPanel(wx.Panel):
         hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10)
 
         # Color properties box
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             hSizer = wx.BoxSizer(wx.HORIZONTAL)
             hSizer.Add(
                 wx.StaticText(self, label="RGB camera resolution:"),
@@ -690,7 +692,7 @@ class ScanningPanel(wx.Panel):
             hSizer2, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10
         )
 
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             #
             # Georeferencing box
             #
@@ -759,7 +761,7 @@ class ScanningPanel(wx.Panel):
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
         for each in "nsewtb":
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             self.cameraResolution.Bind(wx.EVT_CHOICE, self.OnModelProperties)
             self.colorResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
 
@@ -782,7 +784,7 @@ class ScanningPanel(wx.Panel):
             self.scan["trim_nsewtb"] = ",".join(nsewtb_list)
         except ValueError:
             pass
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             self.scan["color_resolution"] = self.colorResolution.GetValue()
             self.scan["camera_resolution"] = self.cameraResolution.GetStringSelection()
 
@@ -1004,7 +1006,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         params = {}
         # we need to specify the camera conditions
         # the cloud is tilted differently for different conditions
-        if self.sensor == "k4a":
+        if self.sensor in ("k4a", "femto"):
             params["camera_resolution"] = self.scan["camera_resolution"]
             params["resolution"] = 0.01
             if (
@@ -1058,7 +1060,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         params = {}
         # we need to specify the camera conditions
         # the cloud is tilted differently for different conditions
-        if self.sensor == "k4a":
+        if self.sensor in ("k4a", "femto"):
             params["camera_resolution"] = self.scan["camera_resolution"]
             params["resolution"] = 0.01
             if (
@@ -1168,7 +1170,7 @@ class TangibleLandscapePlugin(wx.Dialog):
             and self.settings["tangible"]["output"]["color_name"]
         ):
             params["color_output"] = self.settings["tangible"]["output"]["color_name"]
-            if self.sensor == "k4a":
+            if self.sensor in ("k4a", "femto"):
                 params["camera_resolution"] = self.scan["camera_resolution"]
                 color_res = self.scan["color_resolution"]
                 if color_res:
