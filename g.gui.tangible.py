@@ -25,10 +25,10 @@ set_gui_path()
 from gui_core.gselect import Select
 from core.settings import UserSettings
 import grass.script as gscript
+from grass.tools import Tools
 from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
-from wxwrap import TextCtrl, Button, BitmapButton, SpinCtrl, CheckBox
 from tangible_utils import (
     get_environment,
     run_analyses,
@@ -54,10 +54,12 @@ class AboutPanel(wx.Panel):
         wx.Panel.__init__(self, parent)
         scaniface = scaniface
         sensor = wx.StaticText(self, label="", style=wx.ALIGN_CENTRE_HORIZONTAL)
+        if scaniface.sensor == "femto":
+            sensor.SetLabel("Using Orbbec Femto Bolt")
         if scaniface.sensor == "k4a":
-            sensor.SetLabel("Using Kinect Azure DK version of r.in.kinect")
+            sensor.SetLabel("Using Kinect Azure DK")
         elif scaniface.sensor == "k4w_v2":
-            sensor.SetLabel("Using Kinect Xbox One version of r.in.kinect")
+            sensor.SetLabel("Using Kinect Xbox One")
         elif sensor is None:
             sensor.SetLabel("WARNING: r.in.kinect not available")
 
@@ -65,7 +67,7 @@ class AboutPanel(wx.Panel):
         hbitmap = wx.StaticBitmap(self, wx.ID_ANY, get_TL_logo())
         name = wx.StaticText(
             self,
-            label="Tangible Landscape plugin for GRASS GIS",
+            label="Tangible Landscape plugin for GRASS",
             style=wx.ALIGN_CENTRE_HORIZONTAL,
         )
         font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
@@ -100,6 +102,7 @@ class AnalysesPanel(wx.Panel):
         self.giface = giface
         self.settings = settings
         self.scaniface = scaniface
+        self.tools = Tools(overwrite=True)
         self.settingsChanged = Signal("AnalysesPanel.settingsChanged")
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -112,7 +115,7 @@ class AnalysesPanel(wx.Panel):
         topoBox = wx.StaticBox(self, label="  Topographic analyses ")
         topoSizer = wx.StaticBoxSizer(topoBox, wx.VERTICAL)
         self.contoursSelect = Select(self, size=(-1, -1), type="vector")
-        self.contoursStepTextCtrl = TextCtrl(self, size=(40, -1))
+        self.contoursStepTextCtrl = wx.TextCtrl(self, size=(40, -1))
         self.contoursStepTextCtrl.SetToolTip("Contour step")
 
         if (
@@ -158,11 +161,11 @@ class AnalysesPanel(wx.Panel):
         self.trainingAreas = Select(self, size=(-1, -1), type="raster")
         self.trainingAreas.SetValue(self.settings["analyses"]["color_training"])
         self.trainingAreas.Bind(wx.EVT_TEXT, self.OnAnalysesChange)
-        calibrateBtn = wx.Button(self, label="Calibrate")
-        calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
+        self.calibrateBtn = wx.Button(self, label="Calibrate")
+        self.calibrateBtn.Bind(wx.EVT_BUTTON, self.OnColorCalibration)
 
         bmp = get_show_layer_icon()
-        addLayerBtn = BitmapButton(
+        addLayerBtn = wx.BitmapButton(
             self, bitmap=bmp, size=(bmp.GetWidth() + 12, bmp.GetHeight() + 8)
         )
         addLayerBtn.SetToolTip("Add layer to display")
@@ -239,7 +242,7 @@ class AnalysesPanel(wx.Panel):
             flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             border=5,
         )
-        sizer.Add(calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(self.calibrateBtn, proportion=0, flag=wx.ALIGN_CENTER_VERTICAL)
         colorSizer.Add(sizer, flag=wx.EXPAND | wx.ALL, border=5)
         mainSizer.Add(colorSizer, flag=wx.EXPAND | wx.ALL, border=5)
 
@@ -278,20 +281,18 @@ class AnalysesPanel(wx.Panel):
         dlg.Destroy()
 
     def OnColorCalibration(self, event):
-        if self.scaniface.IsScanning():
+        training = self.trainingAreas.GetValue()
+        if not training:
             dlg = wx.MessageDialog(
                 self,
-                "In order to calibrate, please stop scanning process first.",
-                "Stop scanning",
+                "In order to calibrate colors, please specify the raster with training areas.",
+                "Need training raster",
                 wx.OK | wx.ICON_WARNING,
             )
             dlg.ShowModal()
             dlg.Destroy()
             return
 
-        training = self.trainingAreas.GetValue()
-        if not training:
-            return
         if self.settings["output"]["color"] and self.settings["output"]["color_name"]:
             self.group = self.settings["output"]["color_name"]
         else:
@@ -306,49 +307,59 @@ class AnalysesPanel(wx.Panel):
             dlg.Destroy()
             return
 
+        if not self.scaniface.IsScanning():
+            dlg = wx.MessageDialog(
+                self,
+                "In order to calibrate, please start scanning process first.",
+                "Start scanning",
+                wx.OK | wx.ICON_WARNING,
+            )
+            dlg.ShowModal()
+            dlg.Destroy()
+            return
+
         self.CalibrateColor()
 
     def CalibrateColor(self):
         ll = self.giface.GetLayerList()
         checked = []
-        for l in ll:
-            if ll.IsLayerChecked(l):
-                checked.append(l.cmd)
-                ll.CheckLayer(l, False)
-        wx.Yield()
+        for layer in ll:
+            if ll.IsLayerChecked(layer):
+                checked.append(layer.cmd)
+                ll.CheckLayer(layer, False)
+        self.calibrateBtn.SetLabel("Calibrating...")
+        # wx.Yield()
 
-        self.scaniface.Scan(continuous=False)
-        self.scaniface.process.communicate()
-        self.scaniface.process = None
-        self.scaniface.status.SetLabel("Done.")
+        was_paused_before = False
+        if self.scaniface.pause:
+            was_paused_before = True
+            self.scaniface.pause = False
+            self.scaniface.changedInput = True
+        wx.CallLater(4000, self._calibrateColor, checked, was_paused_before)
 
-        self._defineEnvironment()
+    def _calibrateColor(self, checked, was_paused_before):
+        if was_paused_before:
+            self.scaniface.pause = True
+            self.scaniface.changedInput = True
+        self.calibrateBtn.SetLabel("Calibrate")
 
-        self._calibrateColor()
+        maps = self.tools.i_group(
+            flags="l", group=self.group, subgroup=self.group, format="json"
+        )
+        if maps:
+            with gscript.RegionManagerEnv(raster=maps[0]):
+                self.tools.i_gensigset(
+                    trainingmap=self.settings["analyses"]["color_training"],
+                    group=self.group,
+                    subgroup=self.group,
+                    signaturefile="signature",
+                )
+
         # check the layers back to previous state
         ll = self.giface.GetLayerList()
-        for l in ll:
-            if l.cmd in checked:
-                ll.CheckLayer(l, True)
-
-    def _calibrateColor(self):
-        gscript.run_command(
-            "i.gensigset",
-            trainingmap=self.settings["analyses"]["color_training"],
-            group=self.group,
-            subgroup=self.group,
-            signaturefile="signature",
-            env=self.env,
-            overwrite=True,
-        )  # we need here overwrite=True
-
-    def _defineEnvironment(self):
-        self.env = None
-        maps = gscript.read_command(
-            "i.group", flags="g", group=self.group, subgroup=self.group, quiet=True
-        ).strip()
-        if maps:
-            self.env = get_environment(raster=maps.splitlines()[0])
+        for layer in ll:
+            if layer.cmd in checked:
+                ll.CheckLayer(layer, True)
 
     def _addCalibLayer(self, event):
         if not self.giface.GetLayerTree():
@@ -390,7 +401,7 @@ class ScanningPanel(wx.Panel):
             self.settings["scan"]["interpolate"] = False
             self.settings["scan"]["trim_tolerance"] = ""
             self.settings["scan"]["resolution"] = 2
-            if self.scaniface.sensor == "k4a":
+            if self.scaniface.sensor in ("k4a", "femto"):
                 self.settings["scan"]["color_resolution"] = ""
                 self.settings["scan"]["camera_resolution"] = "720P"
                 self.settings["scan"]["white_balance"] = 0
@@ -406,7 +417,7 @@ class ScanningPanel(wx.Panel):
         demBox = wx.StaticBox(self, label=" DEM quality ")
         demSizer = wx.StaticBoxSizer(demBox, wx.VERTICAL)
         georefBox = wx.StaticBox(self, label="  Georeferencing  ")
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             colorBox = wx.StaticBox(self, label=" Color quality ")
             colorSizer = wx.StaticBoxSizer(colorBox, wx.VERTICAL)
             georefSizer = wx.StaticBoxSizer(georefBox, wx.HORIZONTAL)
@@ -415,11 +426,11 @@ class ScanningPanel(wx.Panel):
             georefSizer = wx.StaticBoxSizer(georefBox, wx.VERTICAL)
 
         # create widgets
-        self.btnCalibrateTilt = Button(self, label="Calibration 1")
+        self.btnCalibrateTilt = wx.Button(self, label="Calibration 1")
         self.btnCalibrateTilt.SetToolTip(
             "Calibrate to remove tilt of the scanner and to set suitable distance from the scanner"
         )
-        self.btnCalibrateExtent = Button(self, label="Calibration 2")
+        self.btnCalibrateExtent = wx.Button(self, label="Calibration 2")
         self.btnCalibrateExtent.SetToolTip(
             "Calibrate to identify the extent and position of the scanned object"
         )
@@ -433,37 +444,37 @@ class ScanningPanel(wx.Panel):
         self.regionInput.SetToolTip(
             "Saved region from which we take the georeferencing information"
         )
-        self.zexag = TextCtrl(self)
+        self.zexag = wx.TextCtrl(self)
         self.zexag.SetMinSize((50, -1))
         self.zexag.SetToolTip("Set vertical exaggeration of the physical model")
-        self.numscans = SpinCtrl(self, min=1, max=5, initial=1)
+        self.numscans = wx.SpinCtrl(self, min=1, max=5, initial=1)
         self.numscans.SetToolTip("Set number of scans to integrate")
-        self.rotate = SpinCtrl(self, min=0, max=360, initial=180)
+        self.rotate = wx.SpinCtrl(self, min=0, max=360, initial=180)
         self.rotate.SetToolTip(
             "Set angle of rotation of the sensor around Z axis (typically 180 degrees)"
         )
-        self.smooth = TextCtrl(self)
+        self.smooth = wx.TextCtrl(self)
         self.smooth.SetToolTip(
             "Set smoothing of the DEM (typically between 7 to 12, higher value means more smoothing)"
         )
-        self.resolution = TextCtrl(self)
+        self.resolution = wx.TextCtrl(self)
         self.resolution.SetToolTip(
             "Raster resolution in mm of the ungeoreferenced scan"
         )
         self.trim = {}
         for each in "tbnsew":
-            self.trim[each] = TextCtrl(self, size=(40, -1))
+            self.trim[each] = wx.TextCtrl(self, size=(40, -1))
             if each in "tb":
                 self.trim[each].SetToolTip("Distance from the scanner")
             else:
                 self.trim[each].SetToolTip(
                     "Distance from the center of scanning to the scanning boundary"
                 )
-        self.trim_tolerance = TextCtrl(self)
+        self.trim_tolerance = wx.TextCtrl(self)
         self.trim_tolerance.SetToolTip(
             "Automatic trimming of the edges for rectangular models"
         )
-        self.interpolate = CheckBox(self, label="Use interpolation instead of binning")
+        self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
         self.interpolate.SetToolTip(
             "Interpolation avoids gaps in the scan, but takes longer"
         )
@@ -479,7 +490,7 @@ class ScanningPanel(wx.Panel):
         self.smooth.SetValue(str(self.scan["smooth"]))
         self.resolution.SetValue(str(self.scan["resolution"]))
         self.trim_tolerance.SetValue(str(self.scan["trim_tolerance"]))
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             self.cameraResolution = wx.Choice(
                 self, choices=["depth", "720P", "1080P", "1440P", "2160P"]
             )
@@ -491,7 +502,7 @@ class ScanningPanel(wx.Panel):
             self.cameraResolution.SetStringSelection(
                 self.scan.get("camera_resolution", "720P")
             )
-            self.colorResolution = TextCtrl(self)
+            self.colorResolution = wx.TextCtrl(self)
             self.colorResolution.SetToolTip(
                 "Raster resolution of color output in mm of the ungeoreferenced scan"
             )
@@ -573,7 +584,7 @@ class ScanningPanel(wx.Panel):
         mainSizer.Add(geomSizer, flag=wx.EXPAND | wx.ALL, border=10)
 
         hSizer2 = wx.BoxSizer(wx.HORIZONTAL)
-        if self.scaniface.sensor != "k4a":
+        if self.scaniface.sensor not in ("k4a", "femto"):
             #
             # Georeferencing box
             #
@@ -657,7 +668,7 @@ class ScanningPanel(wx.Panel):
         hSizer2.Add(demSizer, proportion=1, flag=wx.EXPAND | wx.RIGHT, border=10)
 
         # Color properties box
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             hSizer = wx.BoxSizer(wx.HORIZONTAL)
             hSizer.Add(
                 wx.StaticText(self, label="RGB camera resolution:"),
@@ -701,7 +712,7 @@ class ScanningPanel(wx.Panel):
             hSizer2, flag=wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, border=10
         )
 
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             #
             # Georeferencing box
             #
@@ -770,7 +781,7 @@ class ScanningPanel(wx.Panel):
         self.trim_tolerance.Bind(wx.EVT_TEXT, self.OnModelProperties)
         for each in "nsewtb":
             self.trim[each].Bind(wx.EVT_TEXT, self.OnModelProperties)
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             self.cameraResolution.Bind(wx.EVT_CHOICE, self.OnModelProperties)
             self.colorResolution.Bind(wx.EVT_TEXT, self.OnModelProperties)
             self.whiteBalance.Bind(wx.EVT_SPINCTRL, self.OnModelProperties)
@@ -795,7 +806,7 @@ class ScanningPanel(wx.Panel):
             self.scan["trim_nsewtb"] = ",".join(nsewtb_list)
         except ValueError:
             pass
-        if self.scaniface.sensor == "k4a":
+        if self.scaniface.sensor in ("k4a", "femto"):
             self.scan["color_resolution"] = self.colorResolution.GetValue()
             self.scan["camera_resolution"] = self.cameraResolution.GetStringSelection()
             self.scan["white_balance"] = self.whiteBalance.GetValue()
@@ -813,6 +824,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         )
         self.giface = giface
         self.parent = parent
+        self.tools = Tools()
 
         if not gscript.find_program("r.in.kinect"):
             self.giface.WriteError("ERROR: Module r.in.kinect not found.")
@@ -952,13 +964,11 @@ class TangibleLandscapePlugin(wx.Dialog):
             self.notebook.GetPage(c).SetSize(size)
 
     def getSensorVersion(self):
-        nuldev = open(os.devnull, "w+")
         try:
-            out = gscript.read_command("r.in.kinect", flags="i", stderr=nuldev)
-            version = out.strip().split("=")[-1]
+            out = self.tools.r_in_kinect(flags="i").keyval
+            version = out["sensor"]
         except CalledModuleError:
             version = "k4w_v2"
-        nuldev.close()
         return version
 
     def _getSignalFile(self):
@@ -1019,7 +1029,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         params = {}
         # we need to specify the camera conditions
         # the cloud is tilted differently for different conditions
-        if self.sensor == "k4a":
+        if self.sensor in ("k4a", "femto"):
             params["camera_resolution"] = self.scan["camera_resolution"]
             params["resolution"] = 0.01
             if self.scan.get("white_balance", 0) > 0:
@@ -1037,14 +1047,14 @@ class TangibleLandscapePlugin(wx.Dialog):
         params["rotate"] = self.scan["rotation_angle"]
         zrange = ",".join(self.scan["trim_nsewtb"].split(",")[4:])
         params["zrange"] = zrange
-        res = gscript.parse_command("r.in.kinect", flags="m", overwrite=True, **params)
+        res = self.tools.r_in_kinect(flags="m", overwrite=True, **params)
         # Check if res is empty OR if 'bbox' is missing BEFORE trying to access it
-        if not res or "bbox" not in res:
+        if not res or "bbox" not in res.keyval:
             gscript.warning(_("Failed to find model extent. Scanner returned no data."))
             return
 
         offsetcm = 2
-        n, s, e, w = [int(round(float(each))) for each in res["bbox"].split(",")]
+        n, s, e, w = [int(round(float(each))) for each in res.keyval["bbox"].split(",")]
         self.scanning_panel.trim["n"].SetValue(str(n + offsetcm))
         self.scanning_panel.trim["s"].SetValue(str(abs(s) + offsetcm))
         self.scanning_panel.trim["e"].SetValue(str(e + offsetcm))
@@ -1075,7 +1085,7 @@ class TangibleLandscapePlugin(wx.Dialog):
         params = {}
         # we need to specify the camera conditions
         # the cloud is tilted differently for different conditions
-        if self.sensor == "k4a":
+        if self.sensor in ("k4a", "femto"):
             params["camera_resolution"] = self.scan["camera_resolution"]
             params["resolution"] = 0.01
             if self.scan.get("white_balance", 0) > 0:
@@ -1089,7 +1099,7 @@ class TangibleLandscapePlugin(wx.Dialog):
                     "color_name"
                 ]
 
-        res = gscript.parse_command("r.in.kinect", flags="c", overwrite=True, **params)
+        res = self.tools.r_in_kinect(flags="c", overwrite=True, **params).keyval
         if not (res["calib_matrix"] and len(res["calib_matrix"].split(",")) == 9):
             gscript.message(_("Failed to calibrate"))
             return
@@ -1187,7 +1197,7 @@ class TangibleLandscapePlugin(wx.Dialog):
             and self.settings["tangible"]["output"]["color_name"]
         ):
             params["color_output"] = self.settings["tangible"]["output"]["color_name"]
-            if self.sensor == "k4a":
+            if self.sensor in ("k4a", "femto"):
                 params["camera_resolution"] = self.scan["camera_resolution"]
                 if self.scan.get("white_balance", 0) > 0:
                     params["white_balance"] = self.scan["white_balance"]

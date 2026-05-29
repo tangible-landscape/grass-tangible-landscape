@@ -10,7 +10,8 @@ This program is free software under the GNU General Public License
 import wx
 
 from gui_core.gselect import Select
-import grass.script as gscript
+from grass.script import find_file, gisenv
+from grass.tools import Tools
 from grass.pydispatch.signal import Signal
 
 
@@ -19,6 +20,7 @@ class DrawingPanel(wx.Panel):
         wx.Panel.__init__(self, parent)
         self.giface = giface
         self.settings = settings
+        self.tools = Tools(overwrite=True, quiet=True)
         self.settingsChanged = Signal("ScanningPanel.settingsChanged")
 
         if "drawing" not in self.settings:
@@ -121,27 +123,21 @@ class DrawingPanel(wx.Panel):
     def appendVector(self):
         if not self.settings["drawing"]["append"]:
             return
-        ff = gscript.find_file(
+        ff = find_file(
             self.settings["drawing"]["appendName"],
             element="vector",
-            mapset=gscript.gisenv()["MAPSET"],
+            mapset=gisenv()["MAPSET"],
         )
         if not (ff and ff["fullname"]):
             self._newAppendedVector()
-        gscript.run_command(
-            "v.patch",
+        self.tools.v_patch(
             input=self.settings["drawing"]["name"],
             output=self.settings["drawing"]["appendName"],
             flags="a",
-            overwrite=True,
-            quiet=True,
         )
 
     def _newAppendedVector(self, event=None):
-        gscript.run_command(
-            "v.edit",
+        self.tools.v_edit(
             tool="create",
             map=self.settings["drawing"]["appendName"],
-            overwrite=True,
-            quiet=True,
         )
