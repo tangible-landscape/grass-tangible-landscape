@@ -267,7 +267,9 @@ def landform(scanned_elev, new, size=25, zscale=1, env=None, tools=None):
     )
 
 
-def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None, tools=None):
+def geomorphon(
+    scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None, tools=None
+):
     tools = tools or Tools(env=env)
     tools.r_geomorphon(
         elevation=scanned_elev,
@@ -279,7 +281,9 @@ def geomorphon(scanned_elev, new, search=22, skip=12, flat=1, dist=0, env=None, 
     )
 
 
-def usped(scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env=None, tools=None):
+def usped(
+    scanned_elev, k_factor, c_factor, flowacc, slope, aspect, new, env=None, tools=None
+):
     """!Computes net erosion and deposition (USPED model)"""
     tools = tools or Tools(env=env)
     suffix = str(uuid.uuid4()).replace("-", "")[:5]
@@ -382,8 +386,14 @@ def contours(scanned_elev, new, maxlevel=None, step=None, env=None, tools=None):
 
 
 def change_detection_area(
-    before, after, change, height_threshold, filter_slope_threshold, add,
-    env=None, tools=None,
+    before,
+    after,
+    change,
+    height_threshold,
+    filter_slope_threshold,
+    add,
+    env=None,
+    tools=None,
 ):
     """Detects change in area. Result are areas with value
     equals the max difference between the scans as a positive value."""
@@ -481,7 +491,8 @@ def change_detection(
         )
         if debug:
             stat_list = [
-                f"Category {st['categories'][0]['category']}: {st['count']} cells" for st in stats
+                f"Category {st['categories'][0]['category']}: {st['count']} cells"
+                for st in stats
             ]
             print(f"DEBUG: {', '.join(stat_list)}")
         if len(stats) > 0 and stats[0]:
@@ -694,8 +705,14 @@ def trail_salesman(trails, points, output, env=None, tools=None):
 
 
 def viewshed(
-    scanned_elev, output, vector, visible_color, invisible_color, obs_elev=1.7,
-    env=None, tools=None,
+    scanned_elev,
+    output,
+    vector,
+    visible_color,
+    invisible_color,
+    obs_elev=1.7,
+    env=None,
+    tools=None,
 ):
     tools = tools or Tools(env=env)
     coordinates = tools.v_out_ascii(input=vector, separator=",").text
@@ -837,7 +854,9 @@ def cross_section(scanned_elev, voxel, new, env=None, tools=None):
     tools.r_colors(map=new, raster_3d=voxel)
 
 
-def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env=None, tools=None):
+def subsurface_slice(
+    points, voxel, slice_, axes, slice_line, units, offset, env=None, tools=None
+):
     tools = tools or Tools(env=env)
     topo = tools.v_info(map=points, flags="t", format="json")
     if topo:
@@ -866,7 +885,9 @@ def subsurface_slice(points, voxel, slice_, axes, slice_line, units, offset, env
     )
 
 
-def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env=None, tools=None):
+def subsurface_borehole(
+    points, voxel, new, size, offset, axes, unit, env=None, tools=None
+):
     tools = tools or Tools(env=env)
     coordinates = tools.v_out_ascii(input=points, format="point", separator=",").text
     coords_list = []
@@ -885,8 +906,14 @@ def subsurface_borehole(points, voxel, new, size, offset, axes, unit, env=None, 
 
 
 def classify_colors(
-    new, group, compactness=2, threshold=0.3, minsize=10, useSuperPixels=True,
-    env=None, tools=None,
+    new,
+    group,
+    compactness=2,
+    threshold=0.3,
+    minsize=10,
+    useSuperPixels=True,
+    env=None,
+    tools=None,
 ):
     tools = tools or Tools(env=env)
     segment = "tmp_segment"

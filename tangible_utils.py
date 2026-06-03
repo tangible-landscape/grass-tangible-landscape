@@ -146,15 +146,14 @@ def remove_vector(name, deleteTable=False):
             pass
 
 
-def _dispatch_user_funcs(myanalyses, prefix, scan_name, base_env, call_kwargs, exclude=()):
+def _dispatch_user_funcs(
+    myanalyses, prefix, scan_name, base_env, call_kwargs, exclude=()
+):
     """Run each function in `myanalyses` whose name starts with `prefix`,
     each in its own isolated MaskManager / RegionManager / Tools(env=env) context.
 
     `tools` and `env` are injected into the per-call kwargs."""
-    funcs = [
-        f for f in dir(myanalyses)
-        if f.startswith(prefix) and f not in exclude
-    ]
+    funcs = [f for f in dir(myanalyses) if f.startswith(prefix) and f not in exclude]
     for func in funcs:
         env = base_env.copy()
         with (
@@ -268,22 +267,41 @@ def run_analyses(
 
     if settings["tangible"]["drawing"]["active"]:
         drawing = settings["tangible"]["drawing"]
-        _dispatch_user_funcs(myanalyses, "drawing_", scan_name, base_env, {
-            **common_kwargs,
-            "scanned_calib_elev": calib_scan_name,
-            "draw_vector": drawing["name"],
-            "draw_vector_append": drawing["append"],
-            "draw_vector_append_name": drawing["appendName"],
-        })
+        _dispatch_user_funcs(
+            myanalyses,
+            "drawing_",
+            scan_name,
+            base_env,
+            {
+                **common_kwargs,
+                "scanned_calib_elev": calib_scan_name,
+                "draw_vector": drawing["name"],
+                "draw_vector_append": drawing["append"],
+                "draw_vector_append_name": drawing["appendName"],
+            },
+        )
     elif calibration:
-        _dispatch_user_funcs(myanalyses, "calib_", scan_name, base_env, {
-            **common_kwargs,
-            "scanned_calib_elev": scan_name,
-            "scanned_color": color,
-        })
+        _dispatch_user_funcs(
+            myanalyses,
+            "calib_",
+            scan_name,
+            base_env,
+            {
+                **common_kwargs,
+                "scanned_calib_elev": scan_name,
+                "scanned_color": color,
+            },
+        )
     else:
-        _dispatch_user_funcs(myanalyses, "run_", scan_name, base_env, {
-            **common_kwargs,
-            "scanned_calib_elev": calib_scan_name,
-            "scanned_color": color,
-        }, exclude={"run_command"})
+        _dispatch_user_funcs(
+            myanalyses,
+            "run_",
+            scan_name,
+            base_env,
+            {
+                **common_kwargs,
+                "scanned_calib_elev": calib_scan_name,
+                "scanned_color": color,
+            },
+            exclude={"run_command"},
+        )

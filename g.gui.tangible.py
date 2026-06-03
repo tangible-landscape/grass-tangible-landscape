@@ -30,7 +30,6 @@ from grass.pydispatch.signal import Signal
 from grass.exceptions import CalledModuleError
 
 from tangible_utils import (
-    get_environment,
     run_analyses,
     updateGUIEvt,
     get_TL_logo,
@@ -475,7 +474,9 @@ class ScanningPanel(wx.Panel):
         self.trim_tolerance.SetToolTip(
             "Automatic trimming of the edges for rectangular models"
         )
-        self.interpolate = wx.CheckBox(self, label="Use interpolation instead of binning")
+        self.interpolate = wx.CheckBox(
+            self, label="Use interpolation instead of binning"
+        )
         self.interpolate.SetToolTip(
             "Interpolation avoids gaps in the scan, but takes longer"
         )
