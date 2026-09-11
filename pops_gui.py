@@ -8,8 +8,10 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import os
+import csv
 import json
 import re
+import time
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
@@ -24,6 +26,7 @@ from grass.exceptions import CalledModuleError
 from tangible_utils import load_source, get_environment, changeLayer, checkLayers
 
 from activities_dashboard import MultipleHTMLDashboardFrame
+from activities_dashboard import QuarantineDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
 from pops_dashboard import PoPSDashboard, ModelParameters, dateFromString, dateToString
@@ -83,6 +86,7 @@ class PopsPanel(wx.Panel):
         self.profileFrame = (
             self.dashboardFrame
         ) = self.timeDisplay = self.timeStatusDisplay = None
+        self.quarantineDashboardFrame = None
         self.treatments = Treatments()
         self.treated_area = 0
         self.money_spent = 0
@@ -964,6 +968,8 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
 
     def _initSimulation(self, restart):
+        if self.quarantineDashboardFrame:
+            self.quarantineDashboardFrame.clear()
         # update params, dashboard
         if self.webDashboard:
             # get new run collection
@@ -1168,6 +1174,7 @@ class PopsPanel(wx.Panel):
                 res = re.search("_[0-9]{4}_[0-9]{2}_[0-9]{2}", name)
                 if res:  # should happen always?
                     year, month, day = res.group().strip("_").split("_")
+                    self._updateQuarantineDisplay(name, int(year))
                     # if last checkpoint is the same date as current raster, we don't want it
                     if self.checkpoints[self.currentCheckpoint] == (
                         int(year),
@@ -1330,6 +1337,12 @@ class PopsPanel(wx.Panel):
         # display
         if "display" in self.configuration["tasks"][self.current]:
             self.StartDisplay()
+        # quarantine display
+        if (
+            "quarantine_display" in self.configuration["tasks"][self.current]
+            and "quarantine_output" in self.params.model
+        ):
+            self.StartQuarantineDisplay()
         # time display
         if "time_display" in self.configuration["tasks"][self.current]:
             self.StartTimeDisplay()
@@ -1349,6 +1362,9 @@ class PopsPanel(wx.Panel):
             if self.dashboardFrame:
                 self.dashboardFrame.Destroy()
                 self.dashboardFrame = None
+            if self.quarantineDashboardFrame:
+                self.quarantineDashboardFrame.Destroy()
+                self.quarantineDashboardFrame = None
             if self.timeDisplay:
                 self.timeDisplay.Destroy()
                 self.timeDisplay = None
@@ -1766,6 +1782,126 @@ class PopsPanel(wx.Panel):
         self.dashboardFrame.Show()
         self.dashboardFrame.SetSize(size)
         self.dashboardFrame.SetPosition(pos)
+
+    def StartQuarantineDisplay(self):
+        config = self.tasks[self.current]["quarantine_display"]
+        directions = self.params.model.get("quarantine_directions", "")
+        directions = [each for each in directions.split(",") if each]
+        self.quarantineDashboardFrame = QuarantineDashboardFrame(
+            self,
+            fontsize=config["fontsize"],
+            max_distance=config["max_distance"],
+            title=config.get("title", "Distance to quarantine"),
+            formatting_string=config.get("formatting_string", "{:.1f} km"),
+            escape_formatting_string=config.get(
+                "escape_formatting_string", "Escape by end of simulation: {:.0f}%"
+            ),
+            scale=config.get("scale", 1),
+            # with a single direction the label would only repeat the setting
+            show_direction=len(directions) != 1,
+        )
+        pos = self._getDashboardPosition(key="quarantine_display")
+        size = self._getDashboardSize(key="quarantine_display")
+        self.quarantineDashboardFrame.Show()
+        self.quarantineDashboardFrame.SetSize(size)
+        self.quarantineDashboardFrame.SetPosition(pos)
+
+    def _getSelectedRun(self, name):
+        """Get the index of the selected stochastic run.
+
+        The model records it only in the title of the single run raster,
+        as e.g. 'Occurrence from a single stochastic run (run 3)'.
+        """
+        try:
+            title = gscript.raster_info(name)["title"]
+        except (CalledModuleError, KeyError, TypeError):
+            return None
+        res = re.search("run ([0-9]+)", title)
+        if not res:
+            return None
+        return int(res.group(1))
+
+    def _readQuarantineFile(self):
+        """Read the quarantine CSV written by the model.
+
+        The model truncates and rewrites the whole file at every steering step,
+        so a read can catch it partially written; in that case retry once.
+        Returns a list of rows as dictionaries, empty when there is nothing
+        usable to read.
+        """
+        path = self.params.model.get("quarantine_output")
+        if not path:
+            return []
+        for attempt in range(2):
+            try:
+                with open(path, "r") as f:
+                    rows = list(csv.reader(f))
+            except IOError:
+                rows = []
+            # escaped runs have empty values but still the full number of
+            # fields, so a short row means the file was caught mid-write
+            if rows and all(len(row) == len(rows[0]) for row in rows):
+                return [dict(zip(rows[0], row)) for row in rows[1:]]
+            if attempt == 0:
+                time.sleep(0.05)
+        return []
+
+    def _updateQuarantineDisplay(self, name, year):
+        """Show distance to quarantine of the selected run for the given year.
+
+        Name is the raster of the step being displayed, which is the
+        probability raster when showing probability.
+        """
+        if not self.quarantineDashboardFrame:
+            return
+        probability = self.params.model["probability_series"]
+        if name.startswith(probability + "__"):
+            name = name[len(probability) + 2 :]
+        run = self._getSelectedRun(name)
+        if run is None:
+            return
+        rows = self._readQuarantineFile()
+        if not rows:
+            return
+        start = dateFromString(self.params.model["start_date"]).year
+        end = dateFromString(self.params.model["end_date"]).year
+        row = None
+        for each in rows:
+            try:
+                step = int(each["step"])
+            except (KeyError, ValueError, TypeError):
+                return
+            if step == year - start:
+                row = each
+                break
+        if row is None:
+            # the model did not compute this year yet
+            return
+        distance = row.get("dist{}".format(run))
+        if distance is None:
+            # fewer runs in the file than the selected run index
+            return
+        escaped = not distance
+        if not escaped:
+            try:
+                distance = float(distance)
+            except ValueError:
+                return
+        # the escape probability is a preview of the end of the forecast, so it
+        # is shown only once the model computed the whole horizon; stepping
+        # back truncates the file and hides it again
+        escape_probability = None
+        if len(rows) == end - start + 1:
+            try:
+                escape_probability = float(rows[-1]["escape_probability"])
+            except (KeyError, ValueError, TypeError):
+                escape_probability = None
+        self.quarantineDashboardFrame.show_value(
+            distance=None if escaped else distance,
+            direction=row.get("dir{}".format(run)),
+            escaped=escaped,
+            escape_probability=escape_probability,
+        )
 
     def _getDashboardPosition(self, key):
         if "position" in self.tasks[self.current][key]:

@@ -75,6 +75,12 @@ class ModelParameters:
         self.model["spread_rate_output"] = path
         os.close(fh)
 
+        if "quarantine" in self.model:
+            # quarantine and quarantine_output are collective options
+            fh, path = tempfile.mkstemp()
+            self.model["quarantine_output"] = path
+            os.close(fh)
+
         # assume dashboard is initialized
         if self._web:
             session = self._web.get_session()
@@ -91,6 +97,10 @@ class ModelParameters:
         self.baseline = self.model.copy()
         self.baseline.pop("single_series", None)
         self.baseline.pop("average_series", None)
+        # baseline must not overwrite the quarantine results of the steered run
+        self.baseline.pop("quarantine", None)
+        self.baseline.pop("quarantine_output", None)
+        self.baseline.pop("quarantine_directions", None)
         self.baseline.update(self._pops_config["baseline"])
         self.baseline_flags = self.baseline.pop("flags")
         self.pops.pop("baseline")
@@ -106,6 +116,8 @@ class ModelParameters:
     def UnInit(self):
         if "spread_rate_output" in self.model:
             gscript.try_remove(self.model["spread_rate_output"])
+        if "quarantine_output" in self.model:
+            gscript.try_remove(self.model["quarantine_output"])
 
 
 class PoPSDashboard(wx.EvtHandler):

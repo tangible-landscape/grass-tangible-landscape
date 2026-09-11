@@ -16,6 +16,38 @@ except ImportError:
     webview = None
 
 
+PROGRESSBAR_STYLE = """
+            progress {{
+                display: inline-block;
+                width: 100%;
+                padding: 0px 0 0 0;
+                margin: 0;
+                background: none;
+                border: 0;
+                border-radius: 15px;
+                text-align: left;
+                position: relative;
+                font-family: sans-serif;
+            }}
+            progress::-webkit-progress-bar {{
+                display: inline-block;
+                width: 100%;
+                margin: 0 auto;
+                background-color: #CCC;
+                border-radius: 15px;
+                box-shadow: 0px 0px 6px #777 inset;
+            }}
+            progress::-webkit-progress-value {{
+                display: inline-block;
+                float: left;
+                margin: 0px 0px 0 0;
+                background: #F70;
+                border-radius: 15px;
+                box-shadow: 0px 0px 6px #666 inset;
+            }}
+            """
+
+
 class MultipleDashboardFrame(wx.Frame):
     def __init__(
         self, parent, fontsize, maximum, title, formatting_string, vertical=False
@@ -153,36 +185,7 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         self.sizer.Fit(self.panel)
 
     def _progressbar(self):
-        return """
-            progress {{
-                display: inline-block;
-                width: 100%;
-                padding: 0px 0 0 0;
-                margin: 0;
-                background: none;
-                border: 0;
-                border-radius: 15px;
-                text-align: left;
-                position: relative;
-                font-family: sans-serif;
-            }}
-            progress::-webkit-progress-bar {{
-                display: inline-block;
-                width: 100%;
-                margin: 0 auto;
-                background-color: #CCC;
-                border-radius: 15px;
-                box-shadow: 0px 0px 6px #777 inset;
-            }}
-            progress::-webkit-progress-value {{
-                display: inline-block;
-                float: left;
-                margin: 0px 0px 0 0;
-                background: #F70;
-                border-radius: 15px;
-                box-shadow: 0px 0px 6px #666 inset;
-            }}
-            """
+        return PROGRESSBAR_STYLE
 
     def _head_grid(self):
         return (
@@ -294,6 +297,148 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         self.show_value(self.values)
 
 
+DIRECTION_LETTERS = {
+    0: "N",
+    45: "NE",
+    90: "E",
+    135: "SE",
+    180: "S",
+    225: "SW",
+    270: "W",
+    315: "NW",
+}
+
+
+def direction_to_letter(azimuth):
+    """Convert azimuth written by r.pops.spread into a compass letter.
+
+    Returns None for the non-directional value and for anything unparsable.
+    """
+    try:
+        return DIRECTION_LETTERS[int(azimuth)]
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+class QuarantineDashboardFrame(wx.Frame):
+    """Shows how close the infestation is to the quarantine boundary.
+
+    The progress bar is inverted on purpose: it fills up as the distance
+    shrinks, so a full bar means the infestation reached the boundary.
+    """
+
+    def __init__(
+        self,
+        parent,
+        fontsize,
+        max_distance,
+        title="Distance to quarantine",
+        formatting_string="{:.1f} km",
+        escape_formatting_string="Escape by end of simulation: {:.0f}%",
+        scale=1,
+        show_direction=True,
+    ):
+        wx.Frame.__init__(self, parent, style=wx.NO_BORDER)
+        self.panel = wx.Panel(parent=self)
+        self.fontsize = fontsize
+        self.max_distance = float(max_distance)
+        self.title = title
+        self.formatting_string = formatting_string
+        self.escape_formatting_string = escape_formatting_string
+        self.scale = float(scale) if scale else 1
+        self.show_direction = show_direction
+        self.values = (None, None, False, None)
+
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        if webview:
+            self.textCtrl = webview.WebView.New(self)
+            self.textCtrl.SetPage(self._content(*self.values), "")
+            self.sizer.Add(self.textCtrl, 1, wx.ALL | wx.EXPAND, 5)
+
+        self.SetSizer(self.sizer)
+        self.sizer.Fit(self.panel)
+
+    def _head(self):
+        return (
+            """<!DOCTYPE html><html><head><style>
+            td {{
+                white-space: nowrap;
+                font-family: sans-serif;
+            }}
+            table td:nth-child(2) {{
+                width: 100%;
+            }}
+            .danger {{
+                color: #C00;
+                font-weight: bold;
+            }}
+            .preview {{
+                color: #555;
+                font-style: italic;
+            }}
+            """
+            + PROGRESSBAR_STYLE
+            + """
+            progress.danger::-webkit-progress-value {{
+                background: #C00;
+            }}
+            </style></head><body>
+            <table style="width:100%; font-size: {fontsize}px;">
+            """
+        )
+
+    def _progress_element(self, value, escaped):
+        return '<progress class="{cls}" max="{max}" value="{val}"></progress>'.format(
+            cls="danger" if escaped else "", max=self.max_distance, val=value
+        )
+
+    def _content(self, distance, direction, escaped, escape_probability):
+        if escaped:
+            # full bar, the boundary has been crossed
+            value = self.max_distance
+            label = '<span class="danger">ESCAPED</span>'
+        elif distance is None:
+            value = 0
+            label = ""
+        else:
+            value = min(self.max_distance, max(0, self.max_distance - distance))
+            label = self.formatting_string.format(distance / self.scale)
+            letter = direction_to_letter(direction)
+            if self.show_direction and letter:
+                label += " " + letter
+
+        html = self._head().format(fontsize=self.fontsize)
+        html += "<tr>"
+        html += "<td>{item}</td>".format(item=self.title + ":")
+        html += "<td>{item}</td>".format(item=self._progress_element(value, escaped))
+        html += "<td>{item}</td>".format(item=label)
+        html += "</tr>"
+        html += "</table>"
+        if escape_probability is not None:
+            preview = '<p class="preview" style="font-size: {fontsize}px;">{text}</p>'
+            html += preview.format(
+                fontsize=int(self.fontsize * 0.8),
+                text=self.escape_formatting_string.format(escape_probability * 100),
+            )
+        html += "</body></html>"
+        return html
+
+    def show_value(
+        self, distance, direction=None, escaped=False, escape_probability=None
+    ):
+        """Update the display.
+
+        Distance is in map units, direction is the azimuth as written by the
+        model. When the run escaped, distance and direction are not available.
+        """
+        self.values = (distance, direction, escaped, escape_probability)
+        if webview:
+            self.textCtrl.SetPage(self._content(*self.values), "")
+
+    def clear(self):
+        self.show_value(None)
+
+
 if __name__ == "__main__":
     app = wx.App()
     test = "html"
@@ -311,6 +456,19 @@ if __name__ == "__main__":
         fr.SetPosition((700, 200))
         fr.SetSize((850, 800))
         fr.show_value([5000, 20, 1000000])
+    elif test == "quarantine":
+        fr = QuarantineDashboardFrame(
+            parent=None,
+            fontsize=20,
+            max_distance=10000,
+            title="Distance to quarantine",
+            formatting_string="{:.1f} km",
+            scale=1000,
+            show_direction=True,
+        )
+        fr.SetPosition((700, 200))
+        fr.SetSize((500, 150))
+        fr.show_value(3400, 90, escaped=False, escape_probability=0.4)
     elif test == "wx":
         fr = MultipleDashboardFrame(
             parent=None,
