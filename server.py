@@ -56,7 +56,7 @@ def clientInterface(conn, connections, event, steering):
     _debug_file = open("/tmp/debugServer.txt", "wb")
     while True:
         # receiving from client
-        data = conn.recv(1524)
+        data = conn.recv(2048)
         message = data.split(b":")
         if message[0] == "clientfile":
             # receive file
@@ -65,7 +65,7 @@ def clientInterface(conn, connections, event, steering):
             server_path = os.path.join(tmp_directory, os.path.basename(path.decode()))
             name = os.path.basename(path).split(".")[0]
             f = open(server_path, "wb")
-            data = conn.recv(1024)
+            data = conn.recv(2048)
             total_received = len(data)
             f.write(data)
             while total_received < fsize:
@@ -114,7 +114,7 @@ def clientInterface(conn, connections, event, steering):
                                 event,
                             ),
                         )
-                        thread.setDaemon(True)
+                        thread.daemon = True
                         thread.start()
             elif message[1] == b"end":
                 print("server: get stop from GUI")
@@ -158,7 +158,7 @@ def clientInterface(conn, connections, event, steering):
                                 event,
                             ),
                         )
-                        thread.setDaemon(True)
+                        thread.daemon = True
                         thread.start()
             elif message[1] == b"play":
                 if "computation" in connections:
@@ -305,7 +305,7 @@ def clientComputation(conn, connections, event):
     event.set()
     while True:
         event.wait(5)
-        data = conn.recv(2000)
+        data = conn.recv(2048)
         message = data.split(b"|")
         for m in message:
             lm = m.split(b":")
@@ -433,5 +433,5 @@ if __name__ == "__main__":
                 thread = Thread(
                     target=clientComputation, args=(conn, connections, event)
                 )
-                thread.setDaemon(True)
+                thread.daemon = True
                 thread.start()
