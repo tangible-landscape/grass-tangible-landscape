@@ -172,7 +172,7 @@ class SteeringClient:
 
     def _client(self, results_queue, event):
         while self._is_client_running:
-            data = self._socket.recv(1524)
+            data = self._socket.recv(2048)
             if not data:
                 # GUI received close from server
                 # finish while loop
@@ -193,7 +193,7 @@ class SteeringClient:
                 # receive file
                 fsize, path = int(message[1]), message[2].decode()
                 self._sendall(data)
-                data = self._socket.recv(1024)
+                data = self._socket.recv(2048)
                 total_received = len(data)
                 new_path = os.path.join(self._tmp_directory, os.path.basename(path))
                 f = open(new_path, "wb")
