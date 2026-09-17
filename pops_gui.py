@@ -627,6 +627,7 @@ class PopsPanel(wx.Panel):
 
     def ResetSimulation(self, event):
         self.HideResultsLayers()
+        self._clearQuarantineDisplay()
         self.ShowInitalInfection(useEvent=False, show=True)
         self.currentCheckpoint = 0
         self.currentRealityCheckpoint = 0
@@ -654,6 +655,7 @@ class PopsPanel(wx.Panel):
         event.Skip()
 
     def Replay(self, scenario):
+        self._clearQuarantineDisplay()
         displayTime = self.checkpoints[self.currentCheckpoint]
         suffix = "{y}_{m:02d}_{d:02d}".format(
             y=displayTime[0], m=displayTime[1], d=displayTime[2]
@@ -707,6 +709,7 @@ class PopsPanel(wx.Panel):
             )
 
     def ShowBaseline(self):
+        self._clearQuarantineDisplay()
         # change layers
         displayTime = self.checkpoints[self.currentCheckpoint]
         event = self.getEventName()
@@ -800,7 +803,9 @@ class PopsPanel(wx.Panel):
                 resultType="results",
                 useEvent=False,
             )
+            self._clearQuarantineDisplay()
         else:
+            self._updateQuarantineDisplay(name, displayTime[0])
             try:
                 # need to set the colors, sometimes color tables are not copied
                 # flag w will end in error if there is already table
@@ -968,8 +973,7 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
 
     def _initSimulation(self, restart):
-        if self.quarantineDashboardFrame:
-            self.quarantineDashboardFrame.clear()
+        self._clearQuarantineDisplay()
         # update params, dashboard
         if self.webDashboard:
             # get new run collection
@@ -1174,7 +1178,6 @@ class PopsPanel(wx.Panel):
                 res = re.search("_[0-9]{4}_[0-9]{2}_[0-9]{2}", name)
                 if res:  # should happen always?
                     year, month, day = res.group().strip("_").split("_")
-                    self._updateQuarantineDisplay(name, int(year))
                     # if last checkpoint is the same date as current raster, we don't want it
                     if self.checkpoints[self.currentCheckpoint] == (
                         int(year),
@@ -1198,6 +1201,7 @@ class PopsPanel(wx.Panel):
                     # when steering, jump just one step but keep processing outputs
                     if self._one_step or self._one_step is None:
                         self.currentCheckpoint = currentCheckpoint
+                        self._updateQuarantineDisplay(name, int(year))
                         evt = updateTimeDisplay(
                             current=self.currentRealityCheckpoint,
                             currentView=self.currentCheckpoint,
@@ -1846,23 +1850,39 @@ class PopsPanel(wx.Panel):
                 time.sleep(0.05)
         return []
 
-    def _updateQuarantineDisplay(self, name, year):
-        """Show distance to quarantine of the selected run for the given year.
+    def _clearQuarantineDisplay(self):
+        if self.quarantineDashboardFrame:
+            self.quarantineDashboardFrame.clear()
 
-        Name is the raster of the step being displayed, which is the
-        probability raster when showing probability.
+    def _updateQuarantineDisplay(self, name, year):
+        """Show distance to quarantine of the selected run for the displayed year.
+
+        Name is the raster displayed for that year, which is the probability
+        raster when showing probability. When there are no results for that
+        year, the display is cleared so that it never shows a different year.
         """
         if not self.quarantineDashboardFrame:
             return
+        values = self._getQuarantineValues(name, year)
+        if values:
+            self.quarantineDashboardFrame.show_value(*values)
+        else:
+            self.quarantineDashboardFrame.clear()
+
+    def _getQuarantineValues(self, name, year):
+        """Get distance, direction, escaped and escape probability for a year.
+
+        Returns None when the values are not available.
+        """
         probability = self.params.model["probability_series"]
         if name.startswith(probability + "__"):
             name = name[len(probability) + 2 :]
         run = self._getSelectedRun(name)
         if run is None:
-            return
+            return None
         rows = self._readQuarantineFile()
         if not rows:
-            return
+            return None
         start = dateFromString(self.params.model["start_date"]).year
         end = dateFromString(self.params.model["end_date"]).year
         row = None
@@ -1870,23 +1890,25 @@ class PopsPanel(wx.Panel):
             try:
                 step = int(each["step"])
             except (KeyError, ValueError, TypeError):
-                return
+                return None
             if step == year - start:
                 row = each
                 break
         if row is None:
             # the model did not compute this year yet
-            return
+            return None
         distance = row.get("dist{}".format(run))
         if distance is None:
             # fewer runs in the file than the selected run index
-            return
+            return None
         escaped = not distance
-        if not escaped:
+        if escaped:
+            distance = None
+        else:
             try:
                 distance = float(distance)
             except ValueError:
-                return
+                return None
         # the escape probability is a preview of the end of the forecast, so it
         # is shown only once the model computed the whole horizon; stepping
         # back truncates the file and hides it again
@@ -1896,12 +1918,7 @@ class PopsPanel(wx.Panel):
                 escape_probability = float(rows[-1]["escape_probability"])
             except (KeyError, ValueError, TypeError):
                 escape_probability = None
-        self.quarantineDashboardFrame.show_value(
-            distance=None if escaped else distance,
-            direction=row.get("dir{}".format(run)),
-            escaped=escaped,
-            escape_probability=escape_probability,
-        )
+        return distance, row.get("dir{}".format(run)), escaped, escape_probability
 
     def _getDashboardPosition(self, key):
         if "position" in self.tasks[self.current][key]:
