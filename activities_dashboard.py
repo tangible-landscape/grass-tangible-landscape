@@ -294,6 +294,31 @@ class MultipleHTMLDashboardFrame(wx.Frame):
         self.show_value(self.values)
 
 
+class StackedHTMLDashboardFrame(MultipleHTMLDashboardFrame):
+    """Dashboard with the label above the progress bar instead of next to it.
+
+    Useful when the label does not fit on one line with the bar.
+    """
+
+    def _content_table(self, values):
+        div = "<tr><td>{item}</td></tr>"
+        html = self._head_table().format(fontsize=self.fontsize)
+        for i in range(len(self.list_title)):
+            if values[i] is None:
+                values[i] = 0
+                label = ""
+            else:
+                label = self.list_formatting_string[i].format(values[i])
+            html += div.format(item=self.list_title[i] + ": " + label)
+            html += div.format(
+                item=self._progress_element(
+                    max_value=self.list_maximum[i], value=values[i]
+                )
+            )
+        html += self._end_table()
+        return html
+
+
 if __name__ == "__main__":
     app = wx.App()
     test = "html"

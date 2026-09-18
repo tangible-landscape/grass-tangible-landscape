@@ -26,6 +26,7 @@ from grass.exceptions import CalledModuleError
 from tangible_utils import load_source, get_environment, changeLayer, checkLayers
 
 from activities_dashboard import MultipleHTMLDashboardFrame
+from activities_dashboard import StackedHTMLDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
 from pops_dashboard import PoPSDashboard, ModelParameters, dateFromString, dateToString
@@ -1784,7 +1785,7 @@ class PopsPanel(wx.Panel):
 
     def StartQuarantineDisplay(self):
         config = self.tasks[self.current]["quarantine_display"]
-        self.quarantineDashboardFrame = MultipleHTMLDashboardFrame(
+        self.quarantineDashboardFrame = StackedHTMLDashboardFrame(
             self,
             fontsize=config["fontsize"],
             average=None,
