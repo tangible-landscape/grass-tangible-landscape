@@ -8,8 +8,10 @@ This program is free software under the GNU General Public License
 @author: Anna Petrasova (akratoc@ncsu.edu)
 """
 import os
+import csv
 import json
 import re
+import time
 import wx
 import wx.lib.newevent
 import wx.lib.filebrowsebutton as filebrowse
@@ -24,6 +26,7 @@ from grass.exceptions import CalledModuleError
 from tangible_utils import load_source, get_environment, changeLayer, checkLayers
 
 from activities_dashboard import MultipleHTMLDashboardFrame
+from activities_dashboard import StackedHTMLDashboardFrame
 
 from client import SteeringClient, EVT_PROCESS_FOR_DASHBOARD_EVENT, EVT_BASELINE_DONE
 from pops_dashboard import PoPSDashboard, ModelParameters, dateFromString, dateToString
@@ -83,6 +86,7 @@ class PopsPanel(wx.Panel):
         self.profileFrame = (
             self.dashboardFrame
         ) = self.timeDisplay = self.timeStatusDisplay = None
+        self.quarantineDashboardFrame = None
         self.treatments = Treatments()
         self.treated_area = 0
         self.money_spent = 0
@@ -401,6 +405,7 @@ class PopsPanel(wx.Panel):
             f.write("\n")
 
     def _afterSimulation(self, name):
+        wx.CallAfter(self._updateQuarantineDisplay)
         new_layers = self._renameAllAfterSimulation(name)
         # if new_layers:
         #    self._computeDifference(new_layers)
@@ -623,6 +628,7 @@ class PopsPanel(wx.Panel):
 
     def ResetSimulation(self, event):
         self.HideResultsLayers()
+        self._resetQuarantineDisplay()
         self.ShowInitalInfection(useEvent=False, show=True)
         self.currentCheckpoint = 0
         self.currentRealityCheckpoint = 0
@@ -964,6 +970,7 @@ class PopsPanel(wx.Panel):
         self.HideResultsLayers()
 
     def _initSimulation(self, restart):
+        self._resetQuarantineDisplay()
         # update params, dashboard
         if self.webDashboard:
             # get new run collection
@@ -1330,6 +1337,12 @@ class PopsPanel(wx.Panel):
         # display
         if "display" in self.configuration["tasks"][self.current]:
             self.StartDisplay()
+        # quarantine display
+        if (
+            "quarantine_display" in self.configuration["tasks"][self.current]
+            and "quarantine_output" in self.params.model
+        ):
+            self.StartQuarantineDisplay()
         # time display
         if "time_display" in self.configuration["tasks"][self.current]:
             self.StartTimeDisplay()
@@ -1349,6 +1362,9 @@ class PopsPanel(wx.Panel):
             if self.dashboardFrame:
                 self.dashboardFrame.Destroy()
                 self.dashboardFrame = None
+            if self.quarantineDashboardFrame:
+                self.quarantineDashboardFrame.Destroy()
+                self.quarantineDashboardFrame = None
             if self.timeDisplay:
                 self.timeDisplay.Destroy()
                 self.timeDisplay = None
@@ -1766,6 +1782,74 @@ class PopsPanel(wx.Panel):
         self.dashboardFrame.Show()
         self.dashboardFrame.SetSize(size)
         self.dashboardFrame.SetPosition(pos)
+
+    def StartQuarantineDisplay(self):
+        config = self.tasks[self.current]["quarantine_display"]
+        self.quarantineDashboardFrame = StackedHTMLDashboardFrame(
+            self,
+            fontsize=config["fontsize"],
+            average=None,
+            maximum=[100],
+            title=[config.get("title", "Probability of escape")],
+            formatting_string=[config.get("formatting_string", "{:.0f}%")],
+        )
+        pos = self._getDashboardPosition(key="quarantine_display")
+        size = self._getDashboardSize(key="quarantine_display")
+        self.quarantineDashboardFrame.Show()
+        self.quarantineDashboardFrame.SetSize(size)
+        self.quarantineDashboardFrame.SetPosition(pos)
+        self._resetQuarantineDisplay()
+
+    def _readQuarantineFile(self):
+        """Read the quarantine CSV written by the model.
+
+        The model truncates and rewrites the whole file at every steering step,
+        so a read can catch it partially written; in that case retry once.
+        Returns a list of rows as dictionaries, empty when there is nothing
+        usable to read.
+        """
+        path = self.params.model.get("quarantine_output")
+        if not path:
+            return []
+        for attempt in range(2):
+            try:
+                with open(path, "r") as f:
+                    rows = list(csv.reader(f))
+            except IOError:
+                rows = []
+            # escaped runs have empty values but still the full number of
+            # fields, so a short row means the file was caught mid-write
+            if rows and all(len(row) == len(rows[0]) for row in rows):
+                return [dict(zip(rows[0], row)) for row in rows[1:]]
+            if attempt == 0:
+                time.sleep(0.05)
+        return []
+
+    def _resetQuarantineDisplay(self):
+        """Show the escape probability the simulation starts from."""
+        if not self.quarantineDashboardFrame:
+            return
+        config = self.tasks[self.current]["quarantine_display"]
+        probability = config.get("initial_probability", 0)
+        self.quarantineDashboardFrame.show_value([probability * 100])
+
+    def _updateQuarantineDisplay(self):
+        """Show probability of escaping quarantine by the end of the simulation.
+
+        Called when the model reached the end of the horizon, so the last row
+        of the file is the end of the simulation as it looks after the steps
+        taken so far.
+        """
+        if not self.quarantineDashboardFrame:
+            return
+        rows = self._readQuarantineFile()
+        if not rows:
+            return
+        try:
+            probability = float(rows[-1]["escape_probability"])
+        except (KeyError, ValueError, TypeError):
+            return
+        self.quarantineDashboardFrame.show_value([probability * 100])
 
     def _getDashboardPosition(self, key):
         if "position" in self.tasks[self.current][key]:
