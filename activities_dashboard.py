@@ -298,23 +298,25 @@ class StackedHTMLDashboardFrame(MultipleHTMLDashboardFrame):
     """Dashboard with the label above the progress bar instead of next to it.
 
     Useful when the label does not fit on one line with the bar.
+    Rows with maximum set to None show only the label.
     """
 
     def _content_table(self, values):
         div = "<tr><td>{item}</td></tr>"
         html = self._head_table().format(fontsize=self.fontsize)
         for i in range(len(self.list_title)):
-            if values[i] is None:
-                values[i] = 0
+            value = values[i]
+            if value is None:
                 label = ""
             else:
-                label = self.list_formatting_string[i].format(values[i])
+                label = self.list_formatting_string[i].format(value)
             html += div.format(item=self.list_title[i] + ": " + label)
-            html += div.format(
-                item=self._progress_element(
-                    max_value=self.list_maximum[i], value=values[i]
+            if self.list_maximum[i] is not None:
+                html += div.format(
+                    item=self._progress_element(
+                        max_value=self.list_maximum[i], value=value or 0
+                    )
                 )
-            )
         html += self._end_table()
         return html
 
