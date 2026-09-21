@@ -405,7 +405,7 @@ class PopsPanel(wx.Panel):
             f.write("\n")
 
     def _afterSimulation(self, name):
-        wx.CallAfter(self._updateQuarantineDisplay, name)
+        wx.CallAfter(self._updateQuarantineDisplay)
         new_layers = self._renameAllAfterSimulation(name)
         # if new_layers:
         #    self._computeDifference(new_layers)
@@ -1789,16 +1789,9 @@ class PopsPanel(wx.Panel):
             self,
             fontsize=config["fontsize"],
             average=None,
-            # lost hosts are shown as text only
-            maximum=[100, None],
-            title=[
-                config.get("title", "Probability of escape"),
-                config.get("lost_hosts_title", "Lost hosts"),
-            ],
-            formatting_string=[
-                config.get("formatting_string", "{:.0f}%"),
-                config.get("lost_hosts_formatting_string", "{:,.0f}"),
-            ],
+            maximum=[100],
+            title=[config.get("title", "Probability of escape")],
+            formatting_string=[config.get("formatting_string", "{:.0f}%")],
         )
         pos = self._getDashboardPosition(key="quarantine_display")
         size = self._getDashboardSize(key="quarantine_display")
@@ -1832,64 +1825,31 @@ class PopsPanel(wx.Panel):
                 time.sleep(0.05)
         return []
 
-    def _readLostHosts(self, name):
-        """Read average number of lost hosts written by the model.
-
-        The model writes it as source1 of the average raster. Name is
-        the single run or probability raster of the same date.
-        Returns None when not available, e.g., with a model
-        which does not write it.
-        """
-        probability = self.params.model["probability_series"]
-        if name.startswith(probability + "__"):
-            name = name[len(probability) + 2 :]
-        average = "__".join([self.params.model["average_series"], name])
-        try:
-            info = gscript.parse_command("r.info", flags="e", map=average, quiet=True)
-        except CalledModuleError:
-            return None
-        # source1 is empty when not written
-        if ":" not in info.get("source1", ""):
-            return None
-        text, lost = info["source1"].split(":")
-        try:
-            return float(lost.strip('"'))
-        except ValueError:
-            return None
-
     def _resetQuarantineDisplay(self):
-        """Show the values the simulation starts from."""
+        """Show the escape probability the simulation starts from."""
         if not self.quarantineDashboardFrame:
             return
         config = self.tasks[self.current]["quarantine_display"]
-        self.quarantineDashboardFrame.show_value(
-            [
-                config.get("initial_probability", 0) * 100,
-                config.get("initial_lost_hosts", 0),
-            ]
-        )
+        probability = config.get("initial_probability", 0)
+        self.quarantineDashboardFrame.show_value([probability * 100])
 
-    def _updateQuarantineDisplay(self, name):
-        """Show escape probability and lost hosts at the end of the simulation.
+    def _updateQuarantineDisplay(self):
+        """Show probability of escaping quarantine by the end of the simulation.
 
         Called when the model reached the end of the horizon, so the last row
-        of the file and name, the last raster the model sent, are the end of
-        the simulation as it looks after the steps taken so far.
-        A value which cannot be read keeps what is currently shown.
+        of the file is the end of the simulation as it looks after the steps
+        taken so far.
         """
         if not self.quarantineDashboardFrame:
             return
-        probability, lost_hosts = self.quarantineDashboardFrame.values
         rows = self._readQuarantineFile()
-        if rows:
-            try:
-                probability = float(rows[-1]["escape_probability"]) * 100
-            except (KeyError, ValueError, TypeError):
-                pass
-        lost = self._readLostHosts(name)
-        if lost is not None:
-            lost_hosts = lost
-        self.quarantineDashboardFrame.show_value([probability, lost_hosts])
+        if not rows:
+            return
+        try:
+            probability = float(rows[-1]["escape_probability"])
+        except (KeyError, ValueError, TypeError):
+            return
+        self.quarantineDashboardFrame.show_value([probability * 100])
 
     def _getDashboardPosition(self, key):
         if "position" in self.tasks[self.current][key]:
