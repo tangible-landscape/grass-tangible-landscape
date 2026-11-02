@@ -84,6 +84,15 @@ class PopsPanel(wx.Panel):
             self.dashboardFrame
         ) = self.timeDisplay = self.timeStatusDisplay = None
         self.treatments = Treatments()
+        # conversion of management from dashboard runs in a worker thread,
+        # results are handed over to the GUI thread here
+        self.treatments.set_incoming_done_callback(
+            lambda result, error, generation: wx.CallAfter(
+                self._onIncomingManagementDone, result, error, generation
+            )
+        )
+        # run was requested while management from dashboard was being processed
+        self._runRequested = False
         self.treated_area = 0
         self.money_spent = 0
 
@@ -431,6 +440,24 @@ class PopsPanel(wx.Panel):
         StartCoroutine(self.webDashboard.send_management(json), self)
         return json
 
+    def _onIncomingManagementDone(self, result, error, generation):
+        """Called in the GUI thread when management coming from
+        the dashboard was processed in the background"""
+        if not self:
+            # panel already destroyed
+            return
+        self.treatments.incoming_done(result, error, generation)
+        if error is not None:
+            msg = f"Processing management from dashboard failed: {error}"
+            print(msg)
+            self.infoBar.ShowMessage(msg)
+            # do not start a run with management we could not process
+            self._runRequested = False
+            return
+        if self._runRequested and not self.treatments.incoming_pending():
+            self._runRequested = False
+            self.RunSimulation()
+
     def _uploadStepToDashboard(self, event):
         if not event.name.startswith(self.params.model["probability_series"]):
             return
@@ -622,6 +649,7 @@ class PopsPanel(wx.Panel):
             return False
 
     def ResetSimulation(self, event):
+        self._runRequested = False
         self.HideResultsLayers()
         self.ShowInitalInfection(useEvent=False, show=True)
         self.currentCheckpoint = 0
@@ -1026,6 +1054,14 @@ class PopsPanel(wx.Panel):
         self.steeringClient.simulation_start(restart)
 
     def RunSimulation(self, event=None):
+        if self.treatments.incoming_pending():
+            # management from dashboard is still being processed
+            # in the background, the run starts from
+            # _onIncomingManagementDone once it is finished
+            if not self._runRequested:
+                self._runRequested = True
+                self.infoBar.ShowMessage("Waiting for management from dashboard...")
+            return
         if self.steeringClient.simulation_is_running():
             # if simulation in the beginning, increase major version and restart the simulation
             if self.currentCheckpoint == 0:

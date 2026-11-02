@@ -9,6 +9,9 @@ import shutil
 import requests
 import tempfile
 import threading
+import time
+import traceback
+import uuid
 import wx
 import re
 import math
@@ -136,8 +139,6 @@ class PoPSDashboard(wx.EvtHandler):
         self._tmp_out_file = gscript.tempfile(False)
         suffix = os.path.basename(gscript.tempfile(False)).replace(".", "_")
         self._tmp_vect_file = "tmp_vect_" + suffix
-        self._tmp_inf_file = "tmp_inf_" + suffix
-        self._tmp_infavg_file = "tmp_infavg_" + suffix
         self._last_name_suffix = None
         self._websocket_auth_headers = []
         self._ws_session = None
@@ -475,51 +476,30 @@ class PoPSDashboard(wx.EvtHandler):
         rotation,
         use_single,
     ):
-        env = get_environment(raster=probability)
+        """Compute statistics, export and upload results of one step.
+
+        All GRASS processing runs in a background thread so that the GUI
+        and the websocket read loop are not blocked.
+        """
         mapset = gscript.gisenv()["MAPSET"]
-        gscript.mapcalc(
-            "{n} = int(if({r} == 0, null(), {r}))".format(
-                n=self._tmp_inf_file, r=single_infected
-            ),
-            env=env,
-        )
-        gscript.run_command(
-            "g.copy",
-            raster=[average_infected, self._tmp_infavg_file],
-            overwrite=True,
-            env=env,
-        )
-        gscript.run_command("r.null", map=self._tmp_infavg_file, setnull=0, env=env)
-
-        results = process_for_dashboard(
-            self._run_id,
-            year,
-            self._tmp_inf_file if use_single else self._tmp_infavg_file,
-            spread_rate_file,
-            rotation,
-        )
-
-        export_gisrc, export_env = self._create_tmp_gisrc_environment(
-            self._temp_location
-        )
-        input_gisrc, input_env = self._create_tmp_gisrc_environment()
         t = threading.Thread(
-            target=raster_to_proj_geojson_thread,
+            target=upload_results_thread,
             args=(
                 self,
-                single_infected + "@" + mapset,
-                probability + "@" + mapset,
-                average_infected + "@" + mapset,
-                stddev_infected + "@" + mapset,
-                min_infected + "@" + mapset,
-                max_infected + "@" + mapset,
-                input_gisrc,
-                input_env,
-                export_gisrc,
-                export_env,
-                results,
+                self._run_id,
                 self._root,
+                self._temp_location,
+                mapset,
+                year,
                 probability,
+                single_infected,
+                average_infected,
+                stddev_infected,
+                min_infected,
+                max_infected,
+                spread_rate_file,
+                rotation,
+                use_single,
             ),
         )
         t.start()
@@ -651,13 +631,92 @@ class PoPSDashboard(wx.EvtHandler):
         gscript.run_command(
             "g.remove", type="vector", name=self._tmp_vect_file, flags="f", quiet=True
         )
+
+
+def upload_results_thread(
+    evtHandler,
+    run_id,
+    root,
+    temp_location,
+    mapset,
+    year,
+    probability,
+    single_infected,
+    average_infected,
+    stddev_infected,
+    min_infected,
+    max_infected,
+    spread_rate_file,
+    rotation,
+    use_single,
+):
+    """Prepare rasters, compute statistics and upload them. Runs in a thread.
+    Posts threadDone event with out_id=None when anything fails."""
+    start = time.time()
+    # unique names, several steps can be processed at the same time
+    suffix = uuid.uuid4().hex[:8]
+    tmp_inf = "tmp_inf_" + suffix
+    tmp_infavg = "tmp_infavg_" + suffix
+    try:
+        env = get_environment(raster=probability)
+        gscript.mapcalc(
+            "{n} = int(if({r} == 0, null(), {r}))".format(n=tmp_inf, r=single_infected),
+            env=env,
+        )
+        gscript.run_command(
+            "g.copy", raster=[average_infected, tmp_infavg], overwrite=True, env=env
+        )
+        gscript.run_command("r.null", map=tmp_infavg, setnull=0, env=env)
+        results = process_for_dashboard(
+            run_id,
+            year,
+            tmp_inf if use_single else tmp_infavg,
+            spread_rate_file,
+            rotation,
+        )
+        export_gisrc, export_env = evtHandler._create_tmp_gisrc_environment(
+            temp_location
+        )
+        input_gisrc, input_env = evtHandler._create_tmp_gisrc_environment()
+    except Exception:
+        traceback.print_exc()
+        evt = threadDone(out_id=None, orig_name=probability)
+        wx.PostEvent(evtHandler, evt)
+        return
+    finally:
         gscript.run_command(
             "g.remove",
             type="raster",
-            name=[self._tmp_inf_file, self._tmp_infavg_file],
+            name=[tmp_inf, tmp_infavg],
             flags="f",
             quiet=True,
         )
+    print(
+        "dashboard: statistics for {} took {:.1f} s".format(
+            probability, time.time() - start
+        )
+    )
+    try:
+        raster_to_proj_geojson_thread(
+            evtHandler,
+            single_infected + "@" + mapset,
+            probability + "@" + mapset,
+            average_infected + "@" + mapset,
+            stddev_infected + "@" + mapset,
+            min_infected + "@" + mapset,
+            max_infected + "@" + mapset,
+            input_gisrc,
+            input_env,
+            export_gisrc,
+            export_env,
+            results,
+            root,
+            probability,
+        )
+    except Exception:
+        traceback.print_exc()
+        evt = threadDone(out_id=None, orig_name=probability)
+        wx.PostEvent(evtHandler, evt)
 
 
 def raster_to_proj_geojson_thread(

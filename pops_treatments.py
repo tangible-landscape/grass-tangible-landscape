@@ -4,6 +4,9 @@ import tempfile
 import shutil
 import uuid
 import json
+import threading
+import time
+import traceback
 
 import grass.script as gs
 from tangible_utils import get_environment
@@ -26,6 +29,18 @@ class Treatments:
         self.do_resampling = False
         self.ignore_incoming = False
         self._env = None
+        # management coming from the web dashboard is converted in a worker
+        # thread so that the GUI and the websocket read loop stay responsive
+        self._incoming_lock = threading.Lock()
+        # newest message waiting to be converted: (json, year, generation)
+        self._incoming_job = None
+        self._incoming_thread = None
+        # a result was handed to the GUI thread but not stored yet
+        self._incoming_unpublished = False
+        # bumped by reset_dashboard_treatment so that conversions started
+        # before the reset are discarded when they finish
+        self._incoming_generation = 0
+        self._incoming_done_callback = None
         gs.run_command(
             "v.edit",
             map=self.tr_external_name,
@@ -47,12 +62,15 @@ class Treatments:
         self.reset_dashboard_treatment()
 
     def reset_dashboard_treatment(self):
+        """Clear management coming from dashboard, call from the GUI thread.
+        Messages waiting to be converted and conversions in progress
+        belong to the previous state and are discarded."""
+        with self._incoming_lock:
+            self._incoming_generation += 1
+            self._incoming_job = None
         self.tr_external_json = None
         self.tr_dashboard_json = None
-        gs.run_command(
-            "v.edit", map=self.tr_external_name, tool="create", env=self._env
-        )
-        gs.run_command("v.edit", map=self.tr_dashboard, tool="create", env=self._env)
+        self._reset_dashboard_layers()
 
     def register_treatment(self, year, use_dashboard):
         """Register treatment from TL"""
@@ -305,92 +323,123 @@ class Treatments:
 
         return json.dumps(j)
 
+    def set_incoming_done_callback(self, callback):
+        """Set callback(result, error) called from the worker thread when
+        conversion of incoming management finishes. The callback should
+        switch to the GUI thread (e.g. wx.CallAfter) and call
+        incoming_done(result, error, generation) there."""
+        self._incoming_done_callback = callback
+
+    def incoming_pending(self):
+        """Return True if management from dashboard is waiting to be
+        processed or is being processed right now."""
+        with self._incoming_lock:
+            return (
+                self._incoming_job is not None
+                or self._incoming_thread is not None
+                or self._incoming_unpublished
+            )
+
     def current_geojson_to_treatment(
         self, management_polygons, year, run_collection=None
     ):
-        """Convert json coming from dashboard for visualization on TL"""
+        """Schedule conversion of json coming from dashboard.
 
-        def reset_layers():
-            self.treatments_for_model = []
-            gs.run_command(
-                "v.edit", map=self.tr_external_name, tool="create", env=self._env
+        This is called from the websocket read loop and must return
+        immediately: while it runs, pings from the server are not answered
+        and the server closes the connection after 30 s. The actual work
+        happens in a worker thread. If several messages arrive while one
+        is being processed, only the newest one is kept.
+        """
+        with self._incoming_lock:
+            self._incoming_job = (
+                management_polygons,
+                year,
+                self._incoming_generation,
             )
-            gs.run_command(
-                "v.edit",
-                map=self.tr_dashboard,
-                tool="create",
-                env=self._env,
-            )
+            if self._incoming_thread is None:
+                self._incoming_thread = threading.Thread(
+                    target=self._incoming_worker, daemon=True
+                )
+                self._incoming_thread.start()
 
-        print(f"convert geojson {year}")
-        if not management_polygons or management_polygons == "0":
+    def _incoming_worker(self):
+        try:
+            while True:
+                with self._incoming_lock:
+                    job = self._incoming_job
+                    self._incoming_job = None
+                    if job is None:
+                        return
+                management_polygons, year, generation = job
+                result = error = None
+                start = time.time()
+                try:
+                    result = self._convert_incoming(management_polygons, year)
+                except Exception as e:
+                    error = e
+                    traceback.print_exc()
+                print(f"convert geojson {year} took {time.time() - start:.1f} s")
+                if not self._incoming_done_callback:
+                    continue
+                with self._incoming_lock:
+                    self._incoming_unpublished = True
+                try:
+                    self._incoming_done_callback(result, error, generation)
+                except Exception:
+                    # GUI is probably gone, do not leave the state pending
+                    traceback.print_exc()
+                    with self._incoming_lock:
+                        self._incoming_unpublished = False
+        finally:
+            with self._incoming_lock:
+                self._incoming_thread = None
+
+    def incoming_done(self, result, error, generation):
+        """Store result of a conversion, call from the GUI thread.
+
+        Returns False when the result was discarded because the dashboard
+        treatment was reset while the conversion was running. In that case
+        and when the conversion failed, the layers on disk may have been
+        partially replaced, so they are reset to keep the vectors, json
+        and treatments for the model consistent.
+        """
+        with self._incoming_lock:
+            self._incoming_unpublished = False
+            stale = generation != self._incoming_generation
+        if stale or error is not None:
             self.tr_external_json = None
             self.tr_dashboard_json = None
-            reset_layers()
-            return
-        # create tmp location and reproject
-        dbase = tempfile.mkdtemp()
-        location = "tmp_pseudo_mercator"
-        gs.create_location(dbase=dbase, location=location, epsg=4326)
-        gisrc, env = gs.create_environment(dbase, location, "PERMANENT")
-        env["GRASS_VERBOSE"] = "0"
-        env["GRASS_MESSAGE_FORMAT"] = "standard"
-        out_json = os.path.join(dbase, "tmp.json")
+            self.treatments_for_model = []
+            self._reset_dashboard_layers()
+            return not stale
+        self.tr_external_json = result["external_json"]
+        self.tr_dashboard_json = result["dashboard_json"]
+        self.treatments_for_model = result["treatments_for_model"]
+        return True
 
-        j = json.loads(management_polygons)
-        print(management_polygons)
-        # filter to discard tangible polygons from this year
-        # for merging with TL polygons to send to dashboard
-        features = []
-        for feat in j["features"]:
-            y = dateFromString(feat["properties"]["date"]).year
-            if "tangible" in feat["properties"]:
-                continue
-            if y != year:
-                continue
-            features.append(feat)
-        j["features"] = features
-        self.tr_external_json = j
-        j["features"] = features
-        print("incoming json after filtering")
-        print(j)
-        if features:
-            # export for visualization
-            with open(out_json, "w") as f:
-                json.dump(j, f)
-            gs.run_command(
-                "v.in.ogr",
-                input=out_json,
-                flags="t",
-                output=self.tr_external_name,
-                quiet=True,
-                env=env,
-            )
-            gs.run_command(
-                "v.proj",
-                dbase=dbase,
-                location=location,
-                mapset="PERMANENT",
-                input=self.tr_external_name,
-                output=self.tr_external_name,
-                overwrite=True,
-                quiet=True,
-            )
-        else:
-            reset_layers()
-        print("v.proj tmp_dashboard")
-        # create input for model
-        j = json.loads(management_polygons)
-        self.tr_dashboard_json = j
-        for feat in j["features"]:
-            feat["properties"]["efficacy"] = float(feat["properties"]["efficacy"])
+    def _reset_dashboard_layers(self):
+        gs.run_command(
+            "v.edit", map=self.tr_external_name, tool="create", env=self._env
+        )
+        gs.run_command("v.edit", map=self.tr_dashboard, tool="create", env=self._env)
+
+    def _import_and_replace(self, geojson, name, env, dbase, location, flags=""):
+        """Import geojson into the temporary location, reproject it into
+        the current mapset under a temporary name and only then rename it
+        to the final name, so that the GUI thread never sees
+        a half-written vector."""
+        out_json = os.path.join(dbase, "tmp.json")
         with open(out_json, "w") as f:
-            json.dump(j, f)
+            json.dump(geojson, f)
+        tmp_name = f"{name}_tmp_{uuid.uuid4().hex[:8]}"
         gs.run_command(
             "v.in.ogr",
             input=out_json,
-            output=self.tr_dashboard,
+            flags=flags,
+            output=name,
             quiet=True,
+            overwrite=True,
             env=env,
         )
         gs.run_command(
@@ -398,18 +447,76 @@ class Treatments:
             dbase=dbase,
             location=location,
             mapset="PERMANENT",
-            input=self.tr_dashboard,
-            output=self.tr_dashboard,
+            input=name,
+            output=tmp_name,
             overwrite=True,
             quiet=True,
         )
-        # create rasters for spread model
-        self.create_treatment_rasters_from_dashboard()
-        # cleanup
-        gs.try_remove(gisrc)
-        shutil.rmtree(dbase)
+        gs.run_command("g.rename", vector=[tmp_name, name], overwrite=True, quiet=True)
+
+    def _convert_incoming(self, management_polygons, year):
+        """Convert json coming from dashboard for visualization on TL
+        and for the model. Runs in a worker thread and returns a dict
+        to be stored with incoming_done in the GUI thread."""
+        print(f"convert geojson {year}")
+        result = {
+            "external_json": None,
+            "dashboard_json": None,
+            "treatments_for_model": [],
+        }
+        if not management_polygons or management_polygons == "0":
+            self._reset_dashboard_layers()
+            return result
+        # create tmp location and reproject
+        dbase = tempfile.mkdtemp()
+        location = "tmp_pseudo_mercator"
+        gs.create_location(dbase=dbase, location=location, epsg=4326)
+        gisrc, env = gs.create_environment(dbase, location, "PERMANENT")
+        env["GRASS_VERBOSE"] = "0"
+        env["GRASS_MESSAGE_FORMAT"] = "standard"
+        try:
+            j = json.loads(management_polygons)
+            print(management_polygons)
+            # filter to discard tangible polygons from this year
+            # for merging with TL polygons to send to dashboard
+            features = []
+            for feat in j["features"]:
+                y = dateFromString(feat["properties"]["date"]).year
+                if "tangible" in feat["properties"]:
+                    continue
+                if y != year:
+                    continue
+                features.append(feat)
+            j["features"] = features
+            result["external_json"] = j
+            print("incoming json after filtering")
+            print(j)
+            if features:
+                # export for visualization
+                self._import_and_replace(
+                    j, self.tr_external_name, env, dbase, location, flags="t"
+                )
+            else:
+                self._reset_dashboard_layers()
+            # create input for model
+            j = json.loads(management_polygons)
+            result["dashboard_json"] = j
+            for feat in j["features"]:
+                feat["properties"]["efficacy"] = float(feat["properties"]["efficacy"])
+            self._import_and_replace(j, self.tr_dashboard, env, dbase, location)
+            # create rasters for spread model
+            result["treatments_for_model"] = (
+                self.create_treatment_rasters_from_dashboard()
+            )
+        finally:
+            # cleanup
+            gs.try_remove(gisrc)
+            shutil.rmtree(dbase, ignore_errors=True)
+        return result
 
     def create_treatment_rasters_from_dashboard(self):
+        """Create treatment rasters for the model from the dashboard vector,
+        returns list of treatment parameters (one item per duration/date)"""
         host = self.model_settings.model["host"]
         host_env = get_environment(raster=host)
         res = gs.region(env=host_env)["ewres"]
@@ -430,7 +537,7 @@ class Treatments:
             flags="c",
         )
         combinations = []
-        self.treatments_for_model = []
+        treatments_for_model = []
         for each in distinct.splitlines():
             duration, date = each.split("|")
             combinations.append((int(duration), date))
@@ -478,9 +585,10 @@ class Treatments:
                     "treatment_application"
                 ],
             }
-            self.treatments_for_model.append(params)
+            treatments_for_model.append(params)
         # sort by date needed for steering, otherwise newer may get removed
-        self.treatments_for_model.sort(key=lambda x: x["treatment_date"])
+        treatments_for_model.sort(key=lambda x: x["treatment_date"])
+        return treatments_for_model
 
     def create_treatment_visualization_vector(self, evt, player, attempt, checkpoint):
         pattern = "__".join([self.tr_tl_name, evt, player, f"{attempt[0]}", "*"])
