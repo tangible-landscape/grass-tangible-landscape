@@ -4,6 +4,7 @@ Created on Wed Aug 23 09:29:18 2017
 
 @author: anna
 """
+import asyncio
 import os
 import shutil
 import requests
@@ -20,11 +21,13 @@ import datetime
 import aiohttp
 from urllib.parse import urlparse
 from jsonrpc_websocket import Server as jsonrpc
+from jsonrpc_base import TransportError
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
 
 from tangible_utils import get_environment
+from stall_monitor import StallMonitor
 
 threadDone, EVT_THREAD_DONE = wx.lib.newevent.NewEvent()
 
@@ -143,6 +146,11 @@ class PoPSDashboard(wx.EvtHandler):
         self._websocket_auth_headers = []
         self._ws_session = None
         self._ws_client = None
+        self._ws_loop_task = None
+        self._connection_task = None
+        self._closing = False
+        self._management_callback = None
+        self._stall_monitor = None
         self._username = None
         self._password = None
         self.Bind(EVT_THREAD_DONE, self._on_thread_done)
@@ -158,32 +166,107 @@ class PoPSDashboard(wx.EvtHandler):
         self._password = settings["password"]
 
     def update_incoming_management_callback(self, callback):
-        self._ws_client.update_management = callback
+        self._management_callback = callback
+        if self._ws_client is not None:
+            self._ws_client.update_management = callback
 
     async def connect(self, callback):
-        """Connecting to webSocket server
-        websockets.client.connect returns a WebSocketClientProtocol,
-        which is used to send and receive messages
+        """Connect to the websocket server and keep the connection alive.
+
+        Starts a background task which reconnects whenever the connection
+        drops, so this can be called repeatedly. The callback is called
+        when 'update_management' message is received.
         """
-        if not self._websocket_auth_headers:
-            await self.authenticate()
+        self.update_incoming_management_callback(callback)
+        self._closing = False
+        if self._stall_monitor is None:
+            self._stall_monitor = StallMonitor(threshold=5)
+            self._stall_monitor.start()
+        if self._connection_task is None or self._connection_task.done():
+            self._connection_task = asyncio.ensure_future(self._keep_connected())
+
+    async def _keep_connected(self):
+        delay = 2
+        while not self._closing:
+            try:
+                await self._open()
+                delay = 2
+                # returns when the connection is closed,
+                # raises TransportError when it is closed because of an error
+                await self._ws_loop_task
+                print("dashboard: connection closed")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                print(f"dashboard: connection error: {e!r}")
+            finally:
+                await self._cleanup_connection()
+            if self._closing:
+                break
+            print(f"dashboard: reconnecting in {delay} s")
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 60)
+
+    async def _open(self):
+        # the session cookie may have expired, always log in again
+        await self.authenticate()
         self._ws_session = aiohttp.ClientSession(headers=self._websocket_auth_headers)
         self._ws_client = jsonrpc(self._wsroot, session=self._ws_session)
         # If 'update_management' message received, send to update_message() function.
-        self._ws_client.update_management = callback
-        await self._ws_client.ws_connect()
+        self._ws_client.update_management = self._management_callback
+        start = time.time()
+        self._ws_loop_task = await self._ws_client.ws_connect()
+        print(f"dashboard: connected in {time.time() - start:.1f} s")
         await self.get_external_management()
 
-    def is_connected(self):
-        return self._ws_client and self._ws_client.connected
-
-    async def disconnect(self):
-        if not self._ws_client:
-            return
-        await self._ws_client.close()
-        await self._ws_session.close()
+    async def _cleanup_connection(self):
+        client = self._ws_client
+        session = self._ws_session
         self._ws_client = None
         self._ws_session = None
+        self._ws_loop_task = None
+        if client is not None:
+            try:
+                await client.close()
+            except Exception:
+                pass
+        if session is not None:
+            try:
+                await session.close()
+            except Exception:
+                pass
+
+    def is_connected(self):
+        return self._ws_client is not None and self._ws_client.connected
+
+    async def disconnect(self):
+        self._closing = True
+        task = self._connection_task
+        self._connection_task = None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        await self._cleanup_connection()
+        if self._stall_monitor is not None:
+            self._stall_monitor.stop()
+            self._stall_monitor = None
+
+    async def _notify(self, method, **kwargs):
+        """Send a notification to the dashboard, return False if it could
+        not be sent. The connection is restored in the background,
+        the message is not resent."""
+        if not self.is_connected():
+            print(f"dashboard: not connected, {method} not sent")
+            return False
+        try:
+            await getattr(self._ws_client, method)(_notification=True, **kwargs)
+        except TransportError as e:
+            print(f"dashboard: sending {method} failed: {e}")
+            return False
+        return True
 
     async def authenticate(self):
         """
@@ -227,23 +310,21 @@ class PoPSDashboard(wx.EvtHandler):
         # we don't know when new rcoll is created
         # so we need to always ask for its id
         self.new_runcollection()
-        await self._ws_client.update_management(
+        return await self._notify(
+            "update_management",
             management_polygons=json,
             run_collection=self._runcollection_id,
-            _notification=True,
         )
 
     async def get_external_management(self):
         print("dashboard: get_external_management")
-        await self._ws_client.send_management_request(
-            run_collection=self._runcollection_id, _notification=True
+        return await self._notify(
+            "send_management_request", run_collection=self._runcollection_id
         )
 
     async def running(self):
-        await self._ws_client.run_pops(
-            run_id=self._run_id,
-            run_collection=self._runcollection_id,
-            _notification=True,
+        return await self._notify(
+            "run_pops", run_id=self._run_id, run_collection=self._runcollection_id
         )
 
     def set_management(self, geojson, cost, area, year):
