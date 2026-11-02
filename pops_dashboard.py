@@ -4,11 +4,15 @@ Created on Wed Aug 23 09:29:18 2017
 
 @author: anna
 """
+import asyncio
 import os
 import shutil
 import requests
 import tempfile
 import threading
+import time
+import traceback
+import uuid
 import wx
 import re
 import math
@@ -17,11 +21,13 @@ import datetime
 import aiohttp
 from urllib.parse import urlparse
 from jsonrpc_websocket import Server as jsonrpc
+from jsonrpc_base import TransportError
 
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
 
 from tangible_utils import get_environment
+from stall_monitor import StallMonitor
 
 threadDone, EVT_THREAD_DONE = wx.lib.newevent.NewEvent()
 
@@ -136,12 +142,15 @@ class PoPSDashboard(wx.EvtHandler):
         self._tmp_out_file = gscript.tempfile(False)
         suffix = os.path.basename(gscript.tempfile(False)).replace(".", "_")
         self._tmp_vect_file = "tmp_vect_" + suffix
-        self._tmp_inf_file = "tmp_inf_" + suffix
-        self._tmp_infavg_file = "tmp_infavg_" + suffix
         self._last_name_suffix = None
         self._websocket_auth_headers = []
         self._ws_session = None
         self._ws_client = None
+        self._ws_loop_task = None
+        self._connection_task = None
+        self._closing = False
+        self._management_callback = None
+        self._stall_monitor = None
         self._username = None
         self._password = None
         self.Bind(EVT_THREAD_DONE, self._on_thread_done)
@@ -157,32 +166,107 @@ class PoPSDashboard(wx.EvtHandler):
         self._password = settings["password"]
 
     def update_incoming_management_callback(self, callback):
-        self._ws_client.update_management = callback
+        self._management_callback = callback
+        if self._ws_client is not None:
+            self._ws_client.update_management = callback
 
     async def connect(self, callback):
-        """Connecting to webSocket server
-        websockets.client.connect returns a WebSocketClientProtocol,
-        which is used to send and receive messages
+        """Connect to the websocket server and keep the connection alive.
+
+        Starts a background task which reconnects whenever the connection
+        drops, so this can be called repeatedly. The callback is called
+        when 'update_management' message is received.
         """
-        if not self._websocket_auth_headers:
-            await self.authenticate()
+        self.update_incoming_management_callback(callback)
+        self._closing = False
+        if self._stall_monitor is None:
+            self._stall_monitor = StallMonitor(threshold=5)
+            self._stall_monitor.start()
+        if self._connection_task is None or self._connection_task.done():
+            self._connection_task = asyncio.ensure_future(self._keep_connected())
+
+    async def _keep_connected(self):
+        delay = 2
+        while not self._closing:
+            try:
+                await self._open()
+                delay = 2
+                # returns when the connection is closed,
+                # raises TransportError when it is closed because of an error
+                await self._ws_loop_task
+                print("dashboard: connection closed")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                print(f"dashboard: connection error: {e!r}")
+            finally:
+                await self._cleanup_connection()
+            if self._closing:
+                break
+            print(f"dashboard: reconnecting in {delay} s")
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 60)
+
+    async def _open(self):
+        # the session cookie may have expired, always log in again
+        await self.authenticate()
         self._ws_session = aiohttp.ClientSession(headers=self._websocket_auth_headers)
         self._ws_client = jsonrpc(self._wsroot, session=self._ws_session)
         # If 'update_management' message received, send to update_message() function.
-        self._ws_client.update_management = callback
-        await self._ws_client.ws_connect()
+        self._ws_client.update_management = self._management_callback
+        start = time.time()
+        self._ws_loop_task = await self._ws_client.ws_connect()
+        print(f"dashboard: connected in {time.time() - start:.1f} s")
         await self.get_external_management()
 
-    def is_connected(self):
-        return self._ws_client and self._ws_client.connected
-
-    async def disconnect(self):
-        if not self._ws_client:
-            return
-        await self._ws_client.close()
-        await self._ws_session.close()
+    async def _cleanup_connection(self):
+        client = self._ws_client
+        session = self._ws_session
         self._ws_client = None
         self._ws_session = None
+        self._ws_loop_task = None
+        if client is not None:
+            try:
+                await client.close()
+            except Exception:
+                pass
+        if session is not None:
+            try:
+                await session.close()
+            except Exception:
+                pass
+
+    def is_connected(self):
+        return self._ws_client is not None and self._ws_client.connected
+
+    async def disconnect(self):
+        self._closing = True
+        task = self._connection_task
+        self._connection_task = None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        await self._cleanup_connection()
+        if self._stall_monitor is not None:
+            self._stall_monitor.stop()
+            self._stall_monitor = None
+
+    async def _notify(self, method, **kwargs):
+        """Send a notification to the dashboard, return False if it could
+        not be sent. The connection is restored in the background,
+        the message is not resent."""
+        if not self.is_connected():
+            print(f"dashboard: not connected, {method} not sent")
+            return False
+        try:
+            await getattr(self._ws_client, method)(_notification=True, **kwargs)
+        except TransportError as e:
+            print(f"dashboard: sending {method} failed: {e}")
+            return False
+        return True
 
     async def authenticate(self):
         """
@@ -226,23 +310,21 @@ class PoPSDashboard(wx.EvtHandler):
         # we don't know when new rcoll is created
         # so we need to always ask for its id
         self.new_runcollection()
-        await self._ws_client.update_management(
+        return await self._notify(
+            "update_management",
             management_polygons=json,
             run_collection=self._runcollection_id,
-            _notification=True,
         )
 
     async def get_external_management(self):
         print("dashboard: get_external_management")
-        await self._ws_client.send_management_request(
-            run_collection=self._runcollection_id, _notification=True
+        return await self._notify(
+            "send_management_request", run_collection=self._runcollection_id
         )
 
     async def running(self):
-        await self._ws_client.run_pops(
-            run_id=self._run_id,
-            run_collection=self._runcollection_id,
-            _notification=True,
+        return await self._notify(
+            "run_pops", run_id=self._run_id, run_collection=self._runcollection_id
         )
 
     def set_management(self, geojson, cost, area, year):
@@ -475,51 +557,30 @@ class PoPSDashboard(wx.EvtHandler):
         rotation,
         use_single,
     ):
-        env = get_environment(raster=probability)
+        """Compute statistics, export and upload results of one step.
+
+        All GRASS processing runs in a background thread so that the GUI
+        and the websocket read loop are not blocked.
+        """
         mapset = gscript.gisenv()["MAPSET"]
-        gscript.mapcalc(
-            "{n} = int(if({r} == 0, null(), {r}))".format(
-                n=self._tmp_inf_file, r=single_infected
-            ),
-            env=env,
-        )
-        gscript.run_command(
-            "g.copy",
-            raster=[average_infected, self._tmp_infavg_file],
-            overwrite=True,
-            env=env,
-        )
-        gscript.run_command("r.null", map=self._tmp_infavg_file, setnull=0, env=env)
-
-        results = process_for_dashboard(
-            self._run_id,
-            year,
-            self._tmp_inf_file if use_single else self._tmp_infavg_file,
-            spread_rate_file,
-            rotation,
-        )
-
-        export_gisrc, export_env = self._create_tmp_gisrc_environment(
-            self._temp_location
-        )
-        input_gisrc, input_env = self._create_tmp_gisrc_environment()
         t = threading.Thread(
-            target=raster_to_proj_geojson_thread,
+            target=upload_results_thread,
             args=(
                 self,
-                single_infected + "@" + mapset,
-                probability + "@" + mapset,
-                average_infected + "@" + mapset,
-                stddev_infected + "@" + mapset,
-                min_infected + "@" + mapset,
-                max_infected + "@" + mapset,
-                input_gisrc,
-                input_env,
-                export_gisrc,
-                export_env,
-                results,
+                self._run_id,
                 self._root,
+                self._temp_location,
+                mapset,
+                year,
                 probability,
+                single_infected,
+                average_infected,
+                stddev_infected,
+                min_infected,
+                max_infected,
+                spread_rate_file,
+                rotation,
+                use_single,
             ),
         )
         t.start()
@@ -651,13 +712,92 @@ class PoPSDashboard(wx.EvtHandler):
         gscript.run_command(
             "g.remove", type="vector", name=self._tmp_vect_file, flags="f", quiet=True
         )
+
+
+def upload_results_thread(
+    evtHandler,
+    run_id,
+    root,
+    temp_location,
+    mapset,
+    year,
+    probability,
+    single_infected,
+    average_infected,
+    stddev_infected,
+    min_infected,
+    max_infected,
+    spread_rate_file,
+    rotation,
+    use_single,
+):
+    """Prepare rasters, compute statistics and upload them. Runs in a thread.
+    Posts threadDone event with out_id=None when anything fails."""
+    start = time.time()
+    # unique names, several steps can be processed at the same time
+    suffix = uuid.uuid4().hex[:8]
+    tmp_inf = "tmp_inf_" + suffix
+    tmp_infavg = "tmp_infavg_" + suffix
+    try:
+        env = get_environment(raster=probability)
+        gscript.mapcalc(
+            "{n} = int(if({r} == 0, null(), {r}))".format(n=tmp_inf, r=single_infected),
+            env=env,
+        )
+        gscript.run_command(
+            "g.copy", raster=[average_infected, tmp_infavg], overwrite=True, env=env
+        )
+        gscript.run_command("r.null", map=tmp_infavg, setnull=0, env=env)
+        results = process_for_dashboard(
+            run_id,
+            year,
+            tmp_inf if use_single else tmp_infavg,
+            spread_rate_file,
+            rotation,
+        )
+        export_gisrc, export_env = evtHandler._create_tmp_gisrc_environment(
+            temp_location
+        )
+        input_gisrc, input_env = evtHandler._create_tmp_gisrc_environment()
+    except Exception:
+        traceback.print_exc()
+        evt = threadDone(out_id=None, orig_name=probability)
+        wx.PostEvent(evtHandler, evt)
+        return
+    finally:
         gscript.run_command(
             "g.remove",
             type="raster",
-            name=[self._tmp_inf_file, self._tmp_infavg_file],
+            name=[tmp_inf, tmp_infavg],
             flags="f",
             quiet=True,
         )
+    print(
+        "dashboard: statistics for {} took {:.1f} s".format(
+            probability, time.time() - start
+        )
+    )
+    try:
+        raster_to_proj_geojson_thread(
+            evtHandler,
+            single_infected + "@" + mapset,
+            probability + "@" + mapset,
+            average_infected + "@" + mapset,
+            stddev_infected + "@" + mapset,
+            min_infected + "@" + mapset,
+            max_infected + "@" + mapset,
+            input_gisrc,
+            input_env,
+            export_gisrc,
+            export_env,
+            results,
+            root,
+            probability,
+        )
+    except Exception:
+        traceback.print_exc()
+        evt = threadDone(out_id=None, orig_name=probability)
+        wx.PostEvent(evtHandler, evt)
 
 
 def raster_to_proj_geojson_thread(

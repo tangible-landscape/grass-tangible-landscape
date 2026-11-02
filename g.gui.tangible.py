@@ -1190,21 +1190,62 @@ class TangibleLandscapePlugin(wx.Dialog):
         return params
 
     def EnableDataCatalogWatchdog(self, enable=True):
-        """Disable/enable watchdog monitoring current mapset"""
+        """Disable/enable GRASS GUI watchdogs monitoring current mapset.
+
+        Both the data catalog and the layer manager (mask indicator in
+        the statusbar) watch the current mapset. The layer manager runs
+        r.mask.status in the GUI thread for every changed raster, which
+        blocks the GUI while scanning and the model write many rasters.
+        """
         # TODO: improve when better API is available in GRASS
         try:
-            watchdog_control = self.giface.lmgr.datacatalog.tree._mapset_watchdog
-            observer = watchdog_control._observer
-        except AttributeError:
-            watchdog_control = self.giface.lmgr.datacatalog.tree
-            observer = watchdog_control.observer
-        except AttributeError:
-            return
+            from core import watchdog as grass_watchdog
+        except ImportError:
+            grass_watchdog = None
+        lmgr = self.giface.lmgr
+        datacatalog = getattr(lmgr, "datacatalog", None)
+        tree = getattr(datacatalog, "tree", None)
+        watchdogs = []
+        for owner in (lmgr, tree):
+            watchdog = getattr(owner, "_mapset_watchdog", None)
+            if watchdog is not None:
+                watchdogs.append(watchdog)
 
         if enable:
-            watchdog_control.ScheduleWatchCurrentMapset()
-        else:
-            if observer and observer.is_alive():
+            if grass_watchdog is not None and hasattr(self, "_watchdogWasUsed"):
+                grass_watchdog.watchdog_used = self._watchdogWasUsed
+            for watchdog in watchdogs:
+                watchdog.ScheduleWatchCurrentMapset()
+            if not watchdogs and hasattr(tree, "ScheduleWatchCurrentMapset"):
+                # older GRASS
+                tree.ScheduleWatchCurrentMapset()
+            return
+
+        observers = []
+        # GRASS 8.5 (2026+): one observer shared by all watchdogs
+        if grass_watchdog is not None:
+            shared = getattr(
+                getattr(grass_watchdog, "MapsetWatchdog", None),
+                "_shared_observer",
+                None,
+            )
+            if shared is not None:
+                observers.append(shared)
+        # GRASS 8.4: observer per watchdog
+        for watchdog in watchdogs:
+            observer = getattr(watchdog, "_observer", None)
+            if observer is not None:
+                observers.append(observer)
+        # older GRASS: observer directly in the data catalog tree
+        observer = getattr(tree, "observer", None)
+        if observer is not None:
+            observers.append(observer)
+        # stop GRASS from scheduling the watchdogs again while disabled
+        if grass_watchdog is not None and hasattr(grass_watchdog, "watchdog_used"):
+            self._watchdogWasUsed = grass_watchdog.watchdog_used
+            grass_watchdog.watchdog_used = False
+        for observer in observers:
+            if observer.is_alive():
                 observer.stop()
                 observer.join()
                 observer.unschedule_all()
