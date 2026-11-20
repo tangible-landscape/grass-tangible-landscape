@@ -59,9 +59,13 @@ def blender_export_DEM(
         out = os.path.join(path, fullname)
     else:
         out = os.path.join(tmp_path, fullname)
+
+    # Setting the computation regional before exporting
+    gscript.run_command("g.region", raster=raster, env=env)
+
     gscript.run_command(
         "r.out.gdal",
-        flags="cf",
+        flags="c",
         input=raster,
         type="Float32",
         create="TFW=YES",
