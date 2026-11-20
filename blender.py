@@ -59,13 +59,21 @@ def blender_export_DEM(
         out = os.path.join(path, fullname)
     else:
         out = os.path.join(tmp_path, fullname)
+
     tools = tools or Tools(env=env)
+
+    # Setting the computational region before exporting
+    tools.g_region(raster=raster, env=env)
+
     tools.r_out_gdal(
-        flags="cf",
+        flags="c",
         input=raster,
         type="Float32",
         create="TFW=YES",
         out=out,
+        overwrite=True,
+        quiet=True,
+        env=env,
     )
 
     if not local:

@@ -14,6 +14,8 @@ from math import sqrt
 
 import grass.script as gs
 from grass.tools import Tools, ToolError
+from grass.script import core as gcore
+from grass.script import raster as grast
 
 from tangible_utils import remove_vector
 
@@ -962,4 +964,207 @@ def classify_colors(
         ),
     )
     segments = segment if useSuperPixels else segment_clump
-    tools.r_mode(base=segments, cover=filtered_classification, output=new)
+    gcore.run_command(
+        "r.mode", base=segments, cover=filtered_classification, output=new, env=env
+    )
+
+
+def classify_colors_his(
+    new, group, compactness=2, threshold=0.3, minsize=10, env=None
+):
+    hue = "tmp_hue"
+    intensity = "tmp_intensity"
+    saturation = "tmp_saturation"
+    hs_group = "hs_group"
+
+    segment = "tmp_segment"
+
+    # we expect this name of signature
+    signature = "signature_his"
+    classification = "tmp_classification"
+    filtered_classification = "tmp_filtered_classification"
+    reject = "tmp_reject"
+
+    # Converting to HIS colorspace
+    gcore.run_command(
+        "i.rgb.his",
+        red=f'{group}_r',
+        green=f'{group}_g',
+        blue=f'{group}_b',
+        hue=hue,
+        intensity=intensity,
+        saturation=saturation,
+        env=env,
+    )
+
+    # Creating HS group without intensity
+    gcore.run_command(
+        "i.group",
+        group=hs_group,
+        subgroup=hs_group,
+        input=[hue, saturation],
+        env=env,
+    )
+
+    # Running the segmentation using superpixels
+    gcore.run_command(
+        "i.superpixels.slic",
+        input=group,
+        output=segment,
+        compactness=compactness,
+        minsize=minsize,
+        env=env,
+    )
+
+    gcore.run_command(
+        "i.smap",
+        group=hs_group,
+        subgroup=hs_group,
+        signaturefile=signature,
+        output=classification,
+        goodness=reject,
+        env=env,
+    )
+    cutoff = 99
+    percentile = float(
+        gcore.parse_command("r.univar", flags="ge", percentile=cutoff, map=reject, env=env)[f"percentile_{cutoff}"]
+    )
+    grast.mapcalc(
+        "{new} = if({reject} < {thres}, {classif}, null())".format(
+            new=filtered_classification,
+            reject=reject,
+            classif=classification,
+            thres=percentile,
+        ),
+        env=env,
+    )
+    gcore.run_command(
+        "r.mode", base=segment, cover=filtered_classification, output=new, env=env
+    )
+    # gcore.run_command("g.remove", type="raster", name=[hue, intensity, saturation], flags="f", env=env)
+
+
+def classify_colors_svm(new: str, group: str, compactness: int = 2, minsize: int = 10, 
+                        hs_colorspace: bool = False, env=None):
+    """
+    Classifies colors using i.superpixels.slic and i.svm.predict
+    :param new the name of the prediction raster to output
+    :param group the input RGB imagery group to classify, should have an identically named subgroup
+    :param compactness relative convexity of the superpixels segmentation
+    :param minsize minimum pixels in a superpixel
+    :param hs_colorspace whether to use a hue/saturation colorspace instead of RGB, slightly worse but more lighting-invariant
+    :param env GRASS environment with the input and output maps
+    """
+
+    segment = "tmp_segment"
+    rgb_sig = "svm_rgb_sig"
+    hs_sig = "svm_hs_sig"
+    classification = "tmp_classification"
+
+    if hs_colorspace:
+        # Converting to HIS colorspace
+        gcore.run_command(
+            "i.rgb.his",
+            red=f'{group}_r',
+            green=f'{group}_g',
+            blue=f'{group}_b',
+            hue=f"{group}_h",
+            intensity=f"{group}_i",
+            saturation=f"{group}_s",
+            env=env,
+        )
+
+        # Creating HS group without intensity
+        hs_group = group + "_hs"
+        gcore.run_command(
+            "i.group",
+            group=hs_group,
+            subgroup=hs_group,
+            input=[f"{group}_h", f"{group}_s"],
+            env=env,
+        )
+        group = hs_group
+
+    # Segmentation
+    gcore.run_command(
+        "i.superpixels.slic",
+        input=group,
+        output=segment,
+        compactness=compactness,
+        minsize=minsize,
+        env=env,
+    )
+
+    # SVM Classification with the correct sig file
+    gcore.run_command(
+        "i.svm.predict",
+        group=group,
+        subgroup=group,
+        signaturefile=(hs_sig if hs_colorspace else rgb_sig),
+        output=classification,
+        env=env,
+    )
+
+    # Assigning each superpixel to its most represented value
+    gcore.run_command(
+        "r.mode", base=segment, cover=classification, output=new, env=env
+    )
+
+
+def locate_pins(depth_scan: str, output: str, filter_file: str, env=None):
+    """
+    Locates pins in a new depth scan based on the filter file
+
+    :param depth_scan is the new depth DEM to classify
+    :param output the result of the classification, vector map with poi centers
+    :param filter_file the file with the trained kernel
+    :param env the GRASS environment to use for running commands
+    """
+
+    # Applying the convolution
+    accept = "tmp_conv_accept"
+    gcore.run_command("r.mfilter",
+                        input=depth_scan,
+                        output=accept,
+                        filter=filter_file,
+                        overwrite=True,
+                        env=env)
+    
+    # Removing the borders which are unaffected by the convolution
+    trimmed = "tmp_accept_trimmed"
+    grast.mapcalc(
+        "{new} = if({scan} == {accept}, null(), {accept})".format(
+            new=trimmed,
+            scan=depth_scan,
+            accept=accept,
+        ),
+        overwrite=True,
+        env=env,
+    )
+
+    # Filter by percentile
+    cutoff = 99.5
+    percentile = float(
+        gcore.parse_command("r.univar", 
+                            flags="ge", 
+                            percentile=cutoff, 
+                            map=trimmed, env=env
+                            )[f"percentile_{str(cutoff).replace('.', '_')}"]
+    )
+
+    # Putting it into a binary raster
+    classification = "tmp_classification"
+    grast.mapcalc(
+        "{new} = if({accept} > {thres}, 1, null())".format(
+            new=classification,
+            accept=trimmed,
+            thres=percentile,
+        ),
+        overwrite=True,
+        env=env,
+    )
+
+    # Generating vector locations for each pin center
+    clumped = "tmp_clumped"
+    gcore.run_command("r.clump", flags="d", input=classification, output=clumped, overwrite=True, env=env)
+    gcore.run_command("r.volume", input=classification, clump=clumped, centroids=output, overwrite=True, env=env)
