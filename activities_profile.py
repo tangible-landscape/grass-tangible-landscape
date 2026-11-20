@@ -16,7 +16,7 @@ matplotlib.use("WXAgg")
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-import grass.script as gscript
+from grass.tools import Tools
 
 import wx
 
@@ -61,15 +61,16 @@ class ProfileFrame(wx.Frame):
         coords = []
         for p in points:
             coords.append("{},{}".format(p[0], p[1]))
-        data = gscript.read_command(
-            "r.profile", input=raster, coordinates=coords, quiet=True, env=env
-        ).strip()
+        data = Tools(env=env).r_profile(
+            input=raster,
+            coordinates=coords,
+            format="json",
+        )
         self.distances = []
         self.elevations = []
-        for line in data.splitlines():
-            dist, elev = line.strip().split()
-            self.distances.append(float(dist))
-            self.elevations.append(float(elev))
+        for record in data:
+            self.distances.append(record["distance"])
+            self.elevations.append(record["value"])
 
         d_start = 0
         self.point_distances = [d_start]

@@ -41,14 +41,14 @@ Color, font size, position and text can be specified. This is optional.
 
 ```json
   "handsoff": [
-                "d.text", 
+                "d.text",
                 "at=6,45",
                 "size=20",
                 "color=red",
                 "text='HANDS OFF'"
         ],
  ```
- 
+
 Specifies how much time the sign stays displayed to ensure completing each activity.
 Color, font size, position and text can be specified. This is optional, if not specified it's 0 s.
 
@@ -88,21 +88,21 @@ This describes the activities (explained further below):
     {
       "layers": [
         [
-          "d.rast", 
+          "d.rast",
           "map=freeplay_scan"
         ],
         [
-          "d.vect", 
+          "d.vect",
           "map=freeplay_contours"
         ],
       ],
       "layers_opacity": [1.0, 0.5],
       "calibration": false,
       "base": "cutfill1_dem1",
-      "time_limit": 300, 
+      "time_limit": 300,
       "scanning_params": {"smooth": 10, "numscans": 2, "zexag": 1, "interpolate": false},
       "calibration_scanning_params": {"interpolate": true},
-      "analyses": "experiment_freeplay.py", 
+      "analyses": "experiment_freeplay.py",
       "filter" : {"threshold": 200, "debug": true},
       "slides": {"switch": [93, 174], "file": "freeplay.html"},
       "profile": {"size": [400, 140], "position": [4272, 660],
@@ -140,11 +140,11 @@ Special d.* commands (d.legend, d.northarrow, d.barscale, d.rgb, d.shade, d.labe
 ```json
       "layers": [
         [
-          "d.rast", 
+          "d.rast",
           "map=freeplay_scan"
         ],
         [
-          "d.vect", 
+          "d.vect",
           "map=freeplay_contours"
         ],
       ],
@@ -154,14 +154,14 @@ This specifies the semitransparency of the layers (1 is opaque).
 The length of the list should be the same as the number of loaded layers. Optional.
 
 ```json
- "layers_opacity": [1.0, 0.5], 
+ "layers_opacity": [1.0, 0.5],
 ```
 
 This specifies the whether the layers should be checked (by default they are all checked).
 The length of the list should be the same as the number of loaded layers. Optional.
 
 ```json
- "layers_checked": [true, false], 
+ "layers_checked": [true, false],
 ```
 
 Specifies a raster map used for georeferencing, _required_.
@@ -182,7 +182,7 @@ File with Python workflow for the activity (and postprocessing if desired).
 The directory is specified in 'taskDir' above (if not, must be in the same folder as the config file). This is _required_.
 
 ```json
- "analyses": "experiment_freeplay.py", 
+ "analyses": "experiment_freeplay.py",
 ```
 
 
@@ -257,7 +257,7 @@ def run_freeplay(scanned_elev, eventHandler, env, **kwargs):
      eventHandler.postEvent(receiver=eventHandler.activities_panel, event=event)
  ```
 
-In both cases (profile and widget), size and position can be specified in absolute or relative coordinates. 
+In both cases (profile and widget), size and position can be specified in absolute or relative coordinates.
 
 |  | Size |Position | Description|
 | --- | ----------- | --- | --- |
@@ -277,12 +277,8 @@ Specifies time limit for each activity (useful for experiments). This is optiona
 
 Specifies details of the slides for each activity (when to switch slides and which html file to use).
 'Switch' is a list of numbers telling the application when to switch to next slide,
-in this case next slide is switched after 93s and 174 s (from the beginning of the activity). 
+in this case next slide is switched after 93s and 174 s (from the beginning of the activity).
 
 ```json
 "slides": {"switch": [93, 174], "file": "freeplay.html"},
 ```
-
-
-
-

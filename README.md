@@ -2,9 +2,9 @@ Tangible Landscape
 ==================
 ![header image](readme_image.jpg "Tangible Landscape plugin")
 
-Tangible Landscape is an open source tangible interface for geospatial modeling powered by GRASS GIS. Tangible Landscape couples a physical model with a digital model of a landscape so that you can naturally feel, reshape, and interact with the landscape. This makes geographic information systems (GIS) far more intuitive and accessible for beginners, empowers geospatial experts, and creates new opportunities for developers.
+Tangible Landscape is an open source tangible interface for geospatial modeling powered by GRASS. Tangible Landscape couples a physical model with a digital model of a landscape so that you can naturally feel, reshape, and interact with the landscape. This makes geographic information systems (GIS) far more intuitive and accessible for beginners, empowers geospatial experts, and creates new opportunities for developers.
 
-This repository contains Tangible Landscape plugin for GRASS GIS, which allows
+This repository contains Tangible Landscape plugin for GRASS, which allows
 a real-time feedback cycle of interaction, 3D scanning, point cloud processing, geospatial computation and projection
 
 <p align="center">
@@ -12,23 +12,31 @@ a real-time feedback cycle of interaction, 3D scanning, point cloud processing, 
 
 Installation:
 ----------------------------------
-We support installation on Ubuntu 18.04. Tangible Landscape requires Microsoft Kinect for Xbox (v2) or Kinect for Azure. Software dependencies include:
+We support installation on Ubuntu 24.04. Tangible Landscape supports the Orbbec Femto Bolt, Microsoft Azure Kinect (K4A), and the Kinect for Xbox One. Software dependencies include:
 
--   GRASS GIS >= 8.2
--   GRASS GIS addon [r.in.kinect](https://github.com/ncsu-osgeorel/r.in.kinect): choose version depending on your sensor.
+-   GRASS >= 8.5 (cmake-based build)
+-   GRASS addon [r.in.kinect](https://github.com/tangible-landscape/r.in.kinect): choose the branch matching your sensor (`femto-bolt`, `k4a`, or `xbox-one`).
 -   Python package [watchdog](https://pypi.python.org/pypi/watchdog), optionally [matplotlib](https://matplotlib.org/)
 
 1. Make a folder where all the dependencies will be compiled:
 
        mkdir tangiblelandscape && cd tangiblelandscape
 
-2. Download [one of the install scripts](https://github.com/tangible-landscape/tangible-landscape-install) based on your sensor to that folder and run it:
+2. Download [one of the install scripts](https://github.com/tangible-landscape/tangible-landscape-install) matching your Ubuntu version and sensor to that folder and run it, e.g.:
 
-       sh install_Ubuntu-20.04_k4a.sh
+       sh install_Ubuntu-24.04_femto-bolt.sh
 
     It will ask you for administrator password. You need to be online to download all dependencies. After finishing the process, log out and log in.
 
-3. Find GRASS GIS in Dash and start it. Create a new GRASS Location or use an existing one, and when GRASS Layer Manager opens, go to tab Console and type:
+    To install only the plugin (e.g. when r.in.kinect is already set up), use `g.extension`:
+
+       git clone https://github.com/tangible-landscape/grass-tangible-landscape
+       sudo grass --tmp-project XY --exec \
+           g.extension -s extension=g.gui.tangible url=$(pwd)/grass-tangible-landscape
+
+    The `-s` flag installs system-wide under `$GISBASE`; drop it (and `sudo`) for a per-user install.
+
+3. Find GRASS in Dash and start it. Create a new GRASS project or use an existing one, and when GRASS Layer Manager opens, go to tab Console and type:
 
        g.gui.tangible
 

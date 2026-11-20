@@ -12,7 +12,7 @@ import shutil
 import glob
 from datetime import datetime
 
-import grass.script as gscript
+from grass.tools import Tools
 from grass.exceptions import CalledModuleError
 
 
@@ -34,7 +34,7 @@ def blender_send_file(name, path, text=""):
 
 
 def blender_export_DEM(
-    raster, path, name=None, tmp_path="/tmp", time_suffix=True, env=None
+    raster, path, name=None, tmp_path="/tmp", time_suffix=True, tools=None, env=None
 ):
     """Export raster DEM under  certain name to be used by Blender"""
     if not (path and os.path.exists(path)):
@@ -60,16 +60,18 @@ def blender_export_DEM(
     else:
         out = os.path.join(tmp_path, fullname)
 
-    # Setting the computation regional before exporting
-    gscript.run_command("g.region", raster=raster, env=env)
+    tools = tools or Tools(env=env)
 
-    gscript.run_command(
-        "r.out.gdal",
+    # Setting the computational region before exporting
+    tools.g_region(raster=raster, env=env)
+
+    tools.r_out_gdal(
         flags="c",
         input=raster,
         type="Float32",
         create="TFW=YES",
         out=out,
+        overwrite=True,
         quiet=True,
         env=env,
     )
@@ -90,6 +92,7 @@ def blender_export_vector(
     z=False,
     tmp_path="/tmp",
     time_suffix=False,
+    tools=None,
     env=None,
 ):
     """Export Shapfile of any vector type (point, line, area)"""
@@ -131,14 +134,8 @@ def blender_export_vector(
             params["lco"] = "SHPT=POINT"
         if z:
             params["lco"] += "Z"
-        gscript.run_command(
-            "v.out.ogr",
-            input=vector,
-            output=out,
-            env=env,
-            format="ESRI_Shapefile",
-            **params
-        )
+        tools = tools or Tools(env=env)
+        tools.v_out_ogr(input=vector, output=out, format="ESRI_Shapefile", **params)
     except CalledModuleError as e:
         print(e)
 
@@ -163,7 +160,7 @@ def blender_export_vector(
 
 
 def blender_export_PNG(
-    raster, path, name=None, tmp_path="/tmp", time_suffix=True, env=None
+    raster, path, name=None, tmp_path="/tmp", time_suffix=True, tools=None, env=None
 ):
     """Export raster as PNG to be used by Blender, assumes 8bit"""
     if not (path and os.path.exists(path)):
@@ -188,9 +185,8 @@ def blender_export_PNG(
         out = os.path.join(path, fullname)
     else:
         out = os.path.join(tmp_path, fullname)
-    gscript.run_command(
-        "r.out.gdal", input=raster, format="PNG", out=out, quiet=True, env=env
-    )
+    tools = tools or Tools(env=env)
+    tools.r_out_gdal(input=raster, format="PNG", out=out)
 
     if not local:
         try:
